@@ -11,20 +11,20 @@ final musicRepositoryProvider = Provider<MusicRepository>((ref) {
   return MusicRepository(apiClient);
 });
 
-/// 随机歌曲 Provider
-final randomSongsProvider = FutureProvider.autoDispose<List<Song>>((ref) async {
+/// 随机歌曲 Provider（保持数据，不自动释放）
+final randomSongsProvider = FutureProvider<List<Song>>((ref) async {
   final repository = ref.watch(musicRepositoryProvider);
   return await repository.getRandomSongs(size: 20);
 });
 
-/// 最近播放专辑 Provider
-final recentAlbumsProvider = FutureProvider.autoDispose<List<Album>>((ref) async {
+/// 最近播放专辑 Provider（保持数据，不自动释放）
+final recentAlbumsProvider = FutureProvider<List<Album>>((ref) async {
   final repository = ref.watch(musicRepositoryProvider);
   return await repository.getAlbumList(type: 'recent', size: 10);
 });
 
-/// 常听专辑 Provider
-final frequentAlbumsProvider = FutureProvider.autoDispose<List<Album>>((ref) async {
+/// 常听专辑 Provider（保持数据，不自动释放）
+final frequentAlbumsProvider = FutureProvider<List<Album>>((ref) async {
   final repository = ref.watch(musicRepositoryProvider);
   return await repository.getAlbumList(type: 'frequent', size: 10);
 });

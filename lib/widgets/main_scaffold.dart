@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../features/discover/pages/discover_page.dart';
 import '../features/library/pages/library_page.dart';
+import '../features/player/widgets/mini_player.dart';
 
 /// 导航状态 Provider
 final navigationProvider = StateProvider<int>((ref) => 0);
@@ -24,8 +25,8 @@ class MainScaffold extends ConsumerWidget {
           LibraryPage(),
         ],
       ),
-      // 迷你播放器占位（步骤 9 实现）
-      bottomSheet: null, // 暂时为空
+      // 迷你播放器
+      bottomSheet: const MiniPlayer(),
       bottomNavigationBar: NavigationBar(
         selectedIndex: currentIndex,
         onDestinationSelected: (index) {

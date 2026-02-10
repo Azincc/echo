@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../providers/music_provider.dart';
+import '../../../providers/player_provider.dart';
 import '../../../widgets/cover_art_image.dart';
 import '../../library/pages/album_detail_page.dart';
+import 'search_page.dart';
 
 /// 音乐流首页 - Tab 1
 class DiscoverPage extends ConsumerWidget {
@@ -17,7 +19,12 @@ class DiscoverPage extends ConsumerWidget {
           IconButton(
             icon: const Icon(Icons.search),
             onPressed: () {
-              // TODO: 搜索功能（步骤 12 实现）
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const SearchPage(),
+                ),
+              );
             },
           ),
         ],
@@ -122,7 +129,11 @@ class RandomSongsSection extends ConsumerWidget {
               clipBehavior: Clip.antiAlias,
               child: InkWell(
                 onTap: () {
-                  // TODO: 播放歌曲（步骤 8 实现）
+                  // 播放歌曲
+                  ref.read(playerProvider.notifier).playQueue(
+                        songs,
+                        startIndex: index,
+                      );
                 },
                 child: Padding(
                   padding: const EdgeInsets.all(8),
@@ -257,7 +268,7 @@ class FrequentAlbumsSection extends ConsumerWidget {
           physics: const NeverScrollableScrollPhysics(),
           gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
             crossAxisCount: 2,
-            childAspectRatio: 0.75,
+            childAspectRatio: 0.75, // 调整比例以容纳文字
             crossAxisSpacing: 12,
             mainAxisSpacing: 12,
           ),
@@ -335,7 +346,7 @@ class AlbumCard extends StatelessWidget {
   }
 }
 
-/// 专辑网格项（网格布局）
+/// 专辑网格项（网格布局）- 1:1 正方形
 class AlbumGridItem extends StatelessWidget {
   final dynamic album; // Album 类型
 
@@ -355,12 +366,14 @@ class AlbumGridItem extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Expanded(
+          // 封面 - 正方形
+          AspectRatio(
+            aspectRatio: 1.0,
             child: ClipRRect(
               borderRadius: BorderRadius.circular(8),
               child: CoverArtImage(
                 coverArtId: album.coverArt,
-                size: double.infinity,
+                fit: BoxFit.cover,
               ),
             ),
           ),

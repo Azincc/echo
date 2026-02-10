@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../providers/playlist_provider.dart';
+import '../../../providers/player_provider.dart';
 
 /// 歌单详情页
 class PlaylistDetailPage extends ConsumerWidget {
@@ -54,7 +55,8 @@ class PlaylistDetailPage extends ConsumerWidget {
                       const SizedBox(height: 16),
                       FilledButton.icon(
                         onPressed: () {
-                          // TODO: 播放全部（步骤 8 实现）
+                          // 播放全部
+                          ref.read(playerProvider.notifier).playQueue(songs);
                         },
                         icon: const Icon(Icons.play_arrow),
                         label: const Text('播放全部'),
@@ -75,7 +77,11 @@ class PlaylistDetailPage extends ConsumerWidget {
                       subtitle: song.artist != null ? Text(song.artist!) : null,
                       trailing: Text(song.durationString),
                       onTap: () {
-                        // TODO: 播放歌曲（步骤 8 实现）
+                        // 播放歌曲
+                        ref.read(playerProvider.notifier).playQueue(
+                              songs,
+                              startIndex: index,
+                            );
                       },
                     );
                   },

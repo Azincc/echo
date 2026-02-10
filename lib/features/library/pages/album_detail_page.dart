@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../providers/music_provider.dart';
+import '../../../providers/player_provider.dart';
 import '../../../widgets/cover_art_image.dart';
 
 /// 专辑详情页
@@ -87,18 +88,38 @@ class AlbumDetailPage extends ConsumerWidget {
                         children: [
                           FilledButton.icon(
                             onPressed: () {
-                              // TODO: 播放全部（步骤 8 实现）
+                              // 播放全部
+                              ref.read(playerProvider.notifier).playQueue(songs);
                             },
                             icon: const Icon(Icons.play_arrow),
                             label: const Text('播放全部'),
                           ),
                           const SizedBox(width: 8),
                           IconButton(
-                            onPressed: () {
-                              // TODO: 收藏专辑（步骤 12 实现）
+                            onPressed: () async {
+                              try {
+                                final musicRepository = ref.read(musicRepositoryProvider);
+                                await musicRepository.setAlbumStarred(
+                                  album.id,
+                                  !album.starred,
+                                );
+                                // 刷新专辑详情和收藏列表
+                                ref.invalidate(albumDetailProvider(albumId));
+                                ref.invalidate(starredProvider);
+                                ref.invalidate(recentAlbumsProvider);
+                                ref.invalidate(frequentAlbumsProvider);
+                              } catch (e) {
+                                // 显示错误提示
+                                if (context.mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(content: Text('操作失败: $e')),
+                                  );
+                                }
+                              }
                             },
                             icon: Icon(
                               album.starred ? Icons.favorite : Icons.favorite_border,
+                              color: album.starred ? Colors.red : null,
                             ),
                           ),
                         ],
@@ -119,7 +140,11 @@ class AlbumDetailPage extends ConsumerWidget {
                       subtitle: song.artist != null ? Text(song.artist!) : null,
                       trailing: Text(song.durationString),
                       onTap: () {
-                        // TODO: 播放歌曲（步骤 8 实现）
+                        // 播放歌曲
+                        ref.read(playerProvider.notifier).playQueue(
+                              songs,
+                              startIndex: index,
+                            );
                       },
                     );
                   },

@@ -42,6 +42,8 @@ class CoverArtImage extends ConsumerWidget {
 
     return CachedNetworkImage(
       imageUrl: coverUrl,
+      // 使用 coverArtId 作为缓存键，避免因认证参数变化导致重复下载
+      cacheKey: '${coverArtId!}_${coverSize ?? 500}',
       width: size,
       height: size,
       fit: fit,
@@ -80,4 +82,5 @@ class CoverArtImage extends ConsumerWidget {
     return size! * 0.5;
   }
 }
+
 

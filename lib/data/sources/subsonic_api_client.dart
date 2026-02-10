@@ -177,6 +177,81 @@ class SubsonicApiClient {
 
   /// 获取 Dio 实例（用于流式播放等特殊场景）
   Dio get dio => _dio;
+
+  /// 生成封面 URL（包含认证参数）
+  String getCoverArtUrl(String coverArtId, {int? size}) {
+    if (_config == null) return '';
+
+    final params = <String, String>{};
+
+    // 添加认证参数
+    if (_config!.authType == AuthType.apiKey && _config!.apiKey != null) {
+      params.addAll(SubsonicAuth.generateApiKeyAuthParams(
+        apiKey: _config!.apiKey!,
+        version: ApiConstants.apiVersion,
+        clientName: ApiConstants.clientName,
+        format: ApiConstants.format,
+      ));
+    } else if (_config!.password != null) {
+      params.addAll(SubsonicAuth.generateTokenAuthParams(
+        username: _config!.username,
+        password: _config!.password!,
+        version: ApiConstants.apiVersion,
+        clientName: ApiConstants.clientName,
+        format: ApiConstants.format,
+      ));
+    }
+
+    // 添加封面参数
+    params['id'] = coverArtId;
+    if (size != null) {
+      params['size'] = size.toString();
+    }
+
+    // 构建完整 URL
+    final uri = Uri.parse(_config!.serverUrl + ApiConstants.getCoverArt);
+    final urlWithParams = uri.replace(queryParameters: params);
+    return urlWithParams.toString();
+  }
+
+  /// 生成流媒体 URL（包含认证参数）
+  String getStreamUrl(String songId, {int? maxBitRate, String? format}) {
+    if (_config == null) return '';
+
+    final params = <String, String>{};
+
+    // 添加认证参数
+    if (_config!.authType == AuthType.apiKey && _config!.apiKey != null) {
+      params.addAll(SubsonicAuth.generateApiKeyAuthParams(
+        apiKey: _config!.apiKey!,
+        version: ApiConstants.apiVersion,
+        clientName: ApiConstants.clientName,
+        format: ApiConstants.format,
+      ));
+    } else if (_config!.password != null) {
+      params.addAll(SubsonicAuth.generateTokenAuthParams(
+        username: _config!.username,
+        password: _config!.password!,
+        version: ApiConstants.apiVersion,
+        clientName: ApiConstants.clientName,
+        format: ApiConstants.format,
+      ));
+    }
+
+    // 添加流媒体参数
+    params['id'] = songId;
+    if (maxBitRate != null) {
+      params['maxBitRate'] = maxBitRate.toString();
+    }
+    if (format != null) {
+      params['format'] = format;
+    }
+
+    // 构建完整 URL
+    final uri = Uri.parse(_config!.serverUrl + ApiConstants.stream);
+    final urlWithParams = uri.replace(queryParameters: params);
+    return urlWithParams.toString();
+  }
 }
 
 /// Ping 结果

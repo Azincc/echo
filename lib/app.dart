@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'core/theme/app_theme.dart';
 import 'features/auth/pages/login_page.dart';
 import 'providers/auth_provider.dart';
+import 'widgets/main_scaffold.dart';
 
 /// 应用主入口 Widget
 class App extends ConsumerWidget {
@@ -56,10 +57,10 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: '/login',
         builder: (context, state) => const LoginPage(),
       ),
-      // 主页（步骤 5 实现）
+      // 主页
       GoRoute(
         path: '/home',
-        builder: (context, state) => const Placeholder(), // 临时占位
+        builder: (context, state) => const MainScaffold(),
       ),
     ],
   );

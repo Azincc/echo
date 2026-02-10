@@ -25,6 +25,9 @@ class ApiConstants {
   static const String search3 = '/rest/search3';
   static const String getPlaylists = '/rest/getPlaylists';
   static const String getPlaylist = '/rest/getPlaylist';
+  static const String createPlaylist = '/rest/createPlaylist';
+  static const String updatePlaylist = '/rest/updatePlaylist';
+  static const String deletePlaylist = '/rest/deletePlaylist';
   static const String getStarred2 = '/rest/getStarred2';
   static const String star = '/rest/star';
   static const String unstar = '/rest/unstar';

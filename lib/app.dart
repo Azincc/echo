@@ -6,6 +6,8 @@ import 'core/theme/app_theme.dart';
 import 'features/auth/pages/login_page.dart';
 import 'providers/auth_provider.dart';
 import 'widgets/main_scaffold.dart';
+import 'features/discover/pages/discover_page.dart';
+import 'features/library/pages/library_page.dart';
 
 /// 应用主入口 Widget
 class App extends ConsumerWidget {
@@ -28,7 +30,11 @@ class App extends ConsumerWidget {
 
 /// 路由配置
 final routerProvider = Provider<GoRouter>((ref) {
+  // 定义 NavigatorKey，以便在 ShellRoute 中使用
+  final rootNavigatorKey = GlobalKey<NavigatorState>();
+
   return GoRouter(
+    navigatorKey: rootNavigatorKey,
     initialLocation: '/splash',
     redirect: (context, state) {
       final authState = ref.read(authStateProvider);
@@ -48,12 +54,36 @@ final routerProvider = Provider<GoRouter>((ref) {
       return null;
     },
     routes: [
-      // 启动页（将在后续步骤中实现检查登录状态）
+      // 启动页
       GoRoute(path: '/splash', builder: (context, state) => const SplashPage()),
       // 登录页
       GoRoute(path: '/login', builder: (context, state) => const LoginPage()),
-      // 主页
-      GoRoute(path: '/home', builder: (context, state) => const MainScaffold()),
+      // StatefulShellRoute 为主要导航结构
+      StatefulShellRoute.indexedStack(
+        builder: (context, state, navigationShell) {
+          return MainScaffold(navigationShell: navigationShell);
+        },
+        branches: [
+          // Tab 1: 音乐流
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
+                path: '/home',
+                builder: (context, state) => const DiscoverPage(),
+              ),
+            ],
+          ),
+          // Tab 2: 我的
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
+                path: '/library',
+                builder: (context, state) => const LibraryPage(),
+              ),
+            ],
+          ),
+        ],
+      ),
     ],
   );
 });

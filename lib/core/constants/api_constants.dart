@@ -32,6 +32,7 @@ class ApiConstants {
   static const String star = '/rest/star';
   static const String unstar = '/rest/unstar';
   static const String stream = '/rest/stream';
+  static const String download = '/rest/download';
   static const String getCoverArt = '/rest/getCoverArt';
   static const String scrobble = '/rest/scrobble';
 }

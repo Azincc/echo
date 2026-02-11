@@ -185,6 +185,12 @@ class ProgressBar extends ConsumerWidget {
     final position = playerState.position;
     final duration = playerState.duration;
 
+    // 确保 value 在有效范围内 (0 到 max)
+    final maxValue = duration.inMilliseconds > 0
+        ? duration.inMilliseconds.toDouble()
+        : 1.0;
+    final currentValue = position.inMilliseconds.toDouble().clamp(0.0, maxValue);
+
     return Column(
       children: [
         SliderTheme(
@@ -194,10 +200,8 @@ class ProgressBar extends ConsumerWidget {
             overlayShape: const RoundSliderOverlayShape(overlayRadius: 14),
           ),
           child: Slider(
-            value: position.inMilliseconds.toDouble(),
-            max: duration.inMilliseconds > 0
-                ? duration.inMilliseconds.toDouble()
-                : 1.0,
+            value: currentValue,
+            max: maxValue,
             onChanged: (value) {
               ref.read(playerProvider.notifier).seek(
                     Duration(milliseconds: value.toInt()),

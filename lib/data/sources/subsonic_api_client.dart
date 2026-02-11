@@ -215,7 +215,7 @@ class SubsonicApiClient {
   }
 
   /// 生成流媒体 URL（包含认证参数）
-  String getStreamUrl(String songId, {int? maxBitRate, String? format}) {
+  String getStreamUrl(String songId, {int? maxBitRate, String? format, bool useDownload = false}) {
     if (_config == null) return '';
 
     final params = <String, String>{};
@@ -247,8 +247,14 @@ class SubsonicApiClient {
       params['format'] = format;
     }
 
+    // 转码时使用 download 接口以支持 Range 请求（seek）
+    // 原始格式使用 stream 接口
+    final endpoint = (useDownload || format != null)
+        ? ApiConstants.download
+        : ApiConstants.stream;
+
     // 构建完整 URL
-    final uri = Uri.parse(_config!.serverUrl + ApiConstants.stream);
+    final uri = Uri.parse(_config!.serverUrl + endpoint);
     final urlWithParams = uri.replace(queryParameters: params);
     return urlWithParams.toString();
   }

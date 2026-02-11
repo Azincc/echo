@@ -21,9 +21,7 @@ class DiscoverPage extends ConsumerWidget {
             onPressed: () {
               Navigator.push(
                 context,
-                MaterialPageRoute(
-                  builder: (context) => const SearchPage(),
-                ),
+                MaterialPageRoute(builder: (context) => const SearchPage()),
               );
             },
           ),
@@ -40,19 +38,19 @@ class DiscoverPage extends ConsumerWidget {
           padding: const EdgeInsets.all(16),
           children: [
             // 随机推荐
-            const SectionHeader(title: '🎲 随机推荐'),
+            const SectionHeader(title: '随机推荐', icon: Icons.shuffle),
             const SizedBox(height: 12),
             const RandomSongsSection(),
             const SizedBox(height: 24),
 
             // 最近播放的专辑
-            const SectionHeader(title: '📌 最近播放'),
+            const SectionHeader(title: '最近播放', icon: Icons.history),
             const SizedBox(height: 12),
             const RecentAlbumsSection(),
             const SizedBox(height: 24),
 
             // 常听的专辑
-            const SectionHeader(title: '🔥 经常听的专辑'),
+            const SectionHeader(title: '经常听的专辑', icon: Icons.whatshot),
             const SizedBox(height: 12),
             const FrequentAlbumsSection(),
           ],
@@ -65,11 +63,13 @@ class DiscoverPage extends ConsumerWidget {
 /// 区块标题
 class SectionHeader extends StatelessWidget {
   final String title;
+  final IconData icon;
   final VoidCallback? onViewAll;
 
   const SectionHeader({
     super.key,
     required this.title,
+    required this.icon,
     this.onViewAll,
   });
 
@@ -78,17 +78,20 @@ class SectionHeader extends StatelessWidget {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Text(
-          title,
-          style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                fontWeight: FontWeight.bold,
-              ),
+        Row(
+          children: [
+            Icon(icon, color: Theme.of(context).colorScheme.primary, size: 24),
+            const SizedBox(width: 8),
+            Text(
+              title,
+              style: Theme.of(
+                context,
+              ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+            ),
+          ],
         ),
         if (onViewAll != null)
-          TextButton(
-            onPressed: onViewAll,
-            child: const Text('查看全部'),
-          ),
+          TextButton(onPressed: onViewAll, child: const Text('查看全部')),
       ],
     );
   }
@@ -106,70 +109,48 @@ class RandomSongsSection extends ConsumerWidget {
       data: (songs) {
         if (songs.isEmpty) {
           return const Center(
-            child: Padding(
-              padding: EdgeInsets.all(24),
-              child: Text('暂无歌曲'),
-            ),
+            child: Padding(padding: EdgeInsets.all(24), child: Text('暂无歌曲')),
           );
         }
 
-        return GridView.builder(
+        return ListView.builder(
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
-          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: 2,
-            childAspectRatio: 3,
-            crossAxisSpacing: 8,
-            mainAxisSpacing: 8,
-          ),
-          itemCount: songs.length > 10 ? 10 : songs.length,
+          itemCount: songs.length > 6 ? 6 : songs.length,
           itemBuilder: (context, index) {
             final song = songs[index];
-            return Card(
-              clipBehavior: Clip.antiAlias,
-              child: InkWell(
-                onTap: () {
-                  // 播放歌曲
-                  ref.read(playerProvider.notifier).playQueue(
-                        songs,
-                        startIndex: index,
-                      );
-                },
-                child: Padding(
-                  padding: const EdgeInsets.all(8),
-                  child: Row(
-                    children: [
-                      CoverArtImage(
-                        coverArtId: song.coverArt,
-                        size: 40,
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Text(
-                              song.title,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                            if (song.artist != null)
-                              Text(
-                                song.artist!,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: Theme.of(context).textTheme.bodySmall,
-                              ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
+            return ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: ClipRRect(
+                borderRadius: BorderRadius.circular(8),
+                child: CoverArtImage(
+                  coverArtId: song.coverArt,
+                  size: 56, // 增大图片尺寸
                 ),
+              ),
+              title: Text(
+                song.title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(fontWeight: FontWeight.w500),
+              ),
+              subtitle: Text(
+                song.artist ?? 'Unknown Artist',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+              onTap: () {
+                // 播放歌曲
+                ref
+                    .read(playerProvider.notifier)
+                    .playQueue(songs, startIndex: index);
+              },
+              trailing: IconButton(
+                icon: const Icon(Icons.more_vert),
+                onPressed: () {
+                  // TODO: 显示更多操作菜单
+                },
               ),
             );
           },
@@ -209,10 +190,7 @@ class RecentAlbumsSection extends ConsumerWidget {
       data: (albums) {
         if (albums.isEmpty) {
           return const Center(
-            child: Padding(
-              padding: EdgeInsets.all(24),
-              child: Text('暂无最近播放'),
-            ),
+            child: Padding(padding: EdgeInsets.all(24), child: Text('暂无最近播放')),
           );
         }
 
@@ -256,10 +234,7 @@ class FrequentAlbumsSection extends ConsumerWidget {
       data: (albums) {
         if (albums.isEmpty) {
           return const Center(
-            child: Padding(
-              padding: EdgeInsets.all(24),
-              child: Text('暂无常听专辑'),
-            ),
+            child: Padding(padding: EdgeInsets.all(24), child: Text('暂无常听专辑')),
           );
         }
 
@@ -320,10 +295,7 @@ class AlbumCard extends StatelessWidget {
           children: [
             ClipRRect(
               borderRadius: BorderRadius.circular(8),
-              child: CoverArtImage(
-                coverArtId: album.coverArt,
-                size: 140,
-              ),
+              child: CoverArtImage(coverArtId: album.coverArt, size: 140),
             ),
             const SizedBox(height: 8),
             Text(

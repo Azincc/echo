@@ -112,9 +112,11 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
 
     // 监听总时长
     _audioPlayer.durationStream.listen((duration) {
-      if (duration != null) {
+      if (duration != null && duration > Duration.zero) {
+        // 如果流能提供时长，优先使用流的时长（更准确）
         state = state.copyWith(duration: duration);
       }
+      // 如果 duration 为 null 或 0，保持使用歌曲元数据的时长
     });
 
     // 监听播放完成
@@ -141,16 +143,35 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
       final playQueue = queue ?? [song];
       final playIndex = index ?? 0;
 
+      // 如果歌曲有时长信息，先预设 duration（转码流可能无法获取时长）
+      final initialDuration = song.duration != null
+          ? Duration(seconds: song.duration!)
+          : Duration.zero;
+
       state = state.copyWith(
         currentSong: song,
         queue: playQueue,
         currentIndex: playIndex,
+        duration: initialDuration,  // 使用歌曲元数据的时长
       );
 
       // 更新通知栏媒体信息
       _updateMediaItem(song);
 
-      final streamUrl = _apiClient.getStreamUrl(song.id);
+      // 优先使用原始格式流式播放，只对确定不支持的格式转码
+      final String? transcodeFormat = _needsTranscoding(song.suffix);
+      final streamUrl = _apiClient.getStreamUrl(
+        song.id,
+        format: transcodeFormat,
+        maxBitRate: transcodeFormat != null ? 320 : null, // 转码时限制最大比特率
+      );
+
+      if (transcodeFormat != null) {
+        Logger.info('Transcoding ${song.suffix} to $transcodeFormat for: ${song.title}');
+      } else {
+        Logger.info('Playing original format (${song.suffix}): ${song.title}');
+      }
+
       await _audioPlayer.setUrl(streamUrl);
       await _audioPlayer.play();
 
@@ -160,7 +181,63 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
       Logger.info('Playing: ${song.title}');
     } catch (e) {
       Logger.error('Failed to play song', e);
+
+      // 如果播放失败且没有转码过，尝试转码播放
+      if (_needsTranscoding(song.suffix) == null) {
+        Logger.info('Original format failed, retrying with MP3 transcoding');
+        await _playWithTranscoding(song, queue: queue, index: index);
+      }
     }
+  }
+
+  /// 使用转码方式播放（降级方案）
+  Future<void> _playWithTranscoding(Song song, {List<Song>? queue, int? index}) async {
+    try {
+      final streamUrl = _apiClient.getStreamUrl(
+        song.id,
+        format: 'mp3',  // 转码为 MP3
+        maxBitRate: 320,
+      );
+
+      Logger.info('Retrying with MP3 transcoding: ${song.title}');
+      await _audioPlayer.setUrl(streamUrl);
+      await _audioPlayer.play();
+
+      // 上报"正在播放"
+      await _scrobble(song.id, submission: false);
+    } catch (e) {
+      Logger.error('Failed to play song even with transcoding', e);
+      // 可以在这里添加用户提示
+    }
+  }
+
+  /// 判断格式是否需要强制转码
+  /// 返回 null 表示直接使用原始格式，返回格式字符串表示需要转码
+  String? _needsTranscoding(String? suffix) {
+    if (suffix == null) return null;
+
+    final lowerSuffix = suffix.toLowerCase();
+
+    // 只对完全确定不支持的格式进行转码
+    // ExoPlayer/just_audio 在大多数平台上不支持的格式
+    const unsupportedFormats = [
+      'ape',     // Monkey's Audio - Android/iOS 不支持
+      'wv',      // WavPack - 部分平台不支持
+      'tta',     // True Audio - 不支持
+      'dff',     // DSD - 不支持
+      'dsf',     // DSD - 不支持
+      'tak',     // TAK - 不支持
+      'm4a',     // 可能包含 ALAC 编码，Android 支持不完整，转码更稳定
+      'alac',    // Apple Lossless - Android 支持不完整
+    ];
+
+    if (unsupportedFormats.contains(lowerSuffix)) {
+      return 'mp3';  // 转码为通用的 MP3 格式
+    }
+
+    // 其他格式优先尝试原始格式播放
+    // 支持的格式包括：mp3, aac, flac, ogg, opus, wav 等
+    return null;
   }
 
   /// 更新通知栏媒体信息

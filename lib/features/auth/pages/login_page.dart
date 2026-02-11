@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import '../../../providers/auth_provider.dart';
 import '../../../data/repositories/auth_repository.dart';
 
@@ -86,7 +87,10 @@ class _LoginPageState extends ConsumerState<LoginPage> {
     }
 
     if (success && mounted) {
-      // 登录成功，导航会由路由自动处理
+      // 登录成功，跳转到主页
+      if (context.mounted) {
+        context.go('/home');
+      }
     }
   }
 

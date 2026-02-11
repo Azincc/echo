@@ -26,7 +26,7 @@ class AlbumListPage extends ConsumerWidget {
             padding: const EdgeInsets.all(16),
             gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
               crossAxisCount: 2,
-              childAspectRatio: 0.7,
+              childAspectRatio: 0.75, // 调整比例以容纳文字
               crossAxisSpacing: 12,
               mainAxisSpacing: 12,
             ),
@@ -45,12 +45,14 @@ class AlbumListPage extends ConsumerWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Expanded(
+                    // 正方形封面
+                    AspectRatio(
+                      aspectRatio: 1.0,
                       child: ClipRRect(
                         borderRadius: BorderRadius.circular(8),
                         child: CoverArtImage(
                           coverArtId: album.coverArt,
-                          size: double.infinity,
+                          fit: BoxFit.cover,
                         ),
                       ),
                     ),

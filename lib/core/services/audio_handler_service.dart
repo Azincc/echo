@@ -6,14 +6,21 @@ import '../utils/logger.dart';
 class EchoAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
   final AudioPlayer _audioPlayer;
 
+  // 暴露 AudioPlayer 给外部使用
+  AudioPlayer get audioPlayer => _audioPlayer;
+
+  // 用于通知外部的回调
+  Function()? onSkipToNext;
+  Function()? onSkipToPrevious;
+
   EchoAudioHandler(this._audioPlayer) {
     _init();
   }
 
   /// 初始化监听器
   void _init() {
-    // 监听播放状态
-    _audioPlayer.playbackEventStream.listen((event) {
+    // 监听播放状态变化，同步到通知栏
+    _audioPlayer.playingStream.listen((playing) {
       _broadcastState();
     });
 
@@ -26,10 +33,7 @@ class EchoAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
 
     // 监听播放完成
     _audioPlayer.processingStateStream.listen((processingState) {
-      if (processingState == ProcessingState.completed) {
-        // 播放完成，通知外部
-        _broadcastState();
-      }
+      _broadcastState();
     });
   }
 
@@ -76,7 +80,17 @@ class EchoAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
   @override
   Future<void> updateMediaItem(MediaItem item) async {
     mediaItem.add(item);
-    _broadcastState();
+
+    // 立即设置为播放状态，激活 MediaSession
+    playbackState.add(playbackState.value.copyWith(
+      controls: _getControls(),
+      androidCompactActionIndices: const [0, 1, 2],
+      processingState: AudioProcessingState.ready,
+      playing: true,  // 关键：标记为正在播放
+      updatePosition: Duration.zero,
+      bufferedPosition: Duration.zero,
+      speed: 1.0,
+    ));
   }
 
   // ===== 播放控制 =====
@@ -85,24 +99,18 @@ class EchoAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
   Future<void> play() async {
     Logger.info('AudioHandler: play');
     await _audioPlayer.play();
-    _broadcastState();
   }
 
   @override
   Future<void> pause() async {
     Logger.info('AudioHandler: pause');
     await _audioPlayer.pause();
-    _broadcastState();
   }
 
   @override
   Future<void> stop() async {
     Logger.info('AudioHandler: stop');
     await _audioPlayer.stop();
-    playbackState.add(playbackState.value.copyWith(
-      processingState: AudioProcessingState.idle,
-      playing: false,
-    ));
     await super.stop();
   }
 
@@ -110,26 +118,23 @@ class EchoAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
   Future<void> seek(Duration position) async {
     Logger.info('AudioHandler: seek to $position');
     await _audioPlayer.seek(position);
-    _broadcastState();
   }
 
   @override
   Future<void> skipToNext() async {
     Logger.info('AudioHandler: skipToNext');
-    // 由 PlayerProvider 处理
-    // 这里只是触发事件，实际逻辑在外部
+    onSkipToNext?.call();
   }
 
   @override
   Future<void> skipToPrevious() async {
     Logger.info('AudioHandler: skipToPrevious');
-    // 由 PlayerProvider 处理
+    onSkipToPrevious?.call();
   }
 
   @override
   Future<void> setSpeed(double speed) async {
     await _audioPlayer.setSpeed(speed);
-    _broadcastState();
   }
 
   /// 清理资源
@@ -144,13 +149,14 @@ Future<EchoAudioHandler> initAudioService() async {
 
   final handler = await AudioService.init(
     builder: () => EchoAudioHandler(audioPlayer),
-    config: AudioServiceConfig(
-      androidNotificationChannelId: 'com.echo.audio',
+    config: const AudioServiceConfig(
+      androidNotificationChannelId: 'com.example.echo.audio',
       androidNotificationChannelName: 'Echo Music Playback',
-      androidNotificationOngoing: true,
-      androidNotificationIcon: 'mipmap/ic_launcher',
+      androidNotificationChannelDescription: 'Echo music player controls',
+      androidNotificationOngoing: false,  // 允许用户手动关闭通知
+      androidNotificationIcon: 'drawable/ic_notification',
       androidShowNotificationBadge: true,
-      androidStopForegroundOnPause: false,
+      androidStopForegroundOnPause: false,  // 暂停时保持通知栏
       fastForwardInterval: Duration(seconds: 10),
       rewindInterval: Duration(seconds: 10),
     ),

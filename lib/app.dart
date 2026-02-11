@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'core/theme/app_theme.dart';
@@ -48,20 +49,11 @@ final routerProvider = Provider<GoRouter>((ref) {
     },
     routes: [
       // 启动页（将在后续步骤中实现检查登录状态）
-      GoRoute(
-        path: '/splash',
-        builder: (context, state) => const SplashPage(),
-      ),
+      GoRoute(path: '/splash', builder: (context, state) => const SplashPage()),
       // 登录页
-      GoRoute(
-        path: '/login',
-        builder: (context, state) => const LoginPage(),
-      ),
+      GoRoute(path: '/login', builder: (context, state) => const LoginPage()),
       // 主页
-      GoRoute(
-        path: '/home',
-        builder: (context, state) => const MainScaffold(),
-      ),
+      GoRoute(path: '/home', builder: (context, state) => const MainScaffold()),
     ],
   );
 });
@@ -82,6 +74,9 @@ class _SplashPageState extends ConsumerState<SplashPage> {
   }
 
   Future<void> _checkAuthAndNavigate() async {
+    // 请求通知权限 (Android 13+)
+    await Permission.notification.request();
+
     // 等待认证状态加载
     await Future.delayed(const Duration(milliseconds: 500));
 
@@ -113,16 +108,16 @@ class _SplashPageState extends ConsumerState<SplashPage> {
             const SizedBox(height: 24),
             Text(
               'SubSonic Flow',
-              style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
+              style: Theme.of(
+                context,
+              ).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 8),
             Text(
               '正在初始化...',
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: Theme.of(context).colorScheme.onSurfaceVariant,
-                  ),
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
             ),
             const SizedBox(height: 24),
             const CircularProgressIndicator(),

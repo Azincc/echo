@@ -59,7 +59,9 @@ class PlayerState {
 }
 
 /// 播放器 Provider
-final playerProvider = StateNotifierProvider<PlayerNotifier, PlayerState>((ref) {
+final playerProvider = StateNotifierProvider<PlayerNotifier, PlayerState>((
+  ref,
+) {
   final apiClient = ref.watch(apiClientProvider);
   final musicRepository = ref.watch(musicRepositoryProvider);
   return PlayerNotifier(apiClient, musicRepository, ref);
@@ -70,10 +72,11 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
   final SubsonicApiClient _apiClient;
   final MusicRepository _musicRepository;
   final Ref _ref;
-  final AudioPlayer _audioPlayer = AudioPlayer();
+  late final AudioPlayer _audioPlayer;
   EchoAudioHandler? _audioHandler;
 
-  PlayerNotifier(this._apiClient, this._musicRepository, this._ref) : super(PlayerState()) {
+  PlayerNotifier(this._apiClient, this._musicRepository, this._ref)
+    : super(PlayerState()) {
     _init();
   }
 
@@ -82,14 +85,19 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
     // 初始化 AudioService（仅在移动平台）
     try {
       _audioHandler = await initAudioService();
+      _audioPlayer = _audioHandler!.audioPlayer;
       Logger.info('AudioService initialized');
 
-      // 监听通知栏的控制事件
-      _audioHandler?.playbackState.listen((state) {
-        // 这里可以处理通知栏按钮事件
-      });
+      // 设置通知栏按钮回调
+      _audioHandler?.onSkipToNext = () {
+        next();
+      };
+      _audioHandler?.onSkipToPrevious = () {
+        previous();
+      };
     } catch (e) {
       Logger.warn('AudioService not available (web platform): $e');
+      _audioPlayer = AudioPlayer();
     }
 
     // 监听播放状态
@@ -139,12 +147,12 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
         currentIndex: playIndex,
       );
 
+      // 更新通知栏媒体信息
+      _updateMediaItem(song);
+
       final streamUrl = _apiClient.getStreamUrl(song.id);
       await _audioPlayer.setUrl(streamUrl);
       await _audioPlayer.play();
-
-      // 更新通知栏媒体信息
-      _updateMediaItem(song);
 
       // 上报"正在播放"
       await _scrobble(song.id, submission: false);
@@ -168,7 +176,9 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
       title: song.title,
       artist: song.artist ?? 'Unknown Artist',
       album: song.album ?? 'Unknown Album',
-      duration: song.duration != null ? Duration(seconds: song.duration!) : null,
+      duration: song.duration != null
+          ? Duration(seconds: song.duration!)
+          : null,
       artUri: coverArtUrl != null ? Uri.parse(coverArtUrl) : null,
     );
 
@@ -304,10 +314,7 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
       final newIndex = index < state.currentIndex
           ? state.currentIndex - 1
           : state.currentIndex;
-      state = state.copyWith(
-        queue: newQueue,
-        currentIndex: newIndex,
-      );
+      state = state.copyWith(queue: newQueue, currentIndex: newIndex);
     }
   }
 
@@ -380,10 +387,7 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
         return song;
       }).toList();
 
-      state = state.copyWith(
-        currentSong: updatedSong,
-        queue: updatedQueue,
-      );
+      state = state.copyWith(currentSong: updatedSong, queue: updatedQueue);
 
       // 刷新相关数据
       _ref.invalidate(starredProvider);

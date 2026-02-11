@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../providers/music_provider.dart';
 import '../../../providers/player_provider.dart';
 import '../../../widgets/cover_art_image.dart';
+import '../../../widgets/main_scaffold.dart';
 import '../../library/pages/album_detail_page.dart';
 import 'search_page.dart';
 
@@ -14,6 +15,13 @@ class DiscoverPage extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     return Scaffold(
       appBar: AppBar(
+        leading: IconButton(
+          icon: const Icon(Icons.menu),
+          onPressed: () {
+            // 使用 GlobalKey 打开侧栏
+            scaffoldKey.currentState?.openDrawer();
+          },
+        ),
         title: const Text('音乐流'),
         actions: [
           IconButton(

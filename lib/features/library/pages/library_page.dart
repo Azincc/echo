@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../providers/music_provider.dart';
 import '../../../providers/playlist_provider.dart';
+import '../../../widgets/main_scaffold.dart';
 import 'album_list_page.dart';
 import 'artist_list_page.dart';
 import 'playlist_detail_page.dart';
@@ -18,6 +19,13 @@ class LibraryPage extends ConsumerWidget {
 
     return Scaffold(
       appBar: AppBar(
+        leading: IconButton(
+          icon: const Icon(Icons.menu),
+          onPressed: () {
+            // 使用 GlobalKey 打开侧栏
+            scaffoldKey.currentState?.openDrawer();
+          },
+        ),
         title: const Text('我的'),
       ),
       body: ListView(

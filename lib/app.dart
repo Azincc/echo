@@ -33,6 +33,19 @@ final routerProvider = Provider<GoRouter>((ref) {
   // 定义 NavigatorKey，以便在 ShellRoute 中使用
   final rootNavigatorKey = GlobalKey<NavigatorState>();
 
+  // 监听认证状态变化
+  ref.listen<AuthState>(
+    authStateProvider,
+    (previous, next) {
+      // 当认证状态变化时，刷新路由
+      if (previous?.isAuthenticated != next.isAuthenticated) {
+        rootNavigatorKey.currentState?.context.go(
+          next.isAuthenticated ? '/home' : '/login',
+        );
+      }
+    },
+  );
+
   return GoRouter(
     navigatorKey: rootNavigatorKey,
     initialLocation: '/splash',

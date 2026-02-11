@@ -41,9 +41,14 @@ class SubsonicApiClient {
   }
 
   /// 设置服务器配置
-  void setConfig(ServerConfig config) {
+  /// 设置服务器配置
+  void setConfig(ServerConfig? config) {
     _config = config;
-    _dio.options.baseUrl = config.serverUrl;
+    if (config != null) {
+      _dio.options.baseUrl = config.serverUrl;
+    } else {
+      _dio.options.baseUrl = '';
+    }
   }
 
   /// 添加认证参数到请求

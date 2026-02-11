@@ -138,6 +138,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
   /// 登出
   Future<void> logout() async {
     await _repository.logout();
+    _apiClient.setConfig(null);  // 清除 API 客户端配置
     state = AuthState();
   }
 

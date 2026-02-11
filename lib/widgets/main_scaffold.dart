@@ -1,6 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../features/player/widgets/mini_player.dart';
+import 'app_drawer.dart';
+
+// GlobalKey 用于访问 Scaffold 状态（打开侧栏）
+final scaffoldKey = GlobalKey<ScaffoldState>();
 
 /// 主骨架 - 包含底部导航和内容区域
 class MainScaffold extends StatelessWidget {
@@ -11,6 +15,9 @@ class MainScaffold extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      key: scaffoldKey,
+      // 侧栏
+      drawer: const AppDrawer(),
       body: navigationShell,
       // 迷你播放器
       bottomSheet: const MiniPlayer(),

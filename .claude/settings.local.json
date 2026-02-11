@@ -3,7 +3,14 @@
     "allow": [
       "Bash(flutter pub get:*)",
       "Bash(flutter analyze:*)",
-      "Bash(git add:*)"
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git push:*)",
+      "Bash(flutter doctor:*)",
+      "Bash(./gradlew clean:*)",
+      "Bash(flutter clean:*)",
+      "Bash(adb install:*)",
+      "Bash(adb shell:*)"
     ]
   }
 }

@@ -1,8 +1,10 @@
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../providers/music_provider.dart';
 import '../../../providers/player_provider.dart';
 import '../../../widgets/cover_art_image.dart';
+import 'package:marquee/marquee.dart';
 
 /// 专辑详情页
 class AlbumDetailPage extends ConsumerWidget {
@@ -29,40 +31,157 @@ class AlbumDetailPage extends ConsumerWidget {
               SliverAppBar(
                 expandedHeight: 300,
                 pinned: true,
-                flexibleSpace: FlexibleSpaceBar(
-                  title: Text(
-                    album.name,
-                    style: const TextStyle(
-                      shadows: [
-                        Shadow(
-                          offset: Offset(0, 1),
-                          blurRadius: 3.0,
-                          color: Colors.black45,
-                        ),
-                      ],
-                    ),
-                  ),
-                  background: Stack(
-                    fit: StackFit.expand,
-                    children: [
-                      CoverArtImage(
+                flexibleSpace: Stack(
+                  children: [
+                    // Layer 1: Parallax Image
+                    FlexibleSpaceBar(
+                      background: CoverArtImage(
                         coverArtId: album.coverArt,
                         fit: BoxFit.cover,
                       ),
-                      Container(
+                    ),
+                    // Layer 2: Fixed Gradient Shadow (follows divider)
+                    Positioned(
+                      left: 0,
+                      right: 0,
+                      bottom: 0,
+                      height: 120, // Approx 1/3 to 1/4 of expanded height
+                      child: Container(
                         decoration: BoxDecoration(
                           gradient: LinearGradient(
                             begin: Alignment.topCenter,
                             end: Alignment.bottomCenter,
                             colors: [
-                              Colors.transparent,
-                              Colors.black.withValues(alpha: 0.7),
+                              Theme.of(
+                                context,
+                              ).scaffoldBackgroundColor.withOpacity(0.0),
+                              Theme.of(
+                                context,
+                              ).scaffoldBackgroundColor.withOpacity(0.5),
+                              Theme.of(
+                                context,
+                              ).scaffoldBackgroundColor.withOpacity(0.9),
                             ],
+                            // Smooth fade from top of this container to bottom
+                            stops: const [0.0, 0.6, 1.0],
                           ),
                         ),
                       ),
-                    ],
-                  ),
+                    ),
+                    // Layer 3: Title (Animation)
+                    FlexibleSpaceBar(
+                      titlePadding: EdgeInsets.zero,
+                      title: SizedBox(
+                        height: 50,
+                        child: Builder(
+                          builder: (context) {
+                            final settings = context
+                                .dependOnInheritedWidgetOfExactType<
+                                  FlexibleSpaceBarSettings
+                                >();
+                            final deltaExtent =
+                                settings!.maxExtent - settings.minExtent;
+                            final t =
+                                (settings.currentExtent - settings.minExtent) /
+                                deltaExtent;
+                            // t goes from 0.0 (collapsed) to 1.0 (expanded)
+
+                            // Dynamic padding:
+                            // Collapsed: left 56 (clears back button)
+                            // Expanded: left 16 (standard margin)
+                            final tClamped = t.clamp(0.0, 1.0);
+
+                            // helper function
+                            final leftPadding =
+                                lerpDouble(56.0, 16.0, tClamped) ?? 16.0;
+
+                            final isDark =
+                                Theme.of(context).brightness == Brightness.dark;
+                            final textColor = isDark
+                                ? Colors.white
+                                : Colors.black;
+                            final shadowColor = isDark
+                                ? Colors.black.withOpacity(0.8)
+                                : Colors.white.withOpacity(0.8);
+
+                            final textStyle = TextStyle(
+                              color: textColor,
+                              shadows: [
+                                Shadow(
+                                  offset: const Offset(0, 1),
+                                  blurRadius: 3.0,
+                                  color: shadowColor,
+                                ),
+                              ],
+                              fontSize: 16,
+                              fontWeight: FontWeight.w500,
+                            );
+
+                            return Padding(
+                              padding: EdgeInsets.only(
+                                left: leftPadding,
+                                right: 16,
+                                bottom: 16,
+                              ),
+                              child: LayoutBuilder(
+                                builder: (context, constraints) {
+                                  final textPainter =
+                                      TextPainter(
+                                        text: TextSpan(
+                                          text: album.name,
+                                          style: textStyle,
+                                        ),
+                                        maxLines: 1,
+                                        textDirection: TextDirection.ltr,
+                                      )..layout(
+                                        minWidth: 0,
+                                        maxWidth: double.infinity,
+                                      );
+
+                                  final isOverflowing =
+                                      textPainter.width > constraints.maxWidth;
+
+                                  if (isOverflowing) {
+                                    return Marquee(
+                                      text: album.name,
+                                      style: textStyle,
+                                      scrollAxis: Axis.horizontal,
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.end,
+                                      blankSpace: 20.0,
+                                      velocity: 30.0,
+                                      pauseAfterRound: const Duration(
+                                        seconds: 2,
+                                      ),
+                                      startPadding: 0.0,
+                                      accelerationDuration: const Duration(
+                                        seconds: 1,
+                                      ),
+                                      accelerationCurve: Curves.linear,
+                                      decelerationDuration: const Duration(
+                                        milliseconds: 500,
+                                      ),
+                                      decelerationCurve: Curves.easeOut,
+                                    );
+                                  } else {
+                                    return Align(
+                                      alignment: Alignment.bottomLeft,
+                                      child: Text(
+                                        album.name,
+                                        style: textStyle,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    );
+                                  }
+                                },
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
               SliverToBoxAdapter(

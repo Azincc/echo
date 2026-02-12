@@ -2,7 +2,7 @@ name: echo
 description: "A new Flutter project."
 # The following line prevents the package from being accidentally published to
 # pub.dev using `flutter pub publish`. This is preferred for private packages.
-publish_to: 'none' # Remove this line if you wish to publish to pub.dev
+publish_to: "none" # Remove this line if you wish to publish to pub.dev
 
 # The following defines the version and build number for your application.
 # A version number is three numbers separated by dots, like 1.2.43
@@ -56,8 +56,16 @@ dependencies:
   cached_network_image: ^3.4.1
   go_router: ^14.8.1
   permission_handler: ^12.0.1
+  drift: ^2.22.1
+  sqlite3_flutter_libs: ^0.5.28
+  path_provider: ^2.1.5
+  path: ^1.9.1
+  connectivity_plus: ^6.1.1
+  fluttertoast: ^8.2.10
+  freezed_annotation: ^3.1.0
 
 dev_dependencies:
+  drift_dev: ^2.22.1
   flutter_test:
     sdk: flutter
 
@@ -69,13 +77,14 @@ dev_dependencies:
   flutter_lints: ^6.0.0
   riverpod_generator: ^2.6.3
   build_runner: ^2.4.14
+  freezed: ^3.1.0
+  json_serializable: ^6.9.5
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
 
 # The following section is specific to Flutter packages.
 flutter:
-
   # The following line ensures that the Material Icons font is
   # included with your application, so that you can use the icons in
   # the material Icons class.

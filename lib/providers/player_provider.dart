@@ -7,8 +7,9 @@ import '../data/repositories/music_repository.dart';
 import '../core/constants/api_constants.dart';
 import '../core/utils/logger.dart';
 import '../core/services/audio_handler_service.dart';
-import 'auth_provider.dart';
+
 import 'music_provider.dart';
+import 'api_provider.dart';
 
 /// 播放器状态
 class PlayerState {
@@ -59,12 +60,14 @@ class PlayerState {
 }
 
 /// 播放器 Provider
+
+// ...
 final playerProvider = StateNotifierProvider<PlayerNotifier, PlayerState>((
   ref,
 ) {
-  final apiClient = ref.watch(apiClientProvider);
+  final apiClient = ref.watch(subsonicApiClientProvider);
   final musicRepository = ref.watch(musicRepositoryProvider);
-  return PlayerNotifier(apiClient, musicRepository, ref);
+  return PlayerNotifier(apiClient, musicRepository ?? MusicRepository(apiClient), ref);
 });
 
 /// 播放器状态管理器
@@ -152,7 +155,7 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
         currentSong: song,
         queue: playQueue,
         currentIndex: playIndex,
-        duration: initialDuration,  // 使用歌曲元数据的时长
+        duration: initialDuration, // 使用歌曲元数据的时长
       );
 
       // 更新通知栏媒体信息
@@ -167,7 +170,9 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
       );
 
       if (transcodeFormat != null) {
-        Logger.info('Transcoding ${song.suffix} to $transcodeFormat for: ${song.title}');
+        Logger.info(
+          'Transcoding ${song.suffix} to $transcodeFormat for: ${song.title}',
+        );
       } else {
         Logger.info('Playing original format (${song.suffix}): ${song.title}');
       }
@@ -191,11 +196,15 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
   }
 
   /// 使用转码方式播放（降级方案）
-  Future<void> _playWithTranscoding(Song song, {List<Song>? queue, int? index}) async {
+  Future<void> _playWithTranscoding(
+    Song song, {
+    List<Song>? queue,
+    int? index,
+  }) async {
     try {
       final streamUrl = _apiClient.getStreamUrl(
         song.id,
-        format: 'mp3',  // 转码为 MP3
+        format: 'mp3', // 转码为 MP3
         maxBitRate: 320,
       );
 
@@ -221,18 +230,18 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
     // 只对完全确定不支持的格式进行转码
     // ExoPlayer/just_audio 在大多数平台上不支持的格式
     const unsupportedFormats = [
-      'ape',     // Monkey's Audio - Android/iOS 不支持
-      'wv',      // WavPack - 部分平台不支持
-      'tta',     // True Audio - 不支持
-      'dff',     // DSD - 不支持
-      'dsf',     // DSD - 不支持
-      'tak',     // TAK - 不支持
-      'm4a',     // 可能包含 ALAC 编码，Android 支持不完整，转码更稳定
-      'alac',    // Apple Lossless - Android 支持不完整
+      'ape', // Monkey's Audio - Android/iOS 不支持
+      'wv', // WavPack - 部分平台不支持
+      'tta', // True Audio - 不支持
+      'dff', // DSD - 不支持
+      'dsf', // DSD - 不支持
+      'tak', // TAK - 不支持
+      'm4a', // 可能包含 ALAC 编码，Android 支持不完整，转码更稳定
+      'alac', // Apple Lossless - Android 支持不完整
     ];
 
     if (unsupportedFormats.contains(lowerSuffix)) {
-      return 'mp3';  // 转码为通用的 MP3 格式
+      return 'mp3'; // 转码为通用的 MP3 格式
     }
 
     // 其他格式优先尝试原始格式播放

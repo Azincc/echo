@@ -2,93 +2,39 @@ import 'package:dio/dio.dart';
 import '../../core/constants/api_constants.dart';
 import '../../core/utils/subsonic_auth.dart';
 import '../../core/utils/logger.dart';
-import '../models/server_config.dart';
+import '../models/music_library.dart';
 
-/// Subsonic API 客户端
+/// Subsonic API Client
+/// Updated to support MusicLibrary model and injected Dio.
 class SubsonicApiClient {
-  late final Dio _dio;
-  ServerConfig? _config;
+  final Dio _dio;
+  MusicLibrary? _library;
 
-  SubsonicApiClient() {
-    _dio = Dio(
-      BaseOptions(
-        connectTimeout: ApiConstants.connectTimeout,
-        receiveTimeout: ApiConstants.receiveTimeout,
-        responseType: ResponseType.json,
-      ),
-    );
-
-    // 添加日志拦截器（仅调试模式）
-    _dio.interceptors.add(LogInterceptor(
-      requestBody: true,
-      responseBody: true,
-      logPrint: (obj) => Logger.debug(obj.toString()),
-    ));
-
-    // 添加认证拦截器
-    _dio.interceptors.add(
-      InterceptorsWrapper(
-        onRequest: (options, handler) {
-          _addAuthParams(options);
-          handler.next(options);
-        },
-        onError: (error, handler) {
-          Logger.error('API Error', error);
-          handler.next(error);
-        },
-      ),
-    );
+  SubsonicApiClient({required Dio dio}) : _dio = dio {
+    // Remove any existing auth interceptor (may reference a stale client instance)
+    // then add a new one pointing to this client.
+    _dio.interceptors.removeWhere((i) => i is _SubsonicAuthInterceptor);
+    _dio.interceptors.add(_SubsonicAuthInterceptor(this));
   }
 
-  /// 设置服务器配置
-  /// 设置服务器配置
-  void setConfig(ServerConfig? config) {
-    _config = config;
-    if (config != null) {
-      _dio.options.baseUrl = config.serverUrl;
-    } else {
-      _dio.options.baseUrl = '';
-    }
+  /// Set the current music library configuration
+  void setLibrary(MusicLibrary? library) {
+    _library = library;
+    // Note: Base URL is handled by AddressPool/Dio options updates in Provider.
+    // Here we just store library for Auth params.
   }
 
-  /// 添加认证参数到请求
-  void _addAuthParams(RequestOptions options) {
-    if (_config == null) return;
+  MusicLibrary? get library => _library;
 
-    Map<String, String> authParams;
-
-    if (_config!.authType == AuthType.apiKey && _config!.apiKey != null) {
-      // API Key 认证
-      authParams = SubsonicAuth.generateApiKeyAuthParams(
-        apiKey: _config!.apiKey!,
-        version: ApiConstants.apiVersion,
-        clientName: ApiConstants.clientName,
-        format: ApiConstants.format,
-      );
-    } else if (_config!.password != null) {
-      // Token/Salt 认证
-      authParams = SubsonicAuth.generateTokenAuthParams(
-        username: _config!.username,
-        password: _config!.password!,
-        version: ApiConstants.apiVersion,
-        clientName: ApiConstants.clientName,
-        format: ApiConstants.format,
-      );
-    } else {
-      Logger.warn('No valid authentication credentials');
-      return;
-    }
-
-    // 合并认证参数到查询参数
-    options.queryParameters.addAll(authParams);
-  }
-
-  /// 检查响应状态
+  /// Check response status (Subsonic specific)
   void _checkResponse(Map<String, dynamic> data) {
-    final response = data['subsonic-response'];
-    if (response == null) {
-      throw Exception('Invalid response: missing subsonic-response');
+    if (!data.containsKey('subsonic-response')) {
+      // Some servers might return plain JSON if error?
+      // throw Exception('Invalid response: missing subsonic-response');
+      return; // Or throw?
     }
+    final response = data['subsonic-response'];
+    if (response == null) return;
 
     final status = response['status'];
     if (status != 'ok') {
@@ -99,7 +45,7 @@ class SubsonicApiClient {
     }
   }
 
-  /// Ping 测试连接
+  /// Ping
   Future<PingResult> ping() async {
     try {
       final response = await _dio.get(ApiConstants.ping);
@@ -116,20 +62,14 @@ class SubsonicApiClient {
       );
     } on DioException catch (e) {
       Logger.error('Ping failed', e);
-      return PingResult(
-        success: false,
-        errorMessage: e.message,
-      );
+      return PingResult(success: false, errorMessage: e.message);
     } catch (e) {
       Logger.error('Ping failed', e);
-      return PingResult(
-        success: false,
-        errorMessage: e.toString(),
-      );
+      return PingResult(success: false, errorMessage: e.toString());
     }
   }
 
-  /// 获取 OpenSubsonic 扩展列表
+  /// Get OpenSubsonic Extensions
   Future<List<String>> getOpenSubsonicExtensions() async {
     try {
       final response = await _dio.get(ApiConstants.getOpenSubsonicExtensions);
@@ -150,21 +90,18 @@ class SubsonicApiClient {
     }
   }
 
-  /// 通用 GET 请求
+  /// Generic GET
   Future<Map<String, dynamic>> get(
     String path, {
     Map<String, dynamic>? queryParameters,
   }) async {
-    final response = await _dio.get(
-      path,
-      queryParameters: queryParameters,
-    );
+    final response = await _dio.get(path, queryParameters: queryParameters);
     final data = response.data as Map<String, dynamic>;
     _checkResponse(data);
     return data['subsonic-response'];
   }
 
-  /// 通用 POST 请求
+  /// Generic POST
   Future<Map<String, dynamic>> post(
     String path, {
     Map<String, dynamic>? queryParameters,
@@ -180,70 +117,43 @@ class SubsonicApiClient {
     return responseData['subsonic-response'];
   }
 
-  /// 获取 Dio 实例（用于流式播放等特殊场景）
+  /// Get Dio instance
   Dio get dio => _dio;
 
-  /// 生成封面 URL（包含认证参数）
+  /// Generate Cover Art URL
   String getCoverArtUrl(String coverArtId, {int? size}) {
-    if (_config == null) return '';
+    if (_library == null) return '';
+    // Use current dio baseUrl
+    final baseUrl = _dio.options.baseUrl;
+    if (baseUrl.isEmpty) return '';
 
     final params = <String, String>{};
+    _addAuthParamsMap(params);
 
-    // 添加认证参数
-    if (_config!.authType == AuthType.apiKey && _config!.apiKey != null) {
-      params.addAll(SubsonicAuth.generateApiKeyAuthParams(
-        apiKey: _config!.apiKey!,
-        version: ApiConstants.apiVersion,
-        clientName: ApiConstants.clientName,
-        format: ApiConstants.format,
-      ));
-    } else if (_config!.password != null) {
-      params.addAll(SubsonicAuth.generateTokenAuthParams(
-        username: _config!.username,
-        password: _config!.password!,
-        version: ApiConstants.apiVersion,
-        clientName: ApiConstants.clientName,
-        format: ApiConstants.format,
-      ));
-    }
-
-    // 添加封面参数
     params['id'] = coverArtId;
     if (size != null) {
       params['size'] = size.toString();
     }
 
-    // 构建完整 URL
-    final uri = Uri.parse(_config!.serverUrl + ApiConstants.getCoverArt);
+    final uri = Uri.parse(baseUrl + ApiConstants.getCoverArt);
     final urlWithParams = uri.replace(queryParameters: params);
     return urlWithParams.toString();
   }
 
-  /// 生成流媒体 URL（包含认证参数）
-  String getStreamUrl(String songId, {int? maxBitRate, String? format, bool useDownload = false}) {
-    if (_config == null) return '';
+  /// Generate Stream URL
+  String getStreamUrl(
+    String songId, {
+    int? maxBitRate,
+    String? format,
+    bool useDownload = false,
+  }) {
+    if (_library == null) return '';
+    final baseUrl = _dio.options.baseUrl;
+    if (baseUrl.isEmpty) return '';
 
     final params = <String, String>{};
+    _addAuthParamsMap(params);
 
-    // 添加认证参数
-    if (_config!.authType == AuthType.apiKey && _config!.apiKey != null) {
-      params.addAll(SubsonicAuth.generateApiKeyAuthParams(
-        apiKey: _config!.apiKey!,
-        version: ApiConstants.apiVersion,
-        clientName: ApiConstants.clientName,
-        format: ApiConstants.format,
-      ));
-    } else if (_config!.password != null) {
-      params.addAll(SubsonicAuth.generateTokenAuthParams(
-        username: _config!.username,
-        password: _config!.password!,
-        version: ApiConstants.apiVersion,
-        clientName: ApiConstants.clientName,
-        format: ApiConstants.format,
-      ));
-    }
-
-    // 添加流媒体参数
     params['id'] = songId;
     if (maxBitRate != null) {
       params['maxBitRate'] = maxBitRate.toString();
@@ -252,20 +162,66 @@ class SubsonicApiClient {
       params['format'] = format;
     }
 
-    // 转码时使用 download 接口以支持 Range 请求（seek）
-    // 原始格式使用 stream 接口
     final endpoint = (useDownload || format != null)
         ? ApiConstants.download
         : ApiConstants.stream;
 
-    // 构建完整 URL
-    final uri = Uri.parse(_config!.serverUrl + endpoint);
+    final uri = Uri.parse(baseUrl + endpoint);
     final urlWithParams = uri.replace(queryParameters: params);
     return urlWithParams.toString();
   }
+
+  void _addAuthParamsMap(Map<String, String> params) {
+    if (_library == null) {
+      // Just common params if no library
+      params['v'] = ApiConstants.apiVersion;
+      params['c'] = ApiConstants.clientName;
+      params['f'] = ApiConstants.format;
+      return;
+    }
+
+    if (_library!.authType == MusicLibraryAuthType.apiKey &&
+        _library!.apiKey != null) {
+      params.addAll(
+        SubsonicAuth.generateApiKeyAuthParams(
+          apiKey: _library!.apiKey!,
+          version: ApiConstants.apiVersion,
+          clientName: ApiConstants.clientName,
+          format: ApiConstants.format,
+        ),
+      );
+    } else if (_library!.password != null) {
+      params.addAll(
+        SubsonicAuth.generateTokenAuthParams(
+          username: _library!.username ?? '',
+          password: _library!.password!,
+          version: ApiConstants.apiVersion,
+          clientName: ApiConstants.clientName,
+          format: ApiConstants.format,
+        ),
+      );
+    } else {
+      // Only common params if auth data incomplete
+      params['v'] = ApiConstants.apiVersion;
+      params['c'] = ApiConstants.clientName;
+      params['f'] = ApiConstants.format;
+    }
+  }
 }
 
-/// Ping 结果
+class _SubsonicAuthInterceptor extends Interceptor {
+  final SubsonicApiClient _client;
+  _SubsonicAuthInterceptor(this._client);
+
+  @override
+  void onRequest(RequestOptions options, RequestInterceptorHandler handler) {
+    final params = <String, String>{};
+    _client._addAuthParamsMap(params);
+    options.queryParameters.addAll(params);
+    handler.next(options);
+  }
+}
+
 class PingResult {
   final bool success;
   final bool isOpenSubsonic;
@@ -282,13 +238,10 @@ class PingResult {
   });
 }
 
-/// Subsonic 异常
 class SubsonicException implements Exception {
   final String message;
   final int code;
-
   SubsonicException(this.message, this.code);
-
   @override
   String toString() => 'SubsonicException: $message (code: $code)';
 }

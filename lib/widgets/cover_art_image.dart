@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cached_network_image/cached_network_image.dart';
-import '../providers/auth_provider.dart';
+import '../providers/api_provider.dart';
 
 /// 封面图组件 - 从服务端获取封面
 class CoverArtImage extends ConsumerWidget {
@@ -23,7 +23,7 @@ class CoverArtImage extends ConsumerWidget {
       return _buildPlaceholder(context);
     }
 
-    final apiClient = ref.watch(apiClientProvider);
+    final apiClient = ref.watch(subsonicApiClientProvider);
 
     // 处理 size 参数，避免 Infinity
     int? coverSize;
@@ -47,7 +47,8 @@ class CoverArtImage extends ConsumerWidget {
       width: size,
       height: size,
       fit: fit,
-      placeholder: (context, url) => _buildPlaceholder(context, isLoading: true),
+      placeholder: (context, url) =>
+          _buildPlaceholder(context, isLoading: true),
       errorWidget: (context, url, error) => _buildPlaceholder(context),
     );
   }
@@ -82,5 +83,3 @@ class CoverArtImage extends ConsumerWidget {
     return size! * 0.5;
   }
 }
-
-

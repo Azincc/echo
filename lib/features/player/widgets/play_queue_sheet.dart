@@ -21,9 +21,7 @@ class PlayQueueSheet extends ConsumerWidget {
         return Container(
           decoration: BoxDecoration(
             color: Theme.of(context).colorScheme.surface,
-            borderRadius: const BorderRadius.vertical(
-              top: Radius.circular(16),
-            ),
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
           ),
           child: Column(
             children: [
@@ -33,28 +31,33 @@ class PlayQueueSheet extends ConsumerWidget {
                 height: 4,
                 margin: const EdgeInsets.symmetric(vertical: 12),
                 decoration: BoxDecoration(
-                  color: Theme.of(context).colorScheme.onSurfaceVariant.withOpacity(0.4),
+                  color: Theme.of(
+                    context,
+                  ).colorScheme.onSurfaceVariant.withValues(alpha: 0.4),
                   borderRadius: BorderRadius.circular(2),
                 ),
               ),
 
               // 标题栏
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 8,
+                ),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     Text(
                       '播放队列',
                       style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                            fontWeight: FontWeight.bold,
-                          ),
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                     Text(
                       '${queue.length} 首',
                       style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                            color: Theme.of(context).colorScheme.onSurfaceVariant,
-                          ),
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
                     ),
                   ],
                 ),
@@ -77,7 +80,9 @@ class PlayQueueSheet extends ConsumerWidget {
                             leading: isPlaying
                                 ? Icon(
                                     Icons.play_arrow,
-                                    color: Theme.of(context).colorScheme.primary,
+                                    color: Theme.of(
+                                      context,
+                                    ).colorScheme.primary,
                                   )
                                 : CircleAvatar(
                                     radius: 20,
@@ -92,7 +97,9 @@ class PlayQueueSheet extends ConsumerWidget {
                                 fontWeight: isPlaying ? FontWeight.bold : null,
                               ),
                             ),
-                            subtitle: song.artist != null ? Text(song.artist!) : null,
+                            subtitle: song.artist != null
+                                ? Text(song.artist!)
+                                : null,
                             trailing: PopupMenuButton(
                               icon: const Icon(Icons.more_vert),
                               itemBuilder: (context) => [
@@ -109,12 +116,16 @@ class PlayQueueSheet extends ConsumerWidget {
                               ],
                               onSelected: (value) {
                                 if (value == 'remove') {
-                                  ref.read(playerProvider.notifier).removeFromQueue(index);
+                                  ref
+                                      .read(playerProvider.notifier)
+                                      .removeFromQueue(index);
                                 }
                               },
                             ),
                             onTap: () {
-                              ref.read(playerProvider.notifier).skipToQueueItem(index);
+                              ref
+                                  .read(playerProvider.notifier)
+                                  .skipToQueueItem(index);
                               Navigator.pop(context);
                             },
                           );
@@ -127,9 +138,7 @@ class PlayQueueSheet extends ConsumerWidget {
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
                   border: Border(
-                    top: BorderSide(
-                      color: Theme.of(context).dividerColor,
-                    ),
+                    top: BorderSide(color: Theme.of(context).dividerColor),
                   ),
                 ),
                 child: Row(

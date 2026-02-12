@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:echo/data/models/music_library.dart';
 import '../providers/auth_provider.dart';
 import '../providers/player_provider.dart';
 import '../providers/playlist_provider.dart';
 import '../providers/music_provider.dart';
-import '../data/models/server_config.dart';
 
 /// 应用侧栏
 class AppDrawer extends ConsumerWidget {
@@ -14,7 +14,9 @@ class AppDrawer extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final authState = ref.watch(authStateProvider);
-    final config = authState.config;
+    final library = authState.currentLibrary;
+    // Helper to get URL: try active address, or first address, or empty
+    final serverUrl = library?.addresses.firstOrNull?.url ?? '';
 
     return Drawer(
       child: ListView(
@@ -41,16 +43,10 @@ class AppDrawer extends ConsumerWidget {
               ),
             ),
             accountName: Text(
-              config?.username ?? 'Guest',
-              style: const TextStyle(
-                fontWeight: FontWeight.bold,
-                fontSize: 18,
-              ),
+              library?.username ?? 'Guest',
+              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
             ),
-            accountEmail: Text(
-              config?.serverUrl ?? '',
-              style: const TextStyle(fontSize: 12),
-            ),
+            accountEmail: Text(serverUrl, style: const TextStyle(fontSize: 12)),
           ),
 
           // 音乐流
@@ -127,9 +123,7 @@ class AppDrawer extends ConsumerWidget {
             ),
             title: Text(
               '登出',
-              style: TextStyle(
-                color: Theme.of(context).colorScheme.error,
-              ),
+              style: TextStyle(color: Theme.of(context).colorScheme.error),
             ),
             onTap: () {
               Navigator.pop(context);
@@ -161,7 +155,8 @@ class AppDrawer extends ConsumerWidget {
   /// 显示设置对话框
   void _showSettingsDialog(BuildContext context, WidgetRef ref) {
     final authState = ref.read(authStateProvider);
-    final config = authState.config;
+    final library = authState.currentLibrary;
+    final serverUrl = library?.addresses.firstOrNull?.url ?? '未设置';
 
     showDialog(
       context: context,
@@ -175,25 +170,27 @@ class AppDrawer extends ConsumerWidget {
               // 服务器信息
               Text(
                 '服务器信息',
-                style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.bold,
-                    ),
+                style: Theme.of(
+                  context,
+                ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 8),
-              _buildInfoRow('服务器地址', config?.serverUrl ?? '未设置'),
-              _buildInfoRow('用户名', config?.username ?? '未设置'),
+              _buildInfoRow('服务器地址', serverUrl),
+              _buildInfoRow('用户名', library?.username ?? '未设置'),
               _buildInfoRow(
                 '认证方式',
-                config?.authType == AuthType.apiKey ? 'API Key' : '密码',
+                library?.authType == MusicLibraryAuthType.apiKey
+                    ? 'API Key'
+                    : '密码',
               ),
               const Divider(height: 24),
 
               // 应用设置
               Text(
                 '应用设置',
-                style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.bold,
-                    ),
+                style: Theme.of(
+                  context,
+                ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 8),
               const Text('音质设置、缓存设置等功能即将推出'),
@@ -268,9 +265,7 @@ class AppDrawer extends ConsumerWidget {
             },
             child: Text(
               '登出',
-              style: TextStyle(
-                color: Theme.of(context).colorScheme.error,
-              ),
+              style: TextStyle(color: Theme.of(context).colorScheme.error),
             ),
           ),
         ],
@@ -289,18 +284,10 @@ class AppDrawer extends ConsumerWidget {
             width: 80,
             child: Text(
               label,
-              style: const TextStyle(
-                color: Colors.grey,
-                fontSize: 12,
-              ),
+              style: const TextStyle(color: Colors.grey, fontSize: 12),
             ),
           ),
-          Expanded(
-            child: Text(
-              value,
-              style: const TextStyle(fontSize: 12),
-            ),
-          ),
+          Expanded(child: Text(value, style: const TextStyle(fontSize: 12))),
         ],
       ),
     );

@@ -37,14 +37,12 @@ class LibraryPage extends ConsumerWidget {
             trailing: starredAsync.when(
               data: (starred) => Text('${starred.songs.length} 首'),
               loading: () => const SizedBox.shrink(),
-              error: (_, __) => const SizedBox.shrink(),
+              error: (error, stack) => const SizedBox.shrink(),
             ),
             onTap: () {
               Navigator.push(
                 context,
-                MaterialPageRoute(
-                  builder: (context) => const StarredPage(),
-                ),
+                MaterialPageRoute(builder: (context) => const StarredPage()),
               );
             },
           ),
@@ -53,9 +51,9 @@ class LibraryPage extends ConsumerWidget {
             padding: const EdgeInsets.all(16),
             child: Text(
               '我的歌单',
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
+              style: Theme.of(
+                context,
+              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
             ),
           ),
           playlistsAsync.when(
@@ -99,9 +97,9 @@ class LibraryPage extends ConsumerWidget {
             padding: const EdgeInsets.all(16),
             child: Text(
               '音乐库浏览',
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
+              style: Theme.of(
+                context,
+              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
             ),
           ),
           ListTile(
@@ -111,9 +109,7 @@ class LibraryPage extends ConsumerWidget {
             onTap: () {
               Navigator.push(
                 context,
-                MaterialPageRoute(
-                  builder: (context) => const AlbumListPage(),
-                ),
+                MaterialPageRoute(builder: (context) => const AlbumListPage()),
               );
             },
           ),
@@ -124,9 +120,7 @@ class LibraryPage extends ConsumerWidget {
             onTap: () {
               Navigator.push(
                 context,
-                MaterialPageRoute(
-                  builder: (context) => const ArtistListPage(),
-                ),
+                MaterialPageRoute(builder: (context) => const ArtistListPage()),
               );
             },
           ),

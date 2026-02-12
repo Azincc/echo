@@ -1,29 +1,48 @@
-import '../models/server_config.dart';
+import 'package:dio/dio.dart';
+import 'package:uuid/uuid.dart';
+import '../models/music_library.dart'; // New model
+import '../models/server_address.dart'; // New model
 import '../sources/subsonic_api_client.dart';
-import '../sources/local_storage.dart';
 import '../../core/utils/logger.dart';
 
-/// 认证仓库
+/// Authentication Repository
+/// Handles login verification. Persistence is now handled by LibraryRepository.
 class AuthRepository {
-  final SubsonicApiClient _apiClient;
+  // We handle ephemeral clients internally for verification
 
-  AuthRepository(this._apiClient);
+  AuthRepository();
 
-  /// 探测服务器能力（检测是否支持 OpenSubsonic）
+  /// Detect Server Capabilities
   Future<ServerCapabilities> detectServerCapabilities(String serverUrl) async {
     try {
-      // 临时创建一个没有认证的客户端来探测
-      final tempClient = SubsonicApiClient();
-      tempClient.setConfig(
-        ServerConfig(
-          serverUrl: serverUrl,
-          username: '',
-          authType: AuthType.token,
+      final tempDio = Dio(
+        BaseOptions(
+          baseUrl: serverUrl,
+          connectTimeout: const Duration(seconds: 5),
+          receiveTimeout: const Duration(seconds: 5),
+          responseType: ResponseType.json,
         ),
       );
 
-      // 不带认证参数的 ping（某些服务器允许）
-      // 如果失败也没关系，我们主要是看响应格式
+      final tempClient = SubsonicApiClient(dio: tempDio);
+      // No setLibrary needed for initial ping if we only check openSubsonic response structure?
+      // Actually ping needs auth usually.
+      // But OpenSubsonic servers might respond to ping without auth?
+      // Let's try with empty auth.
+
+      // We can create a dummy library
+      tempClient.setLibrary(
+        MusicLibrary(
+          id: 'temp',
+          name: 'temp',
+          authType: MusicLibraryAuthType.token,
+          username: '',
+          password: '',
+          createdAt: DateTime.now(),
+          updatedAt: DateTime.now(),
+        ),
+      );
+
       try {
         final result = await tempClient.ping();
         return ServerCapabilities(
@@ -33,12 +52,7 @@ class AuthRepository {
           supportsApiKey: result.isOpenSubsonic,
         );
       } catch (e) {
-        // ping 失败（需要认证），但我们可以从错误响应中判断
-        // 默认假设是传统 Subsonic
-        return ServerCapabilities(
-          isOpenSubsonic: false,
-          supportsApiKey: false,
-        );
+        return ServerCapabilities(isOpenSubsonic: false, supportsApiKey: false);
       }
     } catch (e) {
       Logger.error('Failed to detect server capabilities', e);
@@ -46,128 +60,123 @@ class AuthRepository {
     }
   }
 
-  /// 使用 Token/Salt 方式登录
+  /// Login with Token/Salt (Password)
   Future<LoginResult> loginWithPassword({
     required String serverUrl,
     required String username,
     required String password,
   }) async {
-    try {
-      final config = ServerConfig(
-        serverUrl: serverUrl,
-        username: username,
-        password: password,
-        authType: AuthType.token,
-      );
-
-      _apiClient.setConfig(config);
-
-      // 执行 ping 测试
-      final pingResult = await _apiClient.ping();
-
-      if (!pingResult.success) {
-        return LoginResult(
-          success: false,
-          errorMessage: pingResult.errorMessage ?? '连接失败',
-        );
-      }
-
-      // 更新配置（添加服务器信息）
-      final updatedConfig = config.copyWith(
-        isOpenSubsonic: pingResult.isOpenSubsonic,
-        serverType: pingResult.serverType,
-        serverVersion: pingResult.serverVersion,
-      );
-
-      // 如果是 OpenSubsonic，获取扩展列表
-      List<String> extensions = [];
-      if (pingResult.isOpenSubsonic) {
-        extensions = await _apiClient.getOpenSubsonicExtensions();
-      }
-
-      final finalConfig = updatedConfig.copyWith(extensions: extensions);
-
-      // 保存配置
-      await LocalStorage.saveServerConfig(finalConfig);
-
-      return LoginResult(
-        success: true,
-        config: finalConfig,
-      );
-    } catch (e) {
-      Logger.error('Login with password failed', e);
-      return LoginResult(
-        success: false,
-        errorMessage: e.toString(),
-      );
-    }
+    return _attemptLogin(
+      serverUrl: serverUrl,
+      username: username,
+      authType: MusicLibraryAuthType.token,
+      password: password,
+    );
   }
 
-  /// 使用 API Key 方式登录
+  /// Login with API Key
   Future<LoginResult> loginWithApiKey({
     required String serverUrl,
     required String username,
     required String apiKey,
   }) async {
+    return _attemptLogin(
+      serverUrl: serverUrl,
+      username: username,
+      authType: MusicLibraryAuthType.apiKey,
+      apiKey: apiKey,
+    );
+  }
+
+  Future<LoginResult> _attemptLogin({
+    required String serverUrl,
+    required String username,
+    required MusicLibraryAuthType authType,
+    String? password,
+    String? apiKey,
+  }) async {
     try {
-      final config = ServerConfig(
-        serverUrl: serverUrl,
-        username: username,
-        apiKey: apiKey,
-        authType: AuthType.apiKey,
+      final tempDio = Dio(
+        BaseOptions(
+          baseUrl: serverUrl,
+          connectTimeout: const Duration(seconds: 10),
+          receiveTimeout: const Duration(seconds: 10),
+          responseType: ResponseType.json,
+        ),
       );
 
-      _apiClient.setConfig(config);
+      final tempClient = SubsonicApiClient(dio: tempDio);
 
-      // 执行 ping 测试
-      final pingResult = await _apiClient.ping();
+      final tempLib = MusicLibrary(
+        id: const Uuid().v4(),
+        name: 'Temp',
+        authType: authType,
+        username: username,
+        password: password,
+        apiKey: apiKey,
+        createdAt: DateTime.now(),
+        updatedAt: DateTime.now(),
+      );
+
+      tempClient.setLibrary(tempLib);
+
+      // Ping
+      final pingResult = await tempClient.ping();
 
       if (!pingResult.success) {
         return LoginResult(
           success: false,
-          errorMessage: pingResult.errorMessage ?? '连接失败',
+          errorMessage: pingResult.errorMessage ?? 'Connection failed',
         );
       }
 
-      // 更新配置
-      final updatedConfig = config.copyWith(
-        isOpenSubsonic: pingResult.isOpenSubsonic,
+      // Get Extensions if OpenSubsonic
+      Map<String, dynamic> extensions = {};
+      if (pingResult.isOpenSubsonic) {
+        try {
+          final exts = await tempClient.getOpenSubsonicExtensions();
+          // Store as map or list? Model says map.
+          // Actually model says Map<String, dynamic> extensions
+          // The API returns List<String>.
+          // Let's store it as {'list': [...]}?
+          // Or change model? The model says Map<String, dynamic>.
+          // Let's just say extensions['supported'] = [list]
+          extensions = {'supported': exts};
+        } catch (_) {}
+      }
+
+      // Create final MusicLibrary object
+      // Define initial address
+      final address = ServerAddress(
+        id: const Uuid().v4(),
+        libraryId: tempLib.id,
+        label: 'Primary',
+        url: serverUrl,
+        priority: 0,
+        status: ServerAddressStatus.ok,
+        lastLatencyMs: 0, // We could measure this
+      );
+
+      final finalLib = tempLib.copyWith(
+        name: pingResult.serverType ?? 'Subsonic Server', // Default name
         serverType: pingResult.serverType,
         serverVersion: pingResult.serverVersion,
+        isOpenSubsonic: pingResult.isOpenSubsonic,
+        extensions: extensions,
+        addresses: [address],
+        isActive: true, // Will be made active
       );
 
-      // 获取扩展列表
-      final extensions = await _apiClient.getOpenSubsonicExtensions();
-      final finalConfig = updatedConfig.copyWith(extensions: extensions);
-
-      // 保存配置
-      await LocalStorage.saveServerConfig(finalConfig);
-
-      return LoginResult(
-        success: true,
-        config: finalConfig,
-      );
+      return LoginResult(success: true, library: finalLib);
     } catch (e) {
-      Logger.error('Login with API key failed', e);
-      return LoginResult(
-        success: false,
-        errorMessage: e.toString(),
-      );
+      Logger.error('Login failed', e);
+      return LoginResult(success: false, errorMessage: e.toString());
     }
   }
 
-  /// 加载已保存的配置
-  Future<ServerConfig?> loadSavedConfig() async {
-    return await LocalStorage.getServerConfig();
-  }
-
-  /// 登出
-  Future<void> logout() async {
-    await LocalStorage.clearServerConfig();
-  }
+  // Legacy load/logout methods are removed as they are handled by LibraryRepository
 }
 
-/// 服务器能力
 class ServerCapabilities {
   final bool isOpenSubsonic;
   final String? serverType;
@@ -182,15 +191,10 @@ class ServerCapabilities {
   });
 }
 
-/// 登录结果
 class LoginResult {
   final bool success;
-  final ServerConfig? config;
+  final MusicLibrary? library;
   final String? errorMessage;
 
-  LoginResult({
-    required this.success,
-    this.config,
-    this.errorMessage,
-  });
+  LoginResult({required this.success, this.library, this.errorMessage});
 }

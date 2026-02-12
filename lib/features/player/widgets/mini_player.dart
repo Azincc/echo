@@ -19,7 +19,8 @@ class MiniPlayer extends ConsumerWidget {
 
     final song = playerState.currentSong!;
     final progress = playerState.duration.inMilliseconds > 0
-        ? playerState.position.inMilliseconds / playerState.duration.inMilliseconds
+        ? playerState.position.inMilliseconds /
+              playerState.duration.inMilliseconds
         : 0.0;
 
     return GestureDetector(
@@ -27,9 +28,7 @@ class MiniPlayer extends ConsumerWidget {
         // 点击展开全屏播放器
         Navigator.push(
           context,
-          MaterialPageRoute(
-            builder: (context) => const FullPlayerPage(),
-          ),
+          MaterialPageRoute(builder: (context) => const FullPlayerPage()),
         );
       },
       child: Container(
@@ -38,7 +37,7 @@ class MiniPlayer extends ConsumerWidget {
           color: Theme.of(context).colorScheme.surfaceContainer,
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.1),
+              color: Colors.black.withValues(alpha: 0.1),
               blurRadius: 8,
               offset: const Offset(0, -2),
             ),
@@ -61,10 +60,7 @@ class MiniPlayer extends ConsumerWidget {
                     // 封面
                     ClipRRect(
                       borderRadius: BorderRadius.circular(4),
-                      child: CoverArtImage(
-                        coverArtId: song.coverArt,
-                        size: 48,
-                      ),
+                      child: CoverArtImage(coverArtId: song.coverArt, size: 48),
                     ),
                     const SizedBox(width: 12),
                     // 歌曲信息
@@ -77,9 +73,7 @@ class MiniPlayer extends ConsumerWidget {
                             song.title,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              fontWeight: FontWeight.w500,
-                            ),
+                            style: const TextStyle(fontWeight: FontWeight.w500),
                           ),
                           if (song.artist != null)
                             Text(
@@ -94,9 +88,7 @@ class MiniPlayer extends ConsumerWidget {
                     // 播放/暂停按钮
                     IconButton(
                       icon: Icon(
-                        playerState.isPlaying
-                            ? Icons.pause
-                            : Icons.play_arrow,
+                        playerState.isPlaying ? Icons.pause : Icons.play_arrow,
                       ),
                       onPressed: () {
                         ref.read(playerProvider.notifier).togglePlayPause();

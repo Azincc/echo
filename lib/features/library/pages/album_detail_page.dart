@@ -56,7 +56,7 @@ class AlbumDetailPage extends ConsumerWidget {
                             end: Alignment.bottomCenter,
                             colors: [
                               Colors.transparent,
-                              Colors.black.withOpacity(0.7),
+                              Colors.black.withValues(alpha: 0.7),
                             ],
                           ),
                         ),
@@ -80,8 +80,8 @@ class AlbumDetailPage extends ConsumerWidget {
                       Text(
                         '${album.songCount} 首 · ${album.durationString}',
                         style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                              color: Theme.of(context).colorScheme.onSurfaceVariant,
-                            ),
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        ),
                       ),
                       const SizedBox(height: 16),
                       Row(
@@ -89,7 +89,9 @@ class AlbumDetailPage extends ConsumerWidget {
                           FilledButton.icon(
                             onPressed: () {
                               // 播放全部
-                              ref.read(playerProvider.notifier).playQueue(songs);
+                              ref
+                                  .read(playerProvider.notifier)
+                                  .playQueue(songs);
                             },
                             icon: const Icon(Icons.play_arrow),
                             label: const Text('播放全部'),
@@ -98,7 +100,10 @@ class AlbumDetailPage extends ConsumerWidget {
                           IconButton(
                             onPressed: () async {
                               try {
-                                final musicRepository = ref.read(musicRepositoryProvider);
+                                final musicRepository = ref.read(
+                                  musicRepositoryProvider,
+                                );
+                                if (musicRepository == null) return;
                                 await musicRepository.setAlbumStarred(
                                   album.id,
                                   !album.starred,
@@ -118,7 +123,9 @@ class AlbumDetailPage extends ConsumerWidget {
                               }
                             },
                             icon: Icon(
-                              album.starred ? Icons.favorite : Icons.favorite_border,
+                              album.starred
+                                  ? Icons.favorite
+                                  : Icons.favorite_border,
                               color: album.starred ? Colors.red : null,
                             ),
                           ),
@@ -129,27 +136,23 @@ class AlbumDetailPage extends ConsumerWidget {
                 ),
               ),
               SliverList(
-                delegate: SliverChildBuilderDelegate(
-                  (context, index) {
-                    final song = songs[index];
-                    return ListTile(
-                      leading: CircleAvatar(
-                        child: Text('${song.track ?? index + 1}'),
-                      ),
-                      title: Text(song.title),
-                      subtitle: song.artist != null ? Text(song.artist!) : null,
-                      trailing: Text(song.durationString),
-                      onTap: () {
-                        // 播放歌曲
-                        ref.read(playerProvider.notifier).playQueue(
-                              songs,
-                              startIndex: index,
-                            );
-                      },
-                    );
-                  },
-                  childCount: songs.length,
-                ),
+                delegate: SliverChildBuilderDelegate((context, index) {
+                  final song = songs[index];
+                  return ListTile(
+                    leading: CircleAvatar(
+                      child: Text('${song.track ?? index + 1}'),
+                    ),
+                    title: Text(song.title),
+                    subtitle: song.artist != null ? Text(song.artist!) : null,
+                    trailing: Text(song.durationString),
+                    onTap: () {
+                      // 播放歌曲
+                      ref
+                          .read(playerProvider.notifier)
+                          .playQueue(songs, startIndex: index);
+                    },
+                  );
+                }, childCount: songs.length),
               ),
             ],
           );

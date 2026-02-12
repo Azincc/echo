@@ -180,6 +180,11 @@ class AuthNotifier extends StateNotifier<AuthState> {
     state = AuthState(isAuthenticated: false);
   }
 
+  /// 切换当前 Library
+  void switchLibrary(MusicLibrary library) {
+    state = state.copyWith(currentLibrary: library, isAuthenticated: true);
+  }
+
   /// 清除错误消息
   void clearError() {
     state = state.copyWith(errorMessage: null);

@@ -8,6 +8,7 @@ import 'providers/auth_provider.dart';
 import 'widgets/main_scaffold.dart';
 import 'features/discover/pages/discover_page.dart';
 import 'features/library/pages/library_page.dart';
+import 'features/library/pages/edit_library_page.dart';
 
 /// 应用主入口 Widget
 class App extends ConsumerWidget {
@@ -34,17 +35,14 @@ final routerProvider = Provider<GoRouter>((ref) {
   final rootNavigatorKey = GlobalKey<NavigatorState>();
 
   // 监听认证状态变化
-  ref.listen<AuthState>(
-    authStateProvider,
-    (previous, next) {
-      // 当认证状态变化时，刷新路由
-      if (previous?.isAuthenticated != next.isAuthenticated) {
-        rootNavigatorKey.currentState?.context.go(
-          next.isAuthenticated ? '/home' : '/login',
-        );
-      }
-    },
-  );
+  ref.listen<AuthState>(authStateProvider, (previous, next) {
+    // 当认证状态变化时，刷新路由
+    if (previous?.isAuthenticated != next.isAuthenticated) {
+      rootNavigatorKey.currentState?.context.go(
+        next.isAuthenticated ? '/home' : '/login',
+      );
+    }
+  });
 
   return GoRouter(
     navigatorKey: rootNavigatorKey,
@@ -53,9 +51,10 @@ final routerProvider = Provider<GoRouter>((ref) {
       final authState = ref.read(authStateProvider);
       final isGoingToLogin = state.matchedLocation == '/login';
       final isGoingToSplash = state.matchedLocation == '/splash';
+      final isAddingLibrary = state.uri.queryParameters['add'] == 'true';
 
-      // 如果已认证且正在去登录页，重定向到主页
-      if (authState.isAuthenticated && isGoingToLogin) {
+      // 如果已认证且正在去登录页，且不是为了添加新库，重定向到主页
+      if (authState.isAuthenticated && isGoingToLogin && !isAddingLibrary) {
         return '/home';
       }
 
@@ -71,6 +70,15 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(path: '/splash', builder: (context, state) => const SplashPage()),
       // 登录页
       GoRoute(path: '/login', builder: (context, state) => const LoginPage()),
+      // Library Edit
+      GoRoute(
+        path: '/library/edit/:id',
+        parentNavigatorKey: rootNavigatorKey,
+        builder: (context, state) {
+          final id = state.pathParameters['id']!;
+          return EditLibraryPage(libraryId: id);
+        },
+      ),
       // StatefulShellRoute 为主要导航结构
       StatefulShellRoute.indexedStack(
         builder: (context, state, navigationShell) {

@@ -5,6 +5,7 @@ import '../models/server_config.dart';
 /// 本地存储封装（SharedPreferences）
 class LocalStorage {
   static const String _keyServerConfig = 'server_config';
+  static const String _keyAutoFallback = 'auto_fallback';
 
   /// 保存服务器配置
   static Future<void> saveServerConfig(ServerConfig config) async {
@@ -37,5 +38,17 @@ class LocalStorage {
   static Future<bool> hasServerConfig() async {
     final prefs = await SharedPreferences.getInstance();
     return prefs.containsKey(_keyServerConfig);
+  }
+
+  /// 读取自动回退开关（默认开启）
+  static Future<bool> getAutoFallback() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getBool(_keyAutoFallback) ?? true;
+  }
+
+  /// 保存自动回退开关
+  static Future<void> setAutoFallback(bool value) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_keyAutoFallback, value);
   }
 }

@@ -53,7 +53,8 @@ class MusicRepository {
 
       final album = Album.fromJson(albumData as Map<String, dynamic>);
       final songList = albumData['song'] as List?;
-      final songs = songList
+      final songs =
+          songList
               ?.map((e) => Song.fromJson(e as Map<String, dynamic>))
               .toList() ??
           [];
@@ -104,7 +105,8 @@ class MusicRepository {
 
       final artist = Artist.fromJson(artistData as Map<String, dynamic>);
       final albumList = artistData['album'] as List?;
-      final albums = albumList
+      final albums =
+          albumList
               ?.map((e) => Album.fromJson(e as Map<String, dynamic>))
               .toList() ??
           [];
@@ -146,6 +148,37 @@ class MusicRepository {
     }
   }
 
+  /// 获取所有歌曲 (通过 search3 接口变通实现)
+  Future<List<Song>> getAllSongs() async {
+    try {
+      // Subsonic API 没有直接的 getAllSongs 接口
+      // 这里使用 search3 接口，查询空字符串或通配符，获取大量歌曲
+      // 实际生产中可能需要分页处理，这里为了简化先一次性获取较多数量
+      final response = await _apiClient.get(
+        ApiConstants.search3,
+        queryParameters: {
+          'query': '', // 尝试空字符串获取所有
+          'songCount': '5000', // 获取足够多的歌曲
+          'artistCount': '0',
+          'albumCount': '0',
+        },
+      );
+
+      final searchResult = response['searchResult3'];
+      if (searchResult == null) return [];
+
+      final songList = searchResult['song'] as List?;
+      if (songList == null) return [];
+
+      return songList
+          .map((e) => Song.fromJson(e as Map<String, dynamic>))
+          .toList();
+    } catch (e) {
+      Logger.error('Failed to get all songs', e);
+      return [];
+    }
+  }
+
   /// 搜索
   Future<SearchResult> search({
     required String query,
@@ -169,17 +202,20 @@ class MusicRepository {
         return SearchResult(artists: [], albums: [], songs: []);
       }
 
-      final artists = (searchResult['artist'] as List?)
+      final artists =
+          (searchResult['artist'] as List?)
               ?.map((e) => Artist.fromJson(e as Map<String, dynamic>))
               .toList() ??
           [];
 
-      final albums = (searchResult['album'] as List?)
+      final albums =
+          (searchResult['album'] as List?)
               ?.map((e) => Album.fromJson(e as Map<String, dynamic>))
               .toList() ??
           [];
 
-      final songs = (searchResult['song'] as List?)
+      final songs =
+          (searchResult['song'] as List?)
               ?.map((e) => Song.fromJson(e as Map<String, dynamic>))
               .toList() ??
           [];
@@ -227,17 +263,20 @@ class MusicRepository {
         return StarredResult(artists: [], albums: [], songs: []);
       }
 
-      final artists = (starred['artist'] as List?)
+      final artists =
+          (starred['artist'] as List?)
               ?.map((e) => Artist.fromJson(e as Map<String, dynamic>))
               .toList() ??
           [];
 
-      final albums = (starred['album'] as List?)
+      final albums =
+          (starred['album'] as List?)
               ?.map((e) => Album.fromJson(e as Map<String, dynamic>))
               .toList() ??
           [];
 
-      final songs = (starred['song'] as List?)
+      final songs =
+          (starred['song'] as List?)
               ?.map((e) => Song.fromJson(e as Map<String, dynamic>))
               .toList() ??
           [];
@@ -255,10 +294,7 @@ class AlbumDetail {
   final Album album;
   final List<Song> songs;
 
-  AlbumDetail({
-    required this.album,
-    required this.songs,
-  });
+  AlbumDetail({required this.album, required this.songs});
 }
 
 /// 歌手详情（包含专辑列表）
@@ -266,10 +302,7 @@ class ArtistDetail {
   final Artist artist;
   final List<Album> albums;
 
-  ArtistDetail({
-    required this.artist,
-    required this.albums,
-  });
+  ArtistDetail({required this.artist, required this.albums});
 }
 
 /// 搜索结果

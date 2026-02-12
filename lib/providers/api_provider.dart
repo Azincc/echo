@@ -6,6 +6,8 @@ import 'package:echo/core/network/fallback_interceptor.dart';
 import 'package:echo/core/network/health_checker.dart';
 import 'package:echo/core/utils/logger.dart';
 
+import 'package:echo/data/models/server_address.dart';
+import 'package:echo/data/sources/local_storage.dart';
 import 'package:echo/data/sources/subsonic_api_client.dart';
 import 'package:echo/providers/library_provider.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -32,6 +34,21 @@ final dioProvider = Provider<Dio>((ref) {
   return dio;
 });
 
+// State provider for UI to listen to active address changes
+final activeAddressProvider = StateProvider<ServerAddress?>((ref) => null);
+
+// 自动回退开关 Provider
+final autoFallbackProvider = StateProvider<bool>((ref) => true);
+
+// 初始化自动回退设置（从本地存储读取）
+final autoFallbackInitProvider = FutureProvider<bool>((ref) async {
+  final value = await LocalStorage.getAutoFallback();
+  ref.read(autoFallbackProvider.notifier).state = value;
+  // 同步到 AddressPool
+  ref.read(addressPoolProvider).autoFallback = value;
+  return value;
+});
+
 // 2. AddressPool Provider
 // It listens to activeLibrary and updates addresses
 final addressPoolProvider = Provider<AddressPool>((ref) {
@@ -54,6 +71,11 @@ final addressPoolProvider = Provider<AddressPool>((ref) {
       ref.read(libraryRepositoryProvider).updateAddress(addr);
     },
     onActiveAddressChanged: (addr) {
+      // Update UI state
+      Future.microtask(() {
+        ref.read(activeAddressProvider.notifier).state = addr;
+      });
+
       if (addr != null) {
         // Update MAIN dio base URL
         // We can't access 'dioProvider' value inside this callback easily if not captured.
@@ -96,6 +118,9 @@ final configuredDioProvider = Provider<Dio>((ref) {
 final networkManagerProvider = Provider<void>((ref) {
   final pool = ref.watch(addressPoolProvider);
 
+  // 初始化自动回退设置
+  ref.watch(autoFallbackInitProvider);
+
   final connectivityMonitor = ConnectivityMonitor(pool);
   connectivityMonitor.start();
 
@@ -116,10 +141,6 @@ final activeLibrarySynchronizerProvider = Provider<void>((ref) {
 
   if (activeLib != null) {
     pool.setAddresses(activeLib.addresses);
-    // Trigger an initial probe if needed, or AddressPool handles it
-    if (pool.activeAddress == null) {
-      pool.probeAll();
-    }
   } else {
     pool.setAddresses([]);
   }

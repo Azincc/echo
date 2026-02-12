@@ -23,6 +23,13 @@ class FallbackInterceptor extends Interceptor {
   void onError(DioException err, ErrorInterceptorHandler handler) async {
     if (_isConnectionError(err)) {
       _consecutiveFailures++;
+
+      // 手动模式 + 自动回退关闭时，不自动切换线路
+      if (_addressPool.isManualMode && !_addressPool.autoFallback) {
+        super.onError(err, handler);
+        return;
+      }
+
       if (_consecutiveFailures >= 2) {
         final currentAddress = _addressPool.activeAddress;
         if (currentAddress != null) {

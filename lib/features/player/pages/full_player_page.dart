@@ -16,12 +16,8 @@ class FullPlayerPage extends ConsumerWidget {
 
     if (currentSong == null) {
       return Scaffold(
-        appBar: AppBar(
-          title: const Text('正在播放'),
-        ),
-        body: const Center(
-          child: Text('暂无播放内容'),
-        ),
+        appBar: AppBar(title: const Text('正在播放')),
+        body: const Center(child: Text('暂无播放内容')),
       );
     }
 
@@ -39,10 +35,7 @@ class FullPlayerPage extends ConsumerWidget {
                     icon: const Icon(Icons.keyboard_arrow_down),
                     onPressed: () => Navigator.pop(context),
                   ),
-                  Text(
-                    '正在播放',
-                    style: Theme.of(context).textTheme.titleMedium,
-                  ),
+                  Text('正在播放', style: Theme.of(context).textTheme.titleMedium),
                   IconButton(
                     icon: const Icon(Icons.more_vert),
                     onPressed: () {
@@ -69,7 +62,9 @@ class FullPlayerPage extends ConsumerWidget {
                           height: 320,
                           decoration: BoxDecoration(
                             borderRadius: BorderRadius.circular(16),
-                            color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                            color: Theme.of(
+                              context,
+                            ).colorScheme.surfaceContainerHighest,
                           ),
                           child: ClipRRect(
                             borderRadius: BorderRadius.circular(16),
@@ -87,9 +82,8 @@ class FullPlayerPage extends ConsumerWidget {
                       // 歌曲信息
                       Text(
                         currentSong.title,
-                        style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                              fontWeight: FontWeight.bold,
-                            ),
+                        style: Theme.of(context).textTheme.headlineSmall
+                            ?.copyWith(fontWeight: FontWeight.bold),
                         textAlign: TextAlign.center,
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
@@ -103,8 +97,8 @@ class FullPlayerPage extends ConsumerWidget {
                           if (currentSong.album != null) currentSong.album!,
                         ].join(' · '),
                         style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                              color: Theme.of(context).colorScheme.onSurfaceVariant,
-                            ),
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        ),
                         textAlign: TextAlign.center,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
@@ -143,9 +137,7 @@ class FullPlayerPage extends ConsumerWidget {
                           currentSong.starred
                               ? Icons.favorite
                               : Icons.favorite_border,
-                          color: currentSong.starred
-                              ? Colors.red
-                              : null,
+                          color: currentSong.starred ? Colors.red : null,
                         ),
                         onPressed: () {
                           ref.read(playerProvider.notifier).toggleFavorite();
@@ -176,20 +168,37 @@ class FullPlayerPage extends ConsumerWidget {
 }
 
 /// 进度条组件
-class ProgressBar extends ConsumerWidget {
+class ProgressBar extends ConsumerStatefulWidget {
   const ProgressBar({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<ProgressBar> createState() => _ProgressBarState();
+}
+
+class _ProgressBarState extends ConsumerState<ProgressBar> {
+  double? _dragValue;
+
+  @override
+  Widget build(BuildContext context) {
     final playerState = ref.watch(playerProvider);
     final position = playerState.position;
     final duration = playerState.duration;
 
     // 确保 value 在有效范围内 (0 到 max)
-    final maxValue = duration.inMilliseconds > 0
+    final maxMilliseconds = duration.inMilliseconds > 0
         ? duration.inMilliseconds.toDouble()
         : 1.0;
-    final currentValue = position.inMilliseconds.toDouble().clamp(0.0, maxValue);
+    final currentMilliseconds = position.inMilliseconds.toDouble();
+
+    // 如果正在拖动，使用拖动值，否则使用当前播放进度
+    // 限制在 0 到 max 之间
+    final sliderValue = (_dragValue ?? currentMilliseconds).clamp(
+      0.0,
+      maxMilliseconds,
+    );
+    final displayPosition = _dragValue != null
+        ? Duration(milliseconds: _dragValue!.toInt())
+        : position;
 
     return Column(
       children: [
@@ -200,12 +209,20 @@ class ProgressBar extends ConsumerWidget {
             overlayShape: const RoundSliderOverlayShape(overlayRadius: 14),
           ),
           child: Slider(
-            value: currentValue,
-            max: maxValue,
+            value: sliderValue,
+            max: maxMilliseconds,
             onChanged: (value) {
-              ref.read(playerProvider.notifier).seek(
-                    Duration(milliseconds: value.toInt()),
-                  );
+              setState(() {
+                _dragValue = value;
+              });
+            },
+            onChangeEnd: (value) {
+              ref
+                  .read(playerProvider.notifier)
+                  .seek(Duration(milliseconds: value.toInt()));
+              setState(() {
+                _dragValue = null;
+              });
             },
           ),
         ),
@@ -215,7 +232,7 @@ class ProgressBar extends ConsumerWidget {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(
-                _formatDuration(position),
+                _formatDuration(displayPosition),
                 style: Theme.of(context).textTheme.bodySmall,
               ),
               Text(
@@ -230,9 +247,11 @@ class ProgressBar extends ConsumerWidget {
   }
 
   String _formatDuration(Duration duration) {
+    // 处理负数情况（虽然进度条一般不会由负数，但 robust 一点）
+    if (duration.isNegative) return "0:00";
     final minutes = duration.inMinutes;
     final seconds = duration.inSeconds % 60;
-    return '${minutes.toString().padLeft(1, '0')}:${seconds.toString().padLeft(2, '0')}';
+    return '${minutes.toString()}:${seconds.toString().padLeft(2, '0')}'; // Remove padLeft for minutes to match style usually
   }
 }
 

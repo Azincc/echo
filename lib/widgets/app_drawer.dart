@@ -2,137 +2,278 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:echo/data/models/music_library.dart';
+import 'package:echo/data/models/server_address.dart';
+import 'package:echo/providers/api_provider.dart';
+import 'package:echo/providers/library_provider.dart';
+import 'package:echo/data/sources/local_storage.dart';
 import '../providers/auth_provider.dart';
 import '../providers/player_provider.dart';
 import '../providers/playlist_provider.dart';
 import '../providers/music_provider.dart';
 
 /// 应用侧栏
-class AppDrawer extends ConsumerWidget {
+class AppDrawer extends ConsumerStatefulWidget {
   const AppDrawer({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<AppDrawer> createState() => _AppDrawerState();
+}
+
+class _AppDrawerState extends ConsumerState<AppDrawer> {
+  bool _showLibraries = false;
+
+  @override
+  Widget build(BuildContext context) {
     final authState = ref.watch(authStateProvider);
-    final library = authState.currentLibrary;
-    // Helper to get URL: try active address, or first address, or empty
-    final serverUrl = library?.addresses.firstOrNull?.url ?? '';
+    final activeLibrary = authState.currentLibrary;
+    final activeAddress = ref.watch(activeAddressProvider);
 
     return Drawer(
-      child: ListView(
-        padding: EdgeInsets.zero,
+      child: Column(
         children: [
-          // 用户信息头部
-          UserAccountsDrawerHeader(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: [
-                  Theme.of(context).colorScheme.primary,
-                  Theme.of(context).colorScheme.primaryContainer,
-                ],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
-            ),
-            currentAccountPicture: CircleAvatar(
-              backgroundColor: Theme.of(context).colorScheme.onPrimary,
-              child: Icon(
-                Icons.person,
-                size: 40,
-                color: Theme.of(context).colorScheme.primary,
-              ),
-            ),
-            accountName: Text(
-              library?.username ?? 'Guest',
-              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
-            ),
-            accountEmail: Text(serverUrl, style: const TextStyle(fontSize: 12)),
-          ),
-
-          // 音乐流
-          ListTile(
-            leading: const Icon(Icons.explore),
-            title: const Text('音乐流'),
-            onTap: () {
-              Navigator.pop(context);
-              context.go('/home');
-            },
-          ),
-
-          // 我的音乐库
-          ListTile(
-            leading: const Icon(Icons.library_music),
-            title: const Text('我的音乐库'),
-            onTap: () {
-              Navigator.pop(context);
-              context.go('/library');
-            },
-          ),
-
-          const Divider(),
-
-          // 统计信息
-          ListTile(
-            leading: const Icon(Icons.analytics_outlined),
-            title: const Text('统计信息'),
-            onTap: () {
-              Navigator.pop(context);
-              _showComingSoonDialog(context, '统计信息');
-            },
-          ),
-
-          // 下载管理
-          ListTile(
-            leading: const Icon(Icons.download_outlined),
-            title: const Text('下载管理'),
-            onTap: () {
-              Navigator.pop(context);
-              _showComingSoonDialog(context, '下载管理');
-            },
-          ),
-
-          const Divider(),
-
-          // 设置
-          ListTile(
-            leading: const Icon(Icons.settings_outlined),
-            title: const Text('设置'),
-            onTap: () {
-              Navigator.pop(context);
-              _showSettingsDialog(context, ref);
-            },
-          ),
-
-          // 关于
-          ListTile(
-            leading: const Icon(Icons.info_outline),
-            title: const Text('关于'),
-            onTap: () {
-              Navigator.pop(context);
-              _showAboutDialog(context);
-            },
-          ),
-
-          const Divider(),
-
-          // 登出
-          ListTile(
-            leading: Icon(
-              Icons.logout,
-              color: Theme.of(context).colorScheme.error,
-            ),
-            title: Text(
-              '登出',
-              style: TextStyle(color: Theme.of(context).colorScheme.error),
-            ),
-            onTap: () {
-              Navigator.pop(context);
-              _showLogoutDialog(context, ref);
-            },
+          _buildHeader(context, activeLibrary, activeAddress),
+          Expanded(
+            child: _showLibraries
+                ? _buildLibraryList(context, activeLibrary)
+                : _buildNavigationList(context),
           ),
         ],
       ),
     );
+  }
+
+  Widget _buildHeader(
+    BuildContext context,
+    MusicLibrary? activeLibrary,
+    ServerAddress? activeAddress,
+  ) {
+    return UserAccountsDrawerHeader(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [
+            Theme.of(context).colorScheme.primary,
+            Theme.of(context).colorScheme.primaryContainer,
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+      ),
+      currentAccountPicture: CircleAvatar(
+        backgroundColor: Theme.of(context).colorScheme.onPrimary,
+        child: Icon(
+          Icons.person,
+          size: 40,
+          color: Theme.of(context).colorScheme.primary,
+        ),
+      ),
+      accountName: Text(
+        activeLibrary?.name ?? 'No Library',
+        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+      ),
+      accountEmail: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(activeLibrary?.username ?? 'Guest'),
+          if (activeAddress != null)
+            Row(
+              children: [
+                Container(
+                  width: 8,
+                  height: 8,
+                  decoration: BoxDecoration(
+                    color: activeAddress.status == ServerAddressStatus.ok
+                        ? Colors.green
+                        : Colors.red,
+                    shape: BoxShape.circle,
+                  ),
+                ),
+                const SizedBox(width: 4),
+                Expanded(
+                  child: Text(
+                    activeAddress.label,
+                    style: const TextStyle(fontSize: 12, color: Colors.white70),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ],
+            )
+          else
+            const Text(
+              'Offline',
+              style: TextStyle(fontSize: 12, color: Colors.white70),
+            ),
+        ],
+      ),
+      onDetailsPressed: () {
+        setState(() {
+          _showLibraries = !_showLibraries;
+        });
+      },
+      arrowColor: Colors.white,
+    );
+  }
+
+  Widget _buildLibraryList(BuildContext context, MusicLibrary? activeLibrary) {
+    final asyncLibraries = ref.watch(librariesProvider);
+
+    return asyncLibraries.when(
+      data: (libs) {
+        return ListView(
+          padding: EdgeInsets.zero,
+          children: [
+            ...libs.map((lib) {
+              final isActive = lib.id == activeLibrary?.id;
+              return ListTile(
+                leading: isActive
+                    ? const Icon(Icons.check, color: Colors.green)
+                    : const Icon(Icons.library_music),
+                title: Text(lib.name),
+                subtitle: Text(lib.addresses.firstOrNull?.url ?? 'No Address'),
+                onTap: () {
+                  if (!isActive) {
+                    _switchLibrary(lib);
+                  }
+                  // Close drawer or switch back?
+                  // Usually Material Drawer stays open or toggles back.
+                  // Let's toggle back to nav after switch?
+                  setState(() {
+                    _showLibraries = false;
+                  });
+                  Navigator.pop(context); // Close drawer to reflect changes
+                },
+                trailing: IconButton(
+                  icon: const Icon(Icons.edit),
+                  onPressed: () {
+                    context.push('/library/edit/${lib.id}');
+                  },
+                ),
+              );
+            }),
+            const Divider(),
+            ListTile(
+              leading: const Icon(Icons.add),
+              title: const Text('添加新音乐库'),
+              onTap: () {
+                context.push('/login?add=true');
+              },
+            ),
+          ],
+        );
+      },
+      error: (err, stack) => Center(child: Text('Error: $err')),
+      loading: () => const Center(child: CircularProgressIndicator()),
+    );
+  }
+
+  Widget _buildNavigationList(BuildContext context) {
+    return ListView(
+      padding: EdgeInsets.zero,
+      children: [
+        // 音乐流
+        ListTile(
+          leading: const Icon(Icons.explore),
+          title: const Text('音乐流'),
+          onTap: () {
+            Navigator.pop(context);
+            context.go('/home');
+          },
+        ),
+
+        // 我的音乐库
+        ListTile(
+          leading: const Icon(Icons.library_music),
+          title: const Text('我的音乐库'),
+          onTap: () {
+            Navigator.pop(context);
+            context.go('/library');
+          },
+        ),
+
+        // 切换线路
+        ListTile(
+          leading: const Icon(Icons.router),
+          title: const Text('切换线路'),
+          subtitle: Consumer(
+            builder: (context, ref, child) {
+              final activeAddress = ref.watch(activeAddressProvider);
+              return Text(
+                activeAddress?.label ?? '自动选择',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(fontSize: 10),
+              );
+            },
+          ),
+          onTap: () {
+            Navigator.pop(context); // Optional: keep drawer open?
+            // Usually switch route is a quick action, maybe keep drawer open or use dialog on top.
+            // User requested "appdrawer添加...功能", implying inside appdrawer or accessible from it.
+            // Let's close drawer and show dialog for better UX.
+            _showRouteSelectionDialog(context);
+          },
+        ),
+
+        const Divider(),
+
+        // 统计信息
+        ListTile(
+          leading: const Icon(Icons.analytics_outlined),
+          title: const Text('统计信息'),
+          onTap: () {
+            Navigator.pop(context);
+            _showComingSoonDialog(context, '统计信息');
+          },
+        ),
+
+        // 下载管理
+        ListTile(
+          leading: const Icon(Icons.download_outlined),
+          title: const Text('下载管理'),
+          onTap: () {
+            Navigator.pop(context);
+            _showComingSoonDialog(context, '下载管理');
+          },
+        ),
+
+        const Divider(),
+
+        // 设置
+        ListTile(
+          leading: const Icon(Icons.settings_outlined),
+          title: const Text('设置'),
+          onTap: () {
+            Navigator.pop(context);
+            _showSettingsDialog(context);
+          },
+        ),
+
+        // 关于
+        ListTile(
+          leading: const Icon(Icons.info_outline),
+          title: const Text('关于'),
+          onTap: () {
+            Navigator.pop(context);
+            _showAboutDialog(context);
+          },
+        ),
+      ],
+    );
+  }
+
+  Future<void> _switchLibrary(MusicLibrary lib) async {
+    final repo = ref.read(libraryRepositoryProvider);
+    await repo.setActiveLibrary(lib.id);
+    // Update AuthState to reflect change
+    ref.read(authStateProvider.notifier).switchLibrary(lib);
+
+    // 切换库后停止音乐并刷新所有数据
+    ref.invalidate(playerProvider);
+    ref.invalidate(randomSongsProvider);
+    ref.invalidate(recentAlbumsProvider);
+    ref.invalidate(frequentAlbumsProvider);
+    ref.invalidate(playlistsProvider);
+    ref.invalidate(starredProvider);
   }
 
   /// 显示"即将推出"对话框
@@ -153,56 +294,76 @@ class AppDrawer extends ConsumerWidget {
   }
 
   /// 显示设置对话框
-  void _showSettingsDialog(BuildContext context, WidgetRef ref) {
+  void _showSettingsDialog(BuildContext context) {
     final authState = ref.read(authStateProvider);
     final library = authState.currentLibrary;
-    final serverUrl = library?.addresses.firstOrNull?.url ?? '未设置';
+    final activeAddress = ref.read(activeAddressProvider);
 
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('设置'),
-        content: SingleChildScrollView(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              // 服务器信息
-              Text(
-                '服务器信息',
-                style: Theme.of(
-                  context,
-                ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 8),
-              _buildInfoRow('服务器地址', serverUrl),
-              _buildInfoRow('用户名', library?.username ?? '未设置'),
-              _buildInfoRow(
-                '认证方式',
-                library?.authType == MusicLibraryAuthType.apiKey
-                    ? 'API Key'
-                    : '密码',
-              ),
-              const Divider(height: 24),
+      builder: (context) => Consumer(
+        builder: (context, ref, _) {
+          final autoFallback = ref.watch(autoFallbackProvider);
 
-              // 应用设置
-              Text(
-                '应用设置',
-                style: Theme.of(
-                  context,
-                ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+          return AlertDialog(
+            title: const Text('设置'),
+            content: SingleChildScrollView(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // 服务器信息
+                  Text(
+                    '服务器信息',
+                    style: Theme.of(
+                      context,
+                    ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 8),
+                  _buildInfoRow('当前连接', activeAddress?.label ?? '未连接'),
+                  _buildInfoRow('服务器地址', activeAddress?.url ?? '未设置'),
+                  _buildInfoRow('用户名', library?.username ?? '未设置'),
+                  _buildInfoRow(
+                    '认证方式',
+                    library?.authType == MusicLibraryAuthType.apiKey
+                        ? 'API Key'
+                        : '密码',
+                  ),
+                  const Divider(height: 24),
+
+                  // 应用设置
+                  Text(
+                    '应用设置',
+                    style: Theme.of(
+                      context,
+                    ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 8),
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: const Text('线路自动回退'),
+                    subtitle: const Text(
+                      '手动选择线路后，若该线路不可用，自动切换到其他可用线路',
+                      style: TextStyle(fontSize: 12),
+                    ),
+                    value: autoFallback,
+                    onChanged: (value) async {
+                      ref.read(autoFallbackProvider.notifier).state = value;
+                      ref.read(addressPoolProvider).autoFallback = value;
+                      await LocalStorage.setAutoFallback(value);
+                    },
+                  ),
+                ],
               ),
-              const SizedBox(height: 8),
-              const Text('音质设置、缓存设置等功能即将推出'),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('关闭'),
+              ),
             ],
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('关闭'),
-          ),
-        ],
+          );
+        },
       ),
     );
   }
@@ -227,49 +388,8 @@ class AppDrawer extends ConsumerWidget {
         const Text('• 自动转码不支持的格式'),
         const Text('• 后台播放和通知栏控制'),
         const Text('• 收藏和播放列表管理'),
+        const Text('• 多服务器地址自动切换 (v0.2.0)'),
       ],
-    );
-  }
-
-  /// 显示登出确认对话框
-  void _showLogoutDialog(BuildContext context, WidgetRef ref) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('确认登出'),
-        content: const Text('确定要退出登录吗？'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('取消'),
-          ),
-          TextButton(
-            onPressed: () async {
-              Navigator.pop(context);
-
-              // 清除所有 Provider 状态
-              ref.invalidate(playerProvider);
-              ref.invalidate(playlistsProvider);
-              ref.invalidate(starredProvider);
-              ref.invalidate(randomSongsProvider);
-              ref.invalidate(recentAlbumsProvider);
-              ref.invalidate(frequentAlbumsProvider);
-
-              // 执行登出
-              await ref.read(authStateProvider.notifier).logout();
-
-              // 跳转到登录页
-              if (context.mounted) {
-                context.go('/login');
-              }
-            },
-            child: Text(
-              '登出',
-              style: TextStyle(color: Theme.of(context).colorScheme.error),
-            ),
-          ),
-        ],
-      ),
     );
   }
 
@@ -291,5 +411,117 @@ class AppDrawer extends ConsumerWidget {
         ],
       ),
     );
+  }
+
+  Future<void> _showRouteSelectionDialog(BuildContext context) async {
+    showDialog(
+      context: context,
+      builder: (context) => Consumer(
+        builder: (context, ref, _) {
+          final authState = ref.watch(authStateProvider);
+          final activeLibId = authState.currentLibrary?.id;
+          final librariesAsync = ref.watch(librariesProvider);
+          final activeAddress = ref.watch(activeAddressProvider);
+          final addressPool = ref.read(addressPoolProvider);
+
+          return AlertDialog(
+            title: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text('切换线路'),
+                IconButton(
+                  icon: const Icon(Icons.refresh),
+                  tooltip: '检测延迟',
+                  onPressed: () {
+                    addressPool
+                        .probeAll(); // Trigger probe, UI updates via Stream
+                  },
+                ),
+              ],
+            ),
+            content: librariesAsync.when(
+              data: (libs) {
+                final lib = libs.firstWhere(
+                  (l) => l.id == activeLibId,
+                  orElse: () => libs.first, // Fallback
+                );
+                final addresses = List<ServerAddress>.from(lib.addresses)
+                  ..sort((a, b) => a.priority.compareTo(b.priority));
+
+                final isAuto = !addresses.any(
+                  (a) => a.isLocked && a.id == activeAddress?.id,
+                );
+
+                return SizedBox(
+                  width: double.maxFinite,
+                  child: ListView(
+                    shrinkWrap: true,
+                    children: [
+                      // 自动选择选项
+                      ListTile(
+                        leading: const Icon(Icons.hdr_auto),
+                        title: const Text('自动选择'),
+                        subtitle: isAuto
+                            ? Text('当前: ${activeAddress?.label}')
+                            : null,
+                        trailing: isAuto
+                            ? const Icon(Icons.check, color: Colors.green)
+                            : null,
+                        onTap: () {
+                          addressPool.setAutoMode();
+                          Navigator.pop(context);
+                        },
+                      ),
+                      const Divider(),
+                      // 地址列表
+                      ...addresses.map((addr) {
+                        final isSelected =
+                            activeAddress?.id == addr.id && addr.isLocked;
+                        return ListTile(
+                          title: Text(addr.label),
+                          subtitle: Text(
+                            '${addr.url}\n延迟: ${addr.lastLatencyMs != null ? "${addr.lastLatencyMs}ms" : "未知"}',
+                          ),
+                          isThreeLine: true,
+                          trailing: isSelected
+                              ? const Icon(Icons.check, color: Colors.green)
+                              : _getStatusIcon(addr.status),
+                          onTap: () {
+                            addressPool.setManualMode(addr);
+                            Navigator.pop(context);
+                          },
+                        );
+                      }),
+                    ],
+                  ),
+                );
+              },
+              loading: () => const SizedBox(
+                height: 100,
+                child: Center(child: CircularProgressIndicator()),
+              ),
+              error: (err, stack) => Text('Error: $err'),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('取消'),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _getStatusIcon(ServerAddressStatus status) {
+    switch (status) {
+      case ServerAddressStatus.ok:
+        return const Icon(Icons.circle, color: Colors.green, size: 12);
+      case ServerAddressStatus.failed:
+        return const Icon(Icons.error, color: Colors.red, size: 12);
+      case ServerAddressStatus.unknown:
+        return const Icon(Icons.help, color: Colors.grey, size: 12);
+    }
   }
 }

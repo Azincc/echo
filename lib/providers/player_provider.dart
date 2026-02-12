@@ -65,30 +65,36 @@ class PlayerState {
 final playerProvider = StateNotifierProvider<PlayerNotifier, PlayerState>((
   ref,
 ) {
-  final apiClient = ref.watch(subsonicApiClientProvider);
-  final musicRepository = ref.watch(musicRepositoryProvider);
-  return PlayerNotifier(apiClient, musicRepository ?? MusicRepository(apiClient), ref);
+  // 不固定 apiClient/musicRepository 引用，PlayerNotifier 内部通过 ref.read 动态获取
+  // 这样既不建立 watch 依赖（不会被重建），又能始终拿到最新的实例
+  return PlayerNotifier(ref);
 });
 
 /// 播放器状态管理器
 class PlayerNotifier extends StateNotifier<PlayerState> {
-  final SubsonicApiClient _apiClient;
-  final MusicRepository _musicRepository;
   final Ref _ref;
-  late final AudioPlayer _audioPlayer;
+  AudioPlayer? _audioPlayer;
   EchoAudioHandler? _audioHandler;
 
-  PlayerNotifier(this._apiClient, this._musicRepository, this._ref)
-    : super(PlayerState()) {
+  /// 动态获取最新的 API client
+  SubsonicApiClient get _apiClient => _ref.read(subsonicApiClientProvider);
+
+  /// 动态获取最新的 MusicRepository
+  MusicRepository get _musicRepository =>
+      _ref.read(musicRepositoryProvider) ?? MusicRepository(_apiClient);
+
+  PlayerNotifier(this._ref) : super(PlayerState()) {
     _init();
   }
 
   /// 初始化播放器
   void _init() async {
+    AudioPlayer player;
+
     // 初始化 AudioService（仅在移动平台）
     try {
       _audioHandler = await initAudioService();
-      _audioPlayer = _audioHandler!.audioPlayer;
+      player = _audioHandler!.audioPlayer;
       Logger.info('AudioService initialized');
 
       // 设置通知栏按钮回调
@@ -100,43 +106,47 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
       };
     } catch (e) {
       Logger.warn('AudioService not available (web platform): $e');
-      _audioPlayer = AudioPlayer();
+      player = AudioPlayer();
     }
 
+    _audioPlayer = player;
+
     // 监听播放状态
-    _audioPlayer.playingStream.listen((isPlaying) {
-      state = state.copyWith(isPlaying: isPlaying);
+    player.playingStream.listen((isPlaying) {
+      if (mounted) state = state.copyWith(isPlaying: isPlaying);
     });
 
     // 监听播放进度
-    _audioPlayer.positionStream.listen((position) {
-      state = state.copyWith(position: position);
+    player.positionStream.listen((position) {
+      if (mounted) state = state.copyWith(position: position);
     });
 
     // 监听总时长
-    _audioPlayer.durationStream.listen((duration) {
-      if (duration != null && duration > Duration.zero) {
-        // 如果流能提供时长，优先使用流的时长（更准确）
-        state = state.copyWith(duration: duration);
+    player.durationStream.listen((duration) {
+      if (mounted) {
+        if (duration != null && duration > Duration.zero) {
+          // 如果流能提供时长，优先使用流的时长（更准确）
+          state = state.copyWith(duration: duration);
+        }
       }
       // 如果 duration 为 null 或 0，保持使用歌曲元数据的时长
     });
 
     // 监听播放完成
-    _audioPlayer.playerStateStream.listen((playerState) {
-      if (playerState.processingState == ProcessingState.completed) {
+    player.playerStateStream.listen((playerState) {
+      if (mounted && playerState.processingState == ProcessingState.completed) {
         _onSongCompleted();
       }
     });
 
     // 监听循环模式
-    _audioPlayer.loopModeStream.listen((loopMode) {
-      state = state.copyWith(loopMode: loopMode);
+    player.loopModeStream.listen((loopMode) {
+      if (mounted) state = state.copyWith(loopMode: loopMode);
     });
 
     // 监听随机模式
-    _audioPlayer.shuffleModeEnabledStream.listen((enabled) {
-      state = state.copyWith(shuffleEnabled: enabled);
+    player.shuffleModeEnabledStream.listen((enabled) {
+      if (mounted) state = state.copyWith(shuffleEnabled: enabled);
     });
   }
 
@@ -177,8 +187,8 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
         Logger.info('Playing original format (${song.suffix}): ${song.title}');
       }
 
-      await _audioPlayer.setUrl(streamUrl);
-      await _audioPlayer.play();
+      await _audioPlayer?.setUrl(streamUrl);
+      await _audioPlayer?.play();
 
       // 上报"正在播放"
       await _scrobble(song.id, submission: false);
@@ -209,8 +219,8 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
       );
 
       Logger.info('Retrying with MP3 transcoding: ${song.title}');
-      await _audioPlayer.setUrl(streamUrl);
-      await _audioPlayer.play();
+      await _audioPlayer?.setUrl(streamUrl);
+      await _audioPlayer?.play();
 
       // 上报"正在播放"
       await _scrobble(song.id, submission: false);
@@ -280,23 +290,23 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
   /// 播放/暂停
   Future<void> togglePlayPause() async {
     if (state.isPlaying) {
-      await _audioPlayer.pause();
+      await _audioPlayer?.pause();
       await _audioHandler?.pause();
     } else {
-      await _audioPlayer.play();
+      await _audioPlayer?.play();
       await _audioHandler?.play();
     }
   }
 
   /// 暂停
   Future<void> pause() async {
-    await _audioPlayer.pause();
+    await _audioPlayer?.pause();
     await _audioHandler?.pause();
   }
 
   /// 播放
   Future<void> play() async {
-    await _audioPlayer.play();
+    await _audioPlayer?.play();
     await _audioHandler?.play();
   }
 
@@ -322,7 +332,7 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
 
   /// 跳转到指定位置
   Future<void> seek(Duration position) async {
-    await _audioPlayer.seek(position);
+    await _audioPlayer?.seek(position);
     await _audioHandler?.seek(position);
   }
 
@@ -336,7 +346,7 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
 
   /// 设置循环模式
   Future<void> setLoopMode(LoopMode mode) async {
-    await _audioPlayer.setLoopMode(mode);
+    await _audioPlayer?.setLoopMode(mode);
   }
 
   /// 切换循环模式
@@ -351,7 +361,7 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
 
   /// 设置随机播放
   Future<void> setShuffleEnabled(bool enabled) async {
-    await _audioPlayer.setShuffleModeEnabled(enabled);
+    await _audioPlayer?.setShuffleModeEnabled(enabled);
   }
 
   /// 切换随机播放
@@ -373,7 +383,7 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
 
   /// 清空队列
   Future<void> clearQueue() async {
-    await _audioPlayer.stop();
+    await _audioPlayer?.stop();
     await _audioHandler?.stop();
     state = PlayerState();
   }
@@ -388,7 +398,7 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
     // 如果移除的是当前播放的歌曲
     if (index == state.currentIndex) {
       // 停止播放
-      _audioPlayer.stop();
+      _audioPlayer?.stop();
       _audioHandler?.stop();
       state = state.copyWith(
         queue: newQueue,
@@ -415,8 +425,8 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
     // 根据循环模式决定下一步
     if (state.loopMode == LoopMode.one) {
       // 单曲循环
-      await _audioPlayer.seek(Duration.zero);
-      await _audioPlayer.play();
+      await _audioPlayer?.seek(Duration.zero);
+      await _audioPlayer?.play();
     } else if (state.hasNext) {
       // 播放下一首
       await next();
@@ -486,8 +496,11 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
 
   @override
   void dispose() {
-    _audioPlayer.dispose();
-    _audioHandler?.dispose();
+    // Check if initialized/assigned before disposing
+    // Since it was 'late', we can't check.
+    // Converting to nullable field:
+    _audioPlayer?.dispose();
+    _audioHandler?.stop(); // Ensure handler is stopped too
     super.dispose();
   }
 }

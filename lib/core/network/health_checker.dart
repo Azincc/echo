@@ -25,35 +25,39 @@ class HealthChecker {
     // Check if current active connection is still good
     if (active != null) {
       final probedCurrent = await _addressPool.probeAddress(active);
-      _addressPool.switchTo(probedCurrent); // Updates local state and status
+
+      // 仅更新探测状态，不触发 setManualMode 切换
+      final index = _addressPool.addresses.indexWhere((a) => a.id == probedCurrent.id);
+      if (index != -1) {
+        _addressPool.onAddressUpdated?.call(probedCurrent);
+      }
 
       if (probedCurrent.status != ServerAddressStatus.ok) {
-        // Auto fallback is usually triggered by request failure (interceptor).
-        // But here we also check proactively.
-        // If current failed, try to switch to next.
+        // 手动模式 + 自动回退关闭时，不自动切换
+        if (_addressPool.isManualMode && !_addressPool.autoFallback) {
+          return;
+        }
+
         final next = _addressPool.getNextAvailable();
         if (next != null) {
           _addressPool.switchTo(next);
         }
       } else {
         // Current is OK.
+        // 手动模式下不自动回退到更高优先级
+        if (_addressPool.isManualMode) {
+          return;
+        }
+
         // Check if we are using suboptimal connection (fallback).
         // Try to recover to higher priority address if available.
-
         final sorted = _addressPool.addresses;
-        // sorted is by priority (lowest int first)
 
         if (sorted.isNotEmpty && active.id != sorted.first.id) {
-          // We are not on top priority address.
-          // Find the highest priority address (could be first or next better than current)
-          // Let's just check the absolute best (first one).
           final best = sorted.first;
-
-          // Probe best address
           final bestProbed = await _addressPool.probeAddress(best);
 
           if (bestProbed.status == ServerAddressStatus.ok) {
-            // Switch back to best!
             _addressPool.switchTo(bestProbed);
           }
         }

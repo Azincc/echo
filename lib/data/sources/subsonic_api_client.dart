@@ -171,6 +171,29 @@ class SubsonicApiClient {
     return urlWithParams.toString();
   }
 
+  /// Get Music Folders
+  Future<List<Map<String, dynamic>>> getMusicFolders() async {
+    try {
+      final response = await _dio.get('getMusicFolders');
+      final data = response.data as Map<String, dynamic>;
+      _checkResponse(data);
+
+      final subsonicResponse = data['subsonic-response'];
+      final folders = subsonicResponse['musicFolders']?['musicFolder'];
+
+      if (folders is List) {
+        return folders.cast<Map<String, dynamic>>();
+      } else if (folders is Map) {
+        // Single folder potentially
+        return [folders as Map<String, dynamic>];
+      }
+      return [];
+    } catch (e) {
+      Logger.warn('Failed to get music folders', e);
+      return [];
+    }
+  }
+
   void _addAuthParamsMap(Map<String, String> params) {
     if (_library == null) {
       // Just common params if no library

@@ -10,6 +10,9 @@ class AddressPool {
   List<ServerAddress> _addresses = [];
   ServerAddress? _activeAddress;
 
+  /// 自动回退开关：手动选择线路后，线路挂掉是否自动切换到可用线路
+  bool autoFallback = true;
+
   // Callback to persist changes (e.g. latency updates)
   final Function(ServerAddress address)? onAddressUpdated;
 
@@ -21,6 +24,9 @@ class AddressPool {
   List<ServerAddress> get addresses => List.unmodifiable(_addresses);
   ServerAddress? get activeAddress => _activeAddress;
 
+  /// 当前是否处于手动模式（有锁定的地址）
+  bool get isManualMode => _activeAddress?.isLocked == true;
+
   void setAddresses(List<ServerAddress> newAddresses) {
     _addresses = List.of(newAddresses)
       ..sort((a, b) => a.priority.compareTo(b.priority));
@@ -31,12 +37,9 @@ class AddressPool {
       _activeAddress = null;
     }
 
-    // If no active address, try to set one (usually the first one if known good, or wait for probe)
+    // 不立即选定 active，而是触发探测让 probeAll 选最优可达地址
     if (_activeAddress == null && _addresses.isNotEmpty) {
-      // Just pick first for now, or maybe the one with best status?
-      // For now, simpler to just set.
-      _activeAddress = _addresses.first;
-      onActiveAddressChanged?.call(_activeAddress);
+      probeAll();
     }
   }
 
@@ -54,10 +57,20 @@ class AddressPool {
       onAddressUpdated?.call(_addresses[i]);
     }
 
-    // Sort again if needed? Usually priority is static, but maybe we want to sort by latency if priority is equal?
-    // Plan says "priority", so we stick to priority.
+    // 手动模式下只更新延迟数据，不切换活跃地址
+    if (isManualMode) {
+      // 更新当前活跃地址的探测结果
+      final updatedActive = _addresses.cast<ServerAddress?>().firstWhere(
+        (a) => a!.id == _activeAddress!.id,
+        orElse: () => null,
+      );
+      if (updatedActive != null) {
+        _activeAddress = updatedActive;
+      }
+      return _activeAddress;
+    }
 
-    // Find first reachable address
+    // 自动模式：选择最优可达地址
     final newActive = _getNextAvailable();
     if (_activeAddress?.id != newActive?.id) {
       _activeAddress = newActive;
@@ -142,34 +155,47 @@ class AddressPool {
     }
   }
 
-  /// 切换到指定地址
-  Future<bool> switchTo(ServerAddress addr) async {
+  /// 切换到自动模式（解锁所有地址，自动选择最优）
+  Future<void> setAutoMode() async {
+    for (int i = 0; i < _addresses.length; i++) {
+      if (_addresses[i].isLocked) {
+        _addresses[i] = _addresses[i].copyWith(isLocked: false);
+        onAddressUpdated?.call(_addresses[i]);
+      }
+    }
+    await probeAll();
+  }
+
+  /// 切换到手动模式（锁定指定地址）
+  Future<void> setManualMode(ServerAddress addr) async {
+    // Probe it first to update latency
     final probed = await probeAddress(addr);
 
-    // Update in list
-    final index = _addresses.indexWhere((a) => a.id == addr.id);
-    if (index != -1) {
-      _addresses[index] = probed;
-      onAddressUpdated?.call(probed);
+    // Update in list and lock it
+    for (int i = 0; i < _addresses.length; i++) {
+      var a = _addresses[i];
+      if (a.id == addr.id) {
+        // Update with probed data AND lock it
+        _addresses[i] = probed.copyWith(isLocked: true);
+        onAddressUpdated?.call(_addresses[i]);
+        _activeAddress = _addresses[i];
+        onActiveAddressChanged?.call(_activeAddress);
+      } else if (a.isLocked) {
+        // Unlock others
+        _addresses[i] = a.copyWith(isLocked: false);
+        onAddressUpdated?.call(_addresses[i]);
+      }
     }
+  }
 
-    if (probed.status == ServerAddressStatus.ok) {
-      _activeAddress = probed;
-      onActiveAddressChanged?.call(probed);
-      return true;
-    }
-    return false;
+  /// 切换到指定地址 (Deprecated: use setManualMode)
+  Future<bool> switchTo(ServerAddress addr) async {
+    await setManualMode(addr);
+    return _activeAddress?.status == ServerAddressStatus.ok;
   }
 
   /// 用户手动锁定某地址（不参与自动切换）
   void lockAddress(ServerAddress addr) {
-    // Implementation for locking
-    final index = _addresses.indexWhere((a) => a.id == addr.id);
-    if (index != -1) {
-      _addresses[index] = _addresses[index].copyWith(isLocked: true);
-      onAddressUpdated?.call(_addresses[index]);
-      _activeAddress = _addresses[index]; // Force switch?
-      onActiveAddressChanged?.call(_activeAddress);
-    }
+    setManualMode(addr);
   }
 }

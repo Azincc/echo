@@ -6,6 +6,7 @@ import '../../../widgets/main_scaffold.dart';
 import 'album_list_page.dart';
 import 'artist_list_page.dart';
 import 'playlist_detail_page.dart';
+import 'song_list_page.dart';
 import 'starred_page.dart';
 
 /// 我的页面 - Tab 2
@@ -101,6 +102,17 @@ class LibraryPage extends ConsumerWidget {
                 context,
               ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
             ),
+          ),
+          ListTile(
+            leading: const Icon(Icons.music_note),
+            title: const Text('全部歌曲'),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const SongListPage()),
+              );
+            },
           ),
           ListTile(
             leading: const Icon(Icons.album),

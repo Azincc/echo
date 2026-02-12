@@ -26,9 +26,11 @@ class CoverArtImage extends ConsumerWidget {
     final apiClient = ref.watch(subsonicApiClientProvider);
 
     // 处理 size 参数，避免 Infinity
+    // 根据设备像素比请求更高分辨率的图片，提升清晰度
+    final devicePixelRatio = MediaQuery.devicePixelRatioOf(context);
     int? coverSize;
     if (size != null && !size!.isInfinite) {
-      coverSize = size!.toInt();
+      coverSize = (size! * devicePixelRatio).ceil();
     }
 
     final coverUrl = apiClient.getCoverArtUrl(

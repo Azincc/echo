@@ -145,6 +145,10 @@ class AuthRepository {
         } catch (_) {}
       }
 
+      // Compute Server Fingerprint
+      final fingerprint = await _computeServerFingerprint(tempClient, username);
+      extensions['serverFingerprint'] = fingerprint; // Store in extensions
+
       // Create final MusicLibrary object
       // Define initial address
       final address = ServerAddress(
@@ -171,6 +175,82 @@ class AuthRepository {
     } catch (e) {
       Logger.error('Login failed', e);
       return LoginResult(success: false, errorMessage: e.toString());
+    }
+  }
+
+  /// Verify if the new address belongs to the same server as the existing library
+  Future<bool> verifyServerIdentity(
+    ServerAddress newAddress,
+    MusicLibrary existingLibrary,
+  ) async {
+    try {
+      final tempDio = Dio(
+        BaseOptions(
+          baseUrl: newAddress.url,
+          connectTimeout: const Duration(seconds: 10),
+          receiveTimeout: const Duration(seconds: 10),
+          responseType: ResponseType.json,
+        ),
+      );
+
+      final tempClient = SubsonicApiClient(dio: tempDio);
+      tempClient.setLibrary(existingLibrary);
+
+      // We rely on existing credentials working on new address.
+      // If ping fails (auth fail), then it's definitely not usable.
+      final pingResult = await tempClient.ping();
+      if (!pingResult.success) {
+        Logger.warn(
+          'Verify identity: Ping failed - ${pingResult.errorMessage}',
+        );
+        return false;
+      }
+
+      // If we stored a fingerprint, verify it.
+      final storedFingerprint = existingLibrary.extensions['serverFingerprint'];
+      if (storedFingerprint != null) {
+        final newFingerprint = await _computeServerFingerprint(
+          tempClient,
+          existingLibrary.username ?? '',
+        );
+
+        if (storedFingerprint != newFingerprint) {
+          Logger.warn(
+            'Verify identity: Fingerprint mismatch. Expected $storedFingerprint, got $newFingerprint',
+          );
+          return false;
+        }
+      }
+
+      return true;
+    } catch (e) {
+      Logger.error('Verify identity failed', e);
+      return false;
+    }
+  }
+
+  Future<String> _computeServerFingerprint(
+    SubsonicApiClient client,
+    String username,
+  ) async {
+    try {
+      final folders = await client.getMusicFolders();
+      // Sort by ID to ensure deterministic order
+      folders.sort((a, b) {
+        final idA = a['id'].toString();
+        final idB = b['id'].toString();
+        return idA.compareTo(idB); // String compare IDs
+      });
+
+      final sb = StringBuffer();
+      sb.write('user:$username|');
+      for (final folder in folders) {
+        sb.write('folder:${folder['id']}:${folder['name']}|');
+      }
+      return sb.toString();
+    } catch (e) {
+      Logger.warn('Failed to compute fingerprint, defaulting to user only', e);
+      return 'user:$username';
     }
   }
 

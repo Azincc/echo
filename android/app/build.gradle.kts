@@ -16,7 +16,7 @@ if (keystorePropertiesFile.exists()) {
 }
 
 android {
-    namespace = "com.example.echo"
+    namespace = "cc.azin.echoes"
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
 
@@ -30,7 +30,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.example.echo"
+        applicationId = "cc.azin.echoes"
         minSdk = flutter.minSdkVersion
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
@@ -42,8 +42,13 @@ android {
         if (keystorePropertiesFile.exists()) {
             create("release") {
                 keyAlias = keystoreProperties.getProperty("keyAlias")
-                keyPassword = keystoreProperties.getProperty("keyPassword")
-                storeFile = file(keystoreProperties.getProperty("storeFile"))
+                val keyPass = keystoreProperties.getProperty("keyPassword")
+                keyPassword = if (keyPass.isNullOrEmpty()) keystoreProperties.getProperty("storePassword") else keyPass
+                storeFile = if (keystoreProperties.getProperty("storeFile").startsWith("/")) {
+                    file(keystoreProperties.getProperty("storeFile"))
+                } else {
+                    file(keystoreProperties.getProperty("storeFile"))
+                }
                 storePassword = keystoreProperties.getProperty("storePassword")
             }
         }

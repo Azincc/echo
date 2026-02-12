@@ -1,15 +1,15 @@
 import 'package:dio/dio.dart';
-import 'package:echo/core/constants/api_constants.dart';
-import 'package:echo/core/network/address_pool.dart';
-import 'package:echo/core/network/connectivity_monitor.dart';
-import 'package:echo/core/network/fallback_interceptor.dart';
-import 'package:echo/core/network/health_checker.dart';
-import 'package:echo/core/utils/logger.dart';
+import 'package:echoes/core/constants/api_constants.dart';
+import 'package:echoes/core/network/address_pool.dart';
+import 'package:echoes/core/network/connectivity_monitor.dart';
+import 'package:echoes/core/network/fallback_interceptor.dart';
+import 'package:echoes/core/network/health_checker.dart';
+import 'package:echoes/core/utils/logger.dart';
 
-import 'package:echo/data/models/server_address.dart';
-import 'package:echo/data/sources/local_storage.dart';
-import 'package:echo/data/sources/subsonic_api_client.dart';
-import 'package:echo/providers/library_provider.dart';
+import 'package:echoes/data/models/server_address.dart';
+import 'package:echoes/data/sources/local_storage.dart';
+import 'package:echoes/data/sources/subsonic_api_client.dart';
+import 'package:echoes/providers/library_provider.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 // 1. Basic Dio Provider

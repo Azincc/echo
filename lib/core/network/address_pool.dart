@@ -1,7 +1,7 @@
 import 'dart:async';
 
 import 'package:dio/dio.dart';
-import 'package:echo/data/models/server_address.dart';
+import 'package:echoes/data/models/server_address.dart';
 
 /// 地址池：管理一个音乐库的多个地址
 class AddressPool {

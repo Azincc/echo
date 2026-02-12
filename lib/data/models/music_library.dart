@@ -1,4 +1,4 @@
-import 'package:echo/data/models/server_address.dart';
+import 'package:echoes/data/models/server_address.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
 
 part 'music_library.freezed.dart';

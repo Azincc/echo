@@ -1,7 +1,7 @@
 import 'dart:async';
 
 import 'package:connectivity_plus/connectivity_plus.dart';
-import 'package:echo/core/network/address_pool.dart';
+import 'package:echoes/core/network/address_pool.dart';
 import 'package:flutter/foundation.dart';
 
 class ConnectivityMonitor {

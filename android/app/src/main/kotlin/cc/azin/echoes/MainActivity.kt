@@ -1,4 +1,4 @@
-package com.example.echo
+package cc.azin.echoes
 
 import com.ryanheise.audioservice.AudioServiceFragmentActivity
 

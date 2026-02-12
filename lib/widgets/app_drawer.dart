@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:echo/data/models/music_library.dart';
-import 'package:echo/data/models/server_address.dart';
-import 'package:echo/providers/api_provider.dart';
-import 'package:echo/providers/library_provider.dart';
-import 'package:echo/data/sources/local_storage.dart';
+import 'package:echoes/data/models/music_library.dart';
+import 'package:echoes/data/models/server_address.dart';
+import 'package:echoes/providers/api_provider.dart';
+import 'package:echoes/providers/library_provider.dart';
+import 'package:echoes/data/sources/local_storage.dart';
 import '../providers/auth_provider.dart';
 import '../providers/player_provider.dart';
 import '../providers/playlist_provider.dart';

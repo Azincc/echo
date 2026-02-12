@@ -1,13 +1,13 @@
 // import 'package:dio/dio.dart'; // unused? No, used for ref.watch(dioProvider) below? Actually below it uses 'dioProvider'.
 // dioProvider returns Dio.
 
-// import 'package:echo/core/constants/api_constants.dart'; // unused
+// import 'package:echoes/core/constants/api_constants.dart'; // unused
 
-import 'package:echo/data/models/music_library.dart'; // New model
-import 'package:echo/data/repositories/auth_repository.dart';
-import 'package:echo/data/repositories/library_repository.dart';
+import 'package:echoes/data/models/music_library.dart'; // New model
+import 'package:echoes/data/repositories/auth_repository.dart';
+import 'package:echoes/data/repositories/library_repository.dart';
 
-import 'package:echo/providers/library_provider.dart';
+import 'package:echoes/providers/library_provider.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 // Removed apiClientProvider as it is replaced by subsonicApiClientProvider in api_provider.dart

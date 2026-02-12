@@ -1,7 +1,7 @@
-import 'package:echo/data/models/music_library.dart';
-import 'package:echo/data/models/server_address.dart';
-import 'package:echo/data/repositories/library_repository.dart';
-import 'package:echo/data/sources/database/database_provider.dart';
+import 'package:echoes/data/models/music_library.dart';
+import 'package:echoes/data/models/server_address.dart';
+import 'package:echoes/data/repositories/library_repository.dart';
+import 'package:echoes/data/sources/database/database_provider.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 final libraryRepositoryProvider = Provider<LibraryRepository>((ref) {

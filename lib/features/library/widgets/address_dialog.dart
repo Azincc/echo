@@ -1,4 +1,4 @@
-import 'package:echo/data/models/server_address.dart';
+import 'package:echoes/data/models/server_address.dart';
 import 'package:flutter/material.dart';
 import 'package:uuid/uuid.dart';
 

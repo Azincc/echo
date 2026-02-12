@@ -1,12 +1,12 @@
-import 'package:echo/data/models/music_library.dart';
-import 'package:echo/data/models/server_address.dart';
-import 'package:echo/features/library/widgets/address_dialog.dart';
-import 'package:echo/providers/library_provider.dart';
+import 'package:echoes/data/models/music_library.dart';
+import 'package:echoes/data/models/server_address.dart';
+import 'package:echoes/features/library/widgets/address_dialog.dart';
+import 'package:echoes/providers/library_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:echo/providers/api_provider.dart';
-import 'package:echo/providers/auth_provider.dart';
-import 'package:echo/providers/player_provider.dart';
+import 'package:echoes/providers/api_provider.dart';
+import 'package:echoes/providers/auth_provider.dart';
+import 'package:echoes/providers/player_provider.dart';
 import 'package:go_router/go_router.dart';
 
 class EditLibraryPage extends ConsumerStatefulWidget {

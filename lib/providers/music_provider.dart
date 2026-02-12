@@ -3,7 +3,7 @@ import '../data/models/album.dart';
 import '../data/models/artist.dart';
 import '../data/models/song.dart';
 import '../data/repositories/music_repository.dart';
-import 'package:echo/providers/library_provider.dart';
+import 'package:echoes/providers/library_provider.dart';
 
 import 'api_provider.dart';
 

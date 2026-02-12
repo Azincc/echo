@@ -2,7 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../data/models/playlist.dart';
 import '../data/repositories/playlist_repository.dart';
 
-import 'package:echo/providers/library_provider.dart';
+import 'package:echoes/providers/library_provider.dart';
 
 import 'api_provider.dart';
 

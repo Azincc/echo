@@ -1,5 +1,5 @@
 import 'package:dio/dio.dart';
-import 'package:echo/core/network/address_pool.dart';
+import 'package:echoes/core/network/address_pool.dart';
 import 'package:fluttertoast/fluttertoast.dart';
 
 class FallbackInterceptor extends Interceptor {

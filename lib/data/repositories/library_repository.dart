@@ -1,9 +1,9 @@
 import 'dart:convert';
 
 import 'package:drift/drift.dart';
-import 'package:echo/data/models/music_library.dart';
-import 'package:echo/data/models/server_address.dart';
-import 'package:echo/data/sources/database/app_database.dart';
+import 'package:echoes/data/models/music_library.dart';
+import 'package:echoes/data/models/server_address.dart';
+import 'package:echoes/data/sources/database/app_database.dart';
 // Note: imports of table files are not strictly needed if we access via AppDatabase getters,
 // but we need the Data classes (Row classes).
 // AppDatabase exports them or they are available part of it?

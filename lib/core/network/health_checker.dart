@@ -1,6 +1,6 @@
 import 'dart:async';
-import 'package:echo/core/network/address_pool.dart';
-import 'package:echo/data/models/server_address.dart';
+import 'package:echoes/core/network/address_pool.dart';
+import 'package:echoes/data/models/server_address.dart';
 
 class HealthChecker {
   final AddressPool _addressPool;

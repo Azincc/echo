@@ -60,7 +60,7 @@ jobs:
           storePassword=$STORE_PASSWORD
           keyPassword=$KEY_PASSWORD
           keyAlias=$KEY_ALIAS
-          storeFile=app/keystore.jks
+          storeFile=keystore.jks
           EOF
 
       - name: Install dependencies

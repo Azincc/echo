@@ -26,9 +26,7 @@ class EchoAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
 
     // 监听播放位置
     _audioPlayer.positionStream.listen((position) {
-      playbackState.add(playbackState.value.copyWith(
-        updatePosition: position,
-      ));
+      playbackState.add(playbackState.value.copyWith(updatePosition: position));
     });
 
     // 监听播放完成
@@ -39,15 +37,17 @@ class EchoAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
 
   /// 广播当前状态到通知栏
   void _broadcastState() {
-    playbackState.add(playbackState.value.copyWith(
-      controls: _getControls(),
-      androidCompactActionIndices: const [0, 1, 2],
-      processingState: _getProcessingState(),
-      playing: _audioPlayer.playing,
-      updatePosition: _audioPlayer.position,
-      bufferedPosition: _audioPlayer.bufferedPosition,
-      speed: _audioPlayer.speed,
-    ));
+    playbackState.add(
+      playbackState.value.copyWith(
+        controls: _getControls(),
+        androidCompactActionIndices: const [0, 1, 2],
+        processingState: _getProcessingState(),
+        playing: _audioPlayer.playing,
+        updatePosition: _audioPlayer.position,
+        bufferedPosition: _audioPlayer.bufferedPosition,
+        speed: _audioPlayer.speed,
+      ),
+    );
   }
 
   /// 获取控制按钮
@@ -56,7 +56,6 @@ class EchoAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
       MediaControl.skipToPrevious,
       if (_audioPlayer.playing) MediaControl.pause else MediaControl.play,
       MediaControl.skipToNext,
-      MediaControl.stop,
     ];
   }
 
@@ -82,15 +81,17 @@ class EchoAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     mediaItem.add(item);
 
     // 立即设置为播放状态，激活 MediaSession
-    playbackState.add(playbackState.value.copyWith(
-      controls: _getControls(),
-      androidCompactActionIndices: const [0, 1, 2],
-      processingState: AudioProcessingState.ready,
-      playing: true,  // 关键：标记为正在播放
-      updatePosition: Duration.zero,
-      bufferedPosition: Duration.zero,
-      speed: 1.0,
-    ));
+    playbackState.add(
+      playbackState.value.copyWith(
+        controls: _getControls(),
+        androidCompactActionIndices: const [0, 1, 2],
+        processingState: AudioProcessingState.ready,
+        playing: true, // 关键：标记为正在播放
+        updatePosition: Duration.zero,
+        bufferedPosition: Duration.zero,
+        speed: 1.0,
+      ),
+    );
   }
 
   // ===== 播放控制 =====
@@ -153,10 +154,10 @@ Future<EchoAudioHandler> initAudioService() async {
       androidNotificationChannelId: 'com.example.echo.audio',
       androidNotificationChannelName: 'Echo Music Playback',
       androidNotificationChannelDescription: 'Echo music player controls',
-      androidNotificationOngoing: false,  // 允许用户手动关闭通知
+      androidNotificationOngoing: false, // 允许用户手动关闭通知
       androidNotificationIcon: 'drawable/ic_notification',
       androidShowNotificationBadge: true,
-      androidStopForegroundOnPause: false,  // 暂停时保持通知栏
+      androidStopForegroundOnPause: false, // 暂停时保持通知栏
       fastForwardInterval: Duration(seconds: 10),
       rewindInterval: Duration(seconds: 10),
     ),

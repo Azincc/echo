@@ -67,6 +67,7 @@ dependencies:
   # A-Z Indexing and Sorting
   azlistview: ^2.0.0
   lpinyin: ^2.0.3
+  marquee: ^2.3.0
 
 dev_dependencies:
   drift_dev: ^2.22.1

@@ -20,7 +20,6 @@ class _AddressDialogState extends State<AddressDialog> {
   final _formKey = GlobalKey<FormState>();
   late TextEditingController _labelController;
   late TextEditingController _urlController;
-  late TextEditingController _priorityController;
 
   @override
   void initState() {
@@ -29,16 +28,12 @@ class _AddressDialogState extends State<AddressDialog> {
       text: widget.initialAddress?.label,
     );
     _urlController = TextEditingController(text: widget.initialAddress?.url);
-    _priorityController = TextEditingController(
-      text: widget.initialAddress?.priority.toString() ?? '10',
-    );
   }
 
   @override
   void dispose() {
     _labelController.dispose();
     _urlController.dispose();
-    _priorityController.dispose();
     super.dispose();
   }
 
@@ -85,25 +80,6 @@ class _AddressDialogState extends State<AddressDialog> {
                   return null;
                 },
               ),
-              const SizedBox(height: 16),
-              TextFormField(
-                controller: _priorityController,
-                decoration: const InputDecoration(
-                  labelText: '优先级',
-                  hintText: '数字越小优先级越高',
-                  helperText: '0 最高，默认 10',
-                ),
-                keyboardType: TextInputType.number,
-                validator: (value) {
-                  if (value == null || value.isEmpty) {
-                    return '请输入优先级';
-                  }
-                  if (int.tryParse(value) == null) {
-                    return '请输入有效的数字';
-                  }
-                  return null;
-                },
-              ),
             ],
           ),
         ),
@@ -121,7 +97,7 @@ class _AddressDialogState extends State<AddressDialog> {
                 libraryId: widget.libraryId,
                 label: _labelController.text,
                 url: _urlController.text,
-                priority: int.parse(_priorityController.text),
+                priority: widget.initialAddress?.priority ?? 10,
                 isLocked: widget.initialAddress?.isLocked ?? false,
               );
               Navigator.of(context).pop(newAddress);

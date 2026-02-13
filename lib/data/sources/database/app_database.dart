@@ -7,15 +7,88 @@ import 'package:path_provider/path_provider.dart';
 
 import 'tables/music_libraries_table.dart';
 import 'tables/server_addresses_table.dart';
+import 'tables/lyrics_provider_configs_table.dart';
+import 'tables/cover_provider_configs_table.dart';
+import 'tables/lyrics_cache_table.dart';
 
 part 'app_database.g.dart';
 
-@DriftDatabase(tables: [MusicLibraries, ServerAddresses])
+@DriftDatabase(
+  tables: [
+    MusicLibraries,
+    ServerAddresses,
+    LyricsProviderConfigs,
+    CoverProviderConfigs,
+    LyricsCache,
+  ],
+)
 class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
 
   @override
-  int get schemaVersion => 1;
+  int get schemaVersion => 2;
+
+  @override
+  MigrationStrategy get migration => MigrationStrategy(
+    onCreate: (m) async {
+      await m.createAll();
+      await _insertDefaultProviderConfigs();
+    },
+    onUpgrade: (m, from, to) async {
+      if (from < 2) {
+        await m.createTable(lyricsProviderConfigs);
+        await m.createTable(coverProviderConfigs);
+        await m.createTable(lyricsCache);
+        await _insertDefaultProviderConfigs();
+      }
+    },
+  );
+
+  Future<void> _insertDefaultProviderConfigs() async {
+    final lyricsDefaults = [
+      LyricsProviderConfigsCompanion.insert(
+        id: 'lyrics_subsonic',
+        sourceId: 'subsonic',
+        priority: 0,
+      ),
+      LyricsProviderConfigsCompanion.insert(
+        id: 'lyrics_lrclib',
+        sourceId: 'lrclib',
+        priority: 1,
+      ),
+      LyricsProviderConfigsCompanion.insert(
+        id: 'lyrics_netease',
+        sourceId: 'netease',
+        priority: 2,
+      ),
+    ];
+
+    for (final config in lyricsDefaults) {
+      await into(lyricsProviderConfigs).insertOnConflictUpdate(config);
+    }
+
+    final coverDefaults = [
+      CoverProviderConfigsCompanion.insert(
+        id: 'cover_subsonic',
+        sourceId: 'subsonic',
+        priority: 0,
+      ),
+      CoverProviderConfigsCompanion.insert(
+        id: 'cover_musicbrainz',
+        sourceId: 'musicbrainz',
+        priority: 1,
+      ),
+      CoverProviderConfigsCompanion.insert(
+        id: 'cover_fanart',
+        sourceId: 'fanart',
+        priority: 2,
+      ),
+    ];
+
+    for (final config in coverDefaults) {
+      await into(coverProviderConfigs).insertOnConflictUpdate(config);
+    }
+  }
 }
 
 LazyDatabase _openConnection() {

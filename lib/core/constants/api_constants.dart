@@ -15,7 +15,8 @@ class ApiConstants {
 
   // API 端点
   static const String ping = '/rest/ping';
-  static const String getOpenSubsonicExtensions = '/rest/getOpenSubsonicExtensions';
+  static const String getOpenSubsonicExtensions =
+      '/rest/getOpenSubsonicExtensions';
   static const String getAlbumList2 = '/rest/getAlbumList2';
   static const String getAlbum = '/rest/getAlbum';
   static const String getArtists = '/rest/getArtists';
@@ -35,4 +36,8 @@ class ApiConstants {
   static const String download = '/rest/download';
   static const String getCoverArt = '/rest/getCoverArt';
   static const String scrobble = '/rest/scrobble';
+
+  // 歌词 API（v0.3.0）
+  static const String getLyricsBySongId = '/rest/getLyricsBySongId';
+  static const String getLyrics = '/rest/getLyrics';
 }

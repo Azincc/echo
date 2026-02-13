@@ -1,4 +1,6 @@
+import 'dart:io' show Platform;
 import 'package:audio_service/audio_service.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:just_audio/just_audio.dart';
 import '../data/models/song.dart';
@@ -237,21 +239,32 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
 
     final lowerSuffix = suffix.toLowerCase();
 
-    // 只对完全确定不支持的格式进行转码
-    // ExoPlayer/just_audio 在大多数平台上不支持的格式
-    const unsupportedFormats = [
-      'ape', // Monkey's Audio - Android/iOS 不支持
-      'wv', // WavPack - 部分平台不支持
-      'tta', // True Audio - 不支持
-      'dff', // DSD - 不支持
-      'dsf', // DSD - 不支持
-      'tak', // TAK - 不支持
-      'm4a', // 可能包含 ALAC 编码，Android 支持不完整，转码更稳定
-      'alac', // Apple Lossless - Android 支持不完整
+    // macOS/iOS 原生支持 m4a/alac（AVFoundation/CoreAudio），无需转码
+    final isApplePlatform = !kIsWeb && (Platform.isMacOS || Platform.isIOS);
+
+    // 所有平台都不支持的格式
+    const universallyUnsupported = [
+      'ape', // Monkey's Audio
+      'wv', // WavPack
+      'tta', // True Audio
+      'dff', // DSD
+      'dsf', // DSD
+      'tak', // TAK
     ];
 
-    if (unsupportedFormats.contains(lowerSuffix)) {
-      return 'mp3'; // 转码为通用的 MP3 格式
+    if (universallyUnsupported.contains(lowerSuffix)) {
+      return 'mp3';
+    }
+
+    // Android 上 m4a/alac 支持不完整，需要转码
+    if (!isApplePlatform) {
+      const androidUnsupported = [
+        'm4a', // 可能包含 ALAC 编码，Android 支持不完整
+        'alac', // Apple Lossless
+      ];
+      if (androidUnsupported.contains(lowerSuffix)) {
+        return 'mp3';
+      }
     }
 
     // 其他格式优先尝试原始格式播放

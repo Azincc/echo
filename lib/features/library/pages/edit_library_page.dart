@@ -180,70 +180,95 @@ class _EditLibraryPageState extends ConsumerState<EditLibraryPage> {
             ),
           ],
         ),
+        const SizedBox(height: 4),
+        Text(
+          '长按拖拽调整优先级顺序，排在前面的地址优先使用',
+          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
+          ),
+        ),
         const SizedBox(height: 8),
         if (sortedAddresses.isEmpty)
           const Text('暂无地址，请添加服务器地址。')
         else
-          ListView.separated(
+          ReorderableListView.builder(
             shrinkWrap: true,
             physics: const NeverScrollableScrollPhysics(),
             itemCount: sortedAddresses.length,
-            separatorBuilder: (context, index) => const Divider(),
+            onReorder: (oldIndex, newIndex) =>
+                _onReorderAddresses(sortedAddresses, oldIndex, newIndex),
             itemBuilder: (context, index) {
               final address = sortedAddresses[index];
-              return ListTile(
-                title: Text(address.label),
-                subtitle: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(address.url),
-                    Row(
-                      children: [
-                        Container(
-                          width: 8,
-                          height: 8,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            color: _getStatusColor(address.status),
+              return Material(
+                key: ValueKey(address.id),
+                child: ListTile(
+                  title: Text(address.label),
+                  subtitle: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(address.url),
+                      Row(
+                        children: [
+                          Container(
+                            width: 8,
+                            height: 8,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: _getStatusColor(address.status),
+                            ),
                           ),
-                        ),
-                        const SizedBox(width: 4),
-                        Text(
-                          '${address.status.name} ${address.lastLatencyMs != null ? '(${address.lastLatencyMs}ms)' : ''}',
-                          style: Theme.of(context).textTheme.bodySmall,
-                        ),
-                        const SizedBox(width: 8),
-                        Text(
-                          '优先级: ${address.priority}',
-                          style: Theme.of(context).textTheme.bodySmall,
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-                trailing: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    IconButton(
-                      icon: const Icon(Icons.edit, size: 20),
-                      onPressed: () =>
-                          _showAddressDialog(context, address: address),
-                    ),
-                    IconButton(
-                      icon: const Icon(
-                        Icons.delete,
-                        size: 20,
-                        color: Colors.red,
+                          const SizedBox(width: 4),
+                          Text(
+                            '${address.status.name} ${address.lastLatencyMs != null ? '(${address.lastLatencyMs}ms)' : ''}',
+                            style: Theme.of(context).textTheme.bodySmall,
+                          ),
+                        ],
                       ),
-                      onPressed: () => _deleteAddress(address),
-                    ),
-                  ],
+                    ],
+                  ),
+                  trailing: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      IconButton(
+                        icon: const Icon(Icons.edit, size: 20),
+                        onPressed: () =>
+                            _showAddressDialog(context, address: address),
+                      ),
+                      IconButton(
+                        icon: const Icon(
+                          Icons.delete,
+                          size: 20,
+                          color: Colors.red,
+                        ),
+                        onPressed: () => _deleteAddress(address),
+                      ),
+                      const Icon(Icons.drag_handle),
+                    ],
+                  ),
                 ),
               );
             },
           ),
       ],
     );
+  }
+
+  Future<void> _onReorderAddresses(
+    List<ServerAddress> addresses,
+    int oldIndex,
+    int newIndex,
+  ) async {
+    if (oldIndex < newIndex) newIndex -= 1;
+    final item = addresses.removeAt(oldIndex);
+    addresses.insert(newIndex, item);
+
+    // 更新所有地址的优先级为列表位置
+    final repo = ref.read(libraryRepositoryProvider);
+    for (int i = 0; i < addresses.length; i++) {
+      final updated = addresses[i].copyWith(priority: i);
+      await repo.updateAddress(updated);
+    }
+    ref.invalidate(librariesProvider);
   }
 
   Color _getStatusColor(ServerAddressStatus status) {

@@ -10,6 +10,8 @@ import '../providers/auth_provider.dart';
 import '../providers/player_provider.dart';
 import '../providers/playlist_provider.dart';
 import '../providers/music_provider.dart';
+import '../features/settings/pages/lyrics_providers_page.dart';
+import '../features/settings/pages/cover_providers_page.dart';
 
 /// 应用侧栏
 class AppDrawer extends ConsumerStatefulWidget {
@@ -214,6 +216,36 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
           },
         ),
 
+        // 歌词提供商
+        ListTile(
+          leading: const Icon(Icons.lyrics),
+          title: const Text('歌词提供商'),
+          onTap: () {
+            Navigator.pop(context);
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => const LyricsProvidersPage(),
+              ),
+            );
+          },
+        ),
+
+        // 封面提供商
+        ListTile(
+          leading: const Icon(Icons.image),
+          title: const Text('封面提供商'),
+          onTap: () {
+            Navigator.pop(context);
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => const CoverProvidersPage(),
+              ),
+            );
+          },
+        ),
+
         const Divider(),
 
         // 统计信息
@@ -315,9 +347,9 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
                   // 服务器信息
                   Text(
                     '服务器信息',
-                    style: Theme.of(
-                      context,
-                    ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                   const SizedBox(height: 8),
                   _buildInfoRow('当前连接', activeAddress?.label ?? '未连接'),
@@ -334,9 +366,9 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
                   // 应用设置
                   Text(
                     '应用设置',
-                    style: Theme.of(
-                      context,
-                    ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                   const SizedBox(height: 8),
                   SwitchListTile(

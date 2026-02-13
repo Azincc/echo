@@ -1,3 +1,5 @@
+import 'dart:io' show Platform;
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -126,7 +128,9 @@ class _SplashPageState extends ConsumerState<SplashPage> {
 
   Future<void> _checkAuthAndNavigate() async {
     // 请求通知权限 (Android 13+)
-    await Permission.notification.request();
+    if (!kIsWeb && Platform.isAndroid) {
+      await Permission.notification.request();
+    }
 
     // 等待认证状态加载
     await Future.delayed(const Duration(milliseconds: 500));

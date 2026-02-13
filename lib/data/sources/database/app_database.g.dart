@@ -1295,6 +1295,1161 @@ class ServerAddressesCompanion extends UpdateCompanion<ServerAddressTableData> {
   }
 }
 
+class $LyricsProviderConfigsTable extends LyricsProviderConfigs
+    with TableInfo<$LyricsProviderConfigsTable, LyricsProviderConfigData> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $LyricsProviderConfigsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
+    'id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _sourceIdMeta = const VerificationMeta(
+    'sourceId',
+  );
+  @override
+  late final GeneratedColumn<String> sourceId = GeneratedColumn<String>(
+    'source_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+    defaultConstraints: GeneratedColumn.constraintIsAlways('UNIQUE'),
+  );
+  static const VerificationMeta _enabledMeta = const VerificationMeta(
+    'enabled',
+  );
+  @override
+  late final GeneratedColumn<bool> enabled = GeneratedColumn<bool>(
+    'enabled',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("enabled" IN (0, 1))',
+    ),
+    defaultValue: const Constant(true),
+  );
+  static const VerificationMeta _priorityMeta = const VerificationMeta(
+    'priority',
+  );
+  @override
+  late final GeneratedColumn<int> priority = GeneratedColumn<int>(
+    'priority',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _configMeta = const VerificationMeta('config');
+  @override
+  late final GeneratedColumn<String> config = GeneratedColumn<String>(
+    'config',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    sourceId,
+    enabled,
+    priority,
+    config,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'lyrics_provider_configs';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<LyricsProviderConfigData> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
+    }
+    if (data.containsKey('source_id')) {
+      context.handle(
+        _sourceIdMeta,
+        sourceId.isAcceptableOrUnknown(data['source_id']!, _sourceIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_sourceIdMeta);
+    }
+    if (data.containsKey('enabled')) {
+      context.handle(
+        _enabledMeta,
+        enabled.isAcceptableOrUnknown(data['enabled']!, _enabledMeta),
+      );
+    }
+    if (data.containsKey('priority')) {
+      context.handle(
+        _priorityMeta,
+        priority.isAcceptableOrUnknown(data['priority']!, _priorityMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_priorityMeta);
+    }
+    if (data.containsKey('config')) {
+      context.handle(
+        _configMeta,
+        config.isAcceptableOrUnknown(data['config']!, _configMeta),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  LyricsProviderConfigData map(
+    Map<String, dynamic> data, {
+    String? tablePrefix,
+  }) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return LyricsProviderConfigData(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}id'],
+      )!,
+      sourceId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}source_id'],
+      )!,
+      enabled: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}enabled'],
+      )!,
+      priority: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}priority'],
+      )!,
+      config: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}config'],
+      ),
+    );
+  }
+
+  @override
+  $LyricsProviderConfigsTable createAlias(String alias) {
+    return $LyricsProviderConfigsTable(attachedDatabase, alias);
+  }
+}
+
+class LyricsProviderConfigData extends DataClass
+    implements Insertable<LyricsProviderConfigData> {
+  final String id;
+  final String sourceId;
+  final bool enabled;
+  final int priority;
+  final String? config;
+  const LyricsProviderConfigData({
+    required this.id,
+    required this.sourceId,
+    required this.enabled,
+    required this.priority,
+    this.config,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<String>(id);
+    map['source_id'] = Variable<String>(sourceId);
+    map['enabled'] = Variable<bool>(enabled);
+    map['priority'] = Variable<int>(priority);
+    if (!nullToAbsent || config != null) {
+      map['config'] = Variable<String>(config);
+    }
+    return map;
+  }
+
+  LyricsProviderConfigsCompanion toCompanion(bool nullToAbsent) {
+    return LyricsProviderConfigsCompanion(
+      id: Value(id),
+      sourceId: Value(sourceId),
+      enabled: Value(enabled),
+      priority: Value(priority),
+      config: config == null && nullToAbsent
+          ? const Value.absent()
+          : Value(config),
+    );
+  }
+
+  factory LyricsProviderConfigData.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return LyricsProviderConfigData(
+      id: serializer.fromJson<String>(json['id']),
+      sourceId: serializer.fromJson<String>(json['sourceId']),
+      enabled: serializer.fromJson<bool>(json['enabled']),
+      priority: serializer.fromJson<int>(json['priority']),
+      config: serializer.fromJson<String?>(json['config']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<String>(id),
+      'sourceId': serializer.toJson<String>(sourceId),
+      'enabled': serializer.toJson<bool>(enabled),
+      'priority': serializer.toJson<int>(priority),
+      'config': serializer.toJson<String?>(config),
+    };
+  }
+
+  LyricsProviderConfigData copyWith({
+    String? id,
+    String? sourceId,
+    bool? enabled,
+    int? priority,
+    Value<String?> config = const Value.absent(),
+  }) => LyricsProviderConfigData(
+    id: id ?? this.id,
+    sourceId: sourceId ?? this.sourceId,
+    enabled: enabled ?? this.enabled,
+    priority: priority ?? this.priority,
+    config: config.present ? config.value : this.config,
+  );
+  LyricsProviderConfigData copyWithCompanion(
+    LyricsProviderConfigsCompanion data,
+  ) {
+    return LyricsProviderConfigData(
+      id: data.id.present ? data.id.value : this.id,
+      sourceId: data.sourceId.present ? data.sourceId.value : this.sourceId,
+      enabled: data.enabled.present ? data.enabled.value : this.enabled,
+      priority: data.priority.present ? data.priority.value : this.priority,
+      config: data.config.present ? data.config.value : this.config,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('LyricsProviderConfigData(')
+          ..write('id: $id, ')
+          ..write('sourceId: $sourceId, ')
+          ..write('enabled: $enabled, ')
+          ..write('priority: $priority, ')
+          ..write('config: $config')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(id, sourceId, enabled, priority, config);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is LyricsProviderConfigData &&
+          other.id == this.id &&
+          other.sourceId == this.sourceId &&
+          other.enabled == this.enabled &&
+          other.priority == this.priority &&
+          other.config == this.config);
+}
+
+class LyricsProviderConfigsCompanion
+    extends UpdateCompanion<LyricsProviderConfigData> {
+  final Value<String> id;
+  final Value<String> sourceId;
+  final Value<bool> enabled;
+  final Value<int> priority;
+  final Value<String?> config;
+  final Value<int> rowid;
+  const LyricsProviderConfigsCompanion({
+    this.id = const Value.absent(),
+    this.sourceId = const Value.absent(),
+    this.enabled = const Value.absent(),
+    this.priority = const Value.absent(),
+    this.config = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  LyricsProviderConfigsCompanion.insert({
+    required String id,
+    required String sourceId,
+    this.enabled = const Value.absent(),
+    required int priority,
+    this.config = const Value.absent(),
+    this.rowid = const Value.absent(),
+  }) : id = Value(id),
+       sourceId = Value(sourceId),
+       priority = Value(priority);
+  static Insertable<LyricsProviderConfigData> custom({
+    Expression<String>? id,
+    Expression<String>? sourceId,
+    Expression<bool>? enabled,
+    Expression<int>? priority,
+    Expression<String>? config,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (sourceId != null) 'source_id': sourceId,
+      if (enabled != null) 'enabled': enabled,
+      if (priority != null) 'priority': priority,
+      if (config != null) 'config': config,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  LyricsProviderConfigsCompanion copyWith({
+    Value<String>? id,
+    Value<String>? sourceId,
+    Value<bool>? enabled,
+    Value<int>? priority,
+    Value<String?>? config,
+    Value<int>? rowid,
+  }) {
+    return LyricsProviderConfigsCompanion(
+      id: id ?? this.id,
+      sourceId: sourceId ?? this.sourceId,
+      enabled: enabled ?? this.enabled,
+      priority: priority ?? this.priority,
+      config: config ?? this.config,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<String>(id.value);
+    }
+    if (sourceId.present) {
+      map['source_id'] = Variable<String>(sourceId.value);
+    }
+    if (enabled.present) {
+      map['enabled'] = Variable<bool>(enabled.value);
+    }
+    if (priority.present) {
+      map['priority'] = Variable<int>(priority.value);
+    }
+    if (config.present) {
+      map['config'] = Variable<String>(config.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('LyricsProviderConfigsCompanion(')
+          ..write('id: $id, ')
+          ..write('sourceId: $sourceId, ')
+          ..write('enabled: $enabled, ')
+          ..write('priority: $priority, ')
+          ..write('config: $config, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $CoverProviderConfigsTable extends CoverProviderConfigs
+    with TableInfo<$CoverProviderConfigsTable, CoverProviderConfigData> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $CoverProviderConfigsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
+    'id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _sourceIdMeta = const VerificationMeta(
+    'sourceId',
+  );
+  @override
+  late final GeneratedColumn<String> sourceId = GeneratedColumn<String>(
+    'source_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+    defaultConstraints: GeneratedColumn.constraintIsAlways('UNIQUE'),
+  );
+  static const VerificationMeta _enabledMeta = const VerificationMeta(
+    'enabled',
+  );
+  @override
+  late final GeneratedColumn<bool> enabled = GeneratedColumn<bool>(
+    'enabled',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("enabled" IN (0, 1))',
+    ),
+    defaultValue: const Constant(true),
+  );
+  static const VerificationMeta _priorityMeta = const VerificationMeta(
+    'priority',
+  );
+  @override
+  late final GeneratedColumn<int> priority = GeneratedColumn<int>(
+    'priority',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _configMeta = const VerificationMeta('config');
+  @override
+  late final GeneratedColumn<String> config = GeneratedColumn<String>(
+    'config',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    sourceId,
+    enabled,
+    priority,
+    config,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'cover_provider_configs';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<CoverProviderConfigData> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
+    }
+    if (data.containsKey('source_id')) {
+      context.handle(
+        _sourceIdMeta,
+        sourceId.isAcceptableOrUnknown(data['source_id']!, _sourceIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_sourceIdMeta);
+    }
+    if (data.containsKey('enabled')) {
+      context.handle(
+        _enabledMeta,
+        enabled.isAcceptableOrUnknown(data['enabled']!, _enabledMeta),
+      );
+    }
+    if (data.containsKey('priority')) {
+      context.handle(
+        _priorityMeta,
+        priority.isAcceptableOrUnknown(data['priority']!, _priorityMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_priorityMeta);
+    }
+    if (data.containsKey('config')) {
+      context.handle(
+        _configMeta,
+        config.isAcceptableOrUnknown(data['config']!, _configMeta),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  CoverProviderConfigData map(
+    Map<String, dynamic> data, {
+    String? tablePrefix,
+  }) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return CoverProviderConfigData(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}id'],
+      )!,
+      sourceId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}source_id'],
+      )!,
+      enabled: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}enabled'],
+      )!,
+      priority: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}priority'],
+      )!,
+      config: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}config'],
+      ),
+    );
+  }
+
+  @override
+  $CoverProviderConfigsTable createAlias(String alias) {
+    return $CoverProviderConfigsTable(attachedDatabase, alias);
+  }
+}
+
+class CoverProviderConfigData extends DataClass
+    implements Insertable<CoverProviderConfigData> {
+  final String id;
+  final String sourceId;
+  final bool enabled;
+  final int priority;
+  final String? config;
+  const CoverProviderConfigData({
+    required this.id,
+    required this.sourceId,
+    required this.enabled,
+    required this.priority,
+    this.config,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<String>(id);
+    map['source_id'] = Variable<String>(sourceId);
+    map['enabled'] = Variable<bool>(enabled);
+    map['priority'] = Variable<int>(priority);
+    if (!nullToAbsent || config != null) {
+      map['config'] = Variable<String>(config);
+    }
+    return map;
+  }
+
+  CoverProviderConfigsCompanion toCompanion(bool nullToAbsent) {
+    return CoverProviderConfigsCompanion(
+      id: Value(id),
+      sourceId: Value(sourceId),
+      enabled: Value(enabled),
+      priority: Value(priority),
+      config: config == null && nullToAbsent
+          ? const Value.absent()
+          : Value(config),
+    );
+  }
+
+  factory CoverProviderConfigData.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return CoverProviderConfigData(
+      id: serializer.fromJson<String>(json['id']),
+      sourceId: serializer.fromJson<String>(json['sourceId']),
+      enabled: serializer.fromJson<bool>(json['enabled']),
+      priority: serializer.fromJson<int>(json['priority']),
+      config: serializer.fromJson<String?>(json['config']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<String>(id),
+      'sourceId': serializer.toJson<String>(sourceId),
+      'enabled': serializer.toJson<bool>(enabled),
+      'priority': serializer.toJson<int>(priority),
+      'config': serializer.toJson<String?>(config),
+    };
+  }
+
+  CoverProviderConfigData copyWith({
+    String? id,
+    String? sourceId,
+    bool? enabled,
+    int? priority,
+    Value<String?> config = const Value.absent(),
+  }) => CoverProviderConfigData(
+    id: id ?? this.id,
+    sourceId: sourceId ?? this.sourceId,
+    enabled: enabled ?? this.enabled,
+    priority: priority ?? this.priority,
+    config: config.present ? config.value : this.config,
+  );
+  CoverProviderConfigData copyWithCompanion(
+    CoverProviderConfigsCompanion data,
+  ) {
+    return CoverProviderConfigData(
+      id: data.id.present ? data.id.value : this.id,
+      sourceId: data.sourceId.present ? data.sourceId.value : this.sourceId,
+      enabled: data.enabled.present ? data.enabled.value : this.enabled,
+      priority: data.priority.present ? data.priority.value : this.priority,
+      config: data.config.present ? data.config.value : this.config,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('CoverProviderConfigData(')
+          ..write('id: $id, ')
+          ..write('sourceId: $sourceId, ')
+          ..write('enabled: $enabled, ')
+          ..write('priority: $priority, ')
+          ..write('config: $config')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(id, sourceId, enabled, priority, config);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is CoverProviderConfigData &&
+          other.id == this.id &&
+          other.sourceId == this.sourceId &&
+          other.enabled == this.enabled &&
+          other.priority == this.priority &&
+          other.config == this.config);
+}
+
+class CoverProviderConfigsCompanion
+    extends UpdateCompanion<CoverProviderConfigData> {
+  final Value<String> id;
+  final Value<String> sourceId;
+  final Value<bool> enabled;
+  final Value<int> priority;
+  final Value<String?> config;
+  final Value<int> rowid;
+  const CoverProviderConfigsCompanion({
+    this.id = const Value.absent(),
+    this.sourceId = const Value.absent(),
+    this.enabled = const Value.absent(),
+    this.priority = const Value.absent(),
+    this.config = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  CoverProviderConfigsCompanion.insert({
+    required String id,
+    required String sourceId,
+    this.enabled = const Value.absent(),
+    required int priority,
+    this.config = const Value.absent(),
+    this.rowid = const Value.absent(),
+  }) : id = Value(id),
+       sourceId = Value(sourceId),
+       priority = Value(priority);
+  static Insertable<CoverProviderConfigData> custom({
+    Expression<String>? id,
+    Expression<String>? sourceId,
+    Expression<bool>? enabled,
+    Expression<int>? priority,
+    Expression<String>? config,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (sourceId != null) 'source_id': sourceId,
+      if (enabled != null) 'enabled': enabled,
+      if (priority != null) 'priority': priority,
+      if (config != null) 'config': config,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  CoverProviderConfigsCompanion copyWith({
+    Value<String>? id,
+    Value<String>? sourceId,
+    Value<bool>? enabled,
+    Value<int>? priority,
+    Value<String?>? config,
+    Value<int>? rowid,
+  }) {
+    return CoverProviderConfigsCompanion(
+      id: id ?? this.id,
+      sourceId: sourceId ?? this.sourceId,
+      enabled: enabled ?? this.enabled,
+      priority: priority ?? this.priority,
+      config: config ?? this.config,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<String>(id.value);
+    }
+    if (sourceId.present) {
+      map['source_id'] = Variable<String>(sourceId.value);
+    }
+    if (enabled.present) {
+      map['enabled'] = Variable<bool>(enabled.value);
+    }
+    if (priority.present) {
+      map['priority'] = Variable<int>(priority.value);
+    }
+    if (config.present) {
+      map['config'] = Variable<String>(config.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('CoverProviderConfigsCompanion(')
+          ..write('id: $id, ')
+          ..write('sourceId: $sourceId, ')
+          ..write('enabled: $enabled, ')
+          ..write('priority: $priority, ')
+          ..write('config: $config, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $LyricsCacheTable extends LyricsCache
+    with TableInfo<$LyricsCacheTable, LyricsCacheData> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $LyricsCacheTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _songIdMeta = const VerificationMeta('songId');
+  @override
+  late final GeneratedColumn<String> songId = GeneratedColumn<String>(
+    'song_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _sourceIdMeta = const VerificationMeta(
+    'sourceId',
+  );
+  @override
+  late final GeneratedColumn<String> sourceId = GeneratedColumn<String>(
+    'source_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _contentMeta = const VerificationMeta(
+    'content',
+  );
+  @override
+  late final GeneratedColumn<String> content = GeneratedColumn<String>(
+    'content',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _hasSyncedMeta = const VerificationMeta(
+    'hasSynced',
+  );
+  @override
+  late final GeneratedColumn<bool> hasSynced = GeneratedColumn<bool>(
+    'has_synced',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("has_synced" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
+  static const VerificationMeta _languagesMeta = const VerificationMeta(
+    'languages',
+  );
+  @override
+  late final GeneratedColumn<String> languages = GeneratedColumn<String>(
+    'languages',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _fetchedAtMeta = const VerificationMeta(
+    'fetchedAt',
+  );
+  @override
+  late final GeneratedColumn<int> fetchedAt = GeneratedColumn<int>(
+    'fetched_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    songId,
+    sourceId,
+    content,
+    hasSynced,
+    languages,
+    fetchedAt,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'lyrics_cache';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<LyricsCacheData> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('song_id')) {
+      context.handle(
+        _songIdMeta,
+        songId.isAcceptableOrUnknown(data['song_id']!, _songIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_songIdMeta);
+    }
+    if (data.containsKey('source_id')) {
+      context.handle(
+        _sourceIdMeta,
+        sourceId.isAcceptableOrUnknown(data['source_id']!, _sourceIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_sourceIdMeta);
+    }
+    if (data.containsKey('content')) {
+      context.handle(
+        _contentMeta,
+        content.isAcceptableOrUnknown(data['content']!, _contentMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_contentMeta);
+    }
+    if (data.containsKey('has_synced')) {
+      context.handle(
+        _hasSyncedMeta,
+        hasSynced.isAcceptableOrUnknown(data['has_synced']!, _hasSyncedMeta),
+      );
+    }
+    if (data.containsKey('languages')) {
+      context.handle(
+        _languagesMeta,
+        languages.isAcceptableOrUnknown(data['languages']!, _languagesMeta),
+      );
+    }
+    if (data.containsKey('fetched_at')) {
+      context.handle(
+        _fetchedAtMeta,
+        fetchedAt.isAcceptableOrUnknown(data['fetched_at']!, _fetchedAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_fetchedAtMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {songId};
+  @override
+  LyricsCacheData map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return LyricsCacheData(
+      songId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}song_id'],
+      )!,
+      sourceId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}source_id'],
+      )!,
+      content: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}content'],
+      )!,
+      hasSynced: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}has_synced'],
+      )!,
+      languages: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}languages'],
+      ),
+      fetchedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}fetched_at'],
+      )!,
+    );
+  }
+
+  @override
+  $LyricsCacheTable createAlias(String alias) {
+    return $LyricsCacheTable(attachedDatabase, alias);
+  }
+}
+
+class LyricsCacheData extends DataClass implements Insertable<LyricsCacheData> {
+  final String songId;
+  final String sourceId;
+  final String content;
+  final bool hasSynced;
+  final String? languages;
+  final int fetchedAt;
+  const LyricsCacheData({
+    required this.songId,
+    required this.sourceId,
+    required this.content,
+    required this.hasSynced,
+    this.languages,
+    required this.fetchedAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['song_id'] = Variable<String>(songId);
+    map['source_id'] = Variable<String>(sourceId);
+    map['content'] = Variable<String>(content);
+    map['has_synced'] = Variable<bool>(hasSynced);
+    if (!nullToAbsent || languages != null) {
+      map['languages'] = Variable<String>(languages);
+    }
+    map['fetched_at'] = Variable<int>(fetchedAt);
+    return map;
+  }
+
+  LyricsCacheCompanion toCompanion(bool nullToAbsent) {
+    return LyricsCacheCompanion(
+      songId: Value(songId),
+      sourceId: Value(sourceId),
+      content: Value(content),
+      hasSynced: Value(hasSynced),
+      languages: languages == null && nullToAbsent
+          ? const Value.absent()
+          : Value(languages),
+      fetchedAt: Value(fetchedAt),
+    );
+  }
+
+  factory LyricsCacheData.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return LyricsCacheData(
+      songId: serializer.fromJson<String>(json['songId']),
+      sourceId: serializer.fromJson<String>(json['sourceId']),
+      content: serializer.fromJson<String>(json['content']),
+      hasSynced: serializer.fromJson<bool>(json['hasSynced']),
+      languages: serializer.fromJson<String?>(json['languages']),
+      fetchedAt: serializer.fromJson<int>(json['fetchedAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'songId': serializer.toJson<String>(songId),
+      'sourceId': serializer.toJson<String>(sourceId),
+      'content': serializer.toJson<String>(content),
+      'hasSynced': serializer.toJson<bool>(hasSynced),
+      'languages': serializer.toJson<String?>(languages),
+      'fetchedAt': serializer.toJson<int>(fetchedAt),
+    };
+  }
+
+  LyricsCacheData copyWith({
+    String? songId,
+    String? sourceId,
+    String? content,
+    bool? hasSynced,
+    Value<String?> languages = const Value.absent(),
+    int? fetchedAt,
+  }) => LyricsCacheData(
+    songId: songId ?? this.songId,
+    sourceId: sourceId ?? this.sourceId,
+    content: content ?? this.content,
+    hasSynced: hasSynced ?? this.hasSynced,
+    languages: languages.present ? languages.value : this.languages,
+    fetchedAt: fetchedAt ?? this.fetchedAt,
+  );
+  LyricsCacheData copyWithCompanion(LyricsCacheCompanion data) {
+    return LyricsCacheData(
+      songId: data.songId.present ? data.songId.value : this.songId,
+      sourceId: data.sourceId.present ? data.sourceId.value : this.sourceId,
+      content: data.content.present ? data.content.value : this.content,
+      hasSynced: data.hasSynced.present ? data.hasSynced.value : this.hasSynced,
+      languages: data.languages.present ? data.languages.value : this.languages,
+      fetchedAt: data.fetchedAt.present ? data.fetchedAt.value : this.fetchedAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('LyricsCacheData(')
+          ..write('songId: $songId, ')
+          ..write('sourceId: $sourceId, ')
+          ..write('content: $content, ')
+          ..write('hasSynced: $hasSynced, ')
+          ..write('languages: $languages, ')
+          ..write('fetchedAt: $fetchedAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode =>
+      Object.hash(songId, sourceId, content, hasSynced, languages, fetchedAt);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is LyricsCacheData &&
+          other.songId == this.songId &&
+          other.sourceId == this.sourceId &&
+          other.content == this.content &&
+          other.hasSynced == this.hasSynced &&
+          other.languages == this.languages &&
+          other.fetchedAt == this.fetchedAt);
+}
+
+class LyricsCacheCompanion extends UpdateCompanion<LyricsCacheData> {
+  final Value<String> songId;
+  final Value<String> sourceId;
+  final Value<String> content;
+  final Value<bool> hasSynced;
+  final Value<String?> languages;
+  final Value<int> fetchedAt;
+  final Value<int> rowid;
+  const LyricsCacheCompanion({
+    this.songId = const Value.absent(),
+    this.sourceId = const Value.absent(),
+    this.content = const Value.absent(),
+    this.hasSynced = const Value.absent(),
+    this.languages = const Value.absent(),
+    this.fetchedAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  LyricsCacheCompanion.insert({
+    required String songId,
+    required String sourceId,
+    required String content,
+    this.hasSynced = const Value.absent(),
+    this.languages = const Value.absent(),
+    required int fetchedAt,
+    this.rowid = const Value.absent(),
+  }) : songId = Value(songId),
+       sourceId = Value(sourceId),
+       content = Value(content),
+       fetchedAt = Value(fetchedAt);
+  static Insertable<LyricsCacheData> custom({
+    Expression<String>? songId,
+    Expression<String>? sourceId,
+    Expression<String>? content,
+    Expression<bool>? hasSynced,
+    Expression<String>? languages,
+    Expression<int>? fetchedAt,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (songId != null) 'song_id': songId,
+      if (sourceId != null) 'source_id': sourceId,
+      if (content != null) 'content': content,
+      if (hasSynced != null) 'has_synced': hasSynced,
+      if (languages != null) 'languages': languages,
+      if (fetchedAt != null) 'fetched_at': fetchedAt,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  LyricsCacheCompanion copyWith({
+    Value<String>? songId,
+    Value<String>? sourceId,
+    Value<String>? content,
+    Value<bool>? hasSynced,
+    Value<String?>? languages,
+    Value<int>? fetchedAt,
+    Value<int>? rowid,
+  }) {
+    return LyricsCacheCompanion(
+      songId: songId ?? this.songId,
+      sourceId: sourceId ?? this.sourceId,
+      content: content ?? this.content,
+      hasSynced: hasSynced ?? this.hasSynced,
+      languages: languages ?? this.languages,
+      fetchedAt: fetchedAt ?? this.fetchedAt,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (songId.present) {
+      map['song_id'] = Variable<String>(songId.value);
+    }
+    if (sourceId.present) {
+      map['source_id'] = Variable<String>(sourceId.value);
+    }
+    if (content.present) {
+      map['content'] = Variable<String>(content.value);
+    }
+    if (hasSynced.present) {
+      map['has_synced'] = Variable<bool>(hasSynced.value);
+    }
+    if (languages.present) {
+      map['languages'] = Variable<String>(languages.value);
+    }
+    if (fetchedAt.present) {
+      map['fetched_at'] = Variable<int>(fetchedAt.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('LyricsCacheCompanion(')
+          ..write('songId: $songId, ')
+          ..write('sourceId: $sourceId, ')
+          ..write('content: $content, ')
+          ..write('hasSynced: $hasSynced, ')
+          ..write('languages: $languages, ')
+          ..write('fetchedAt: $fetchedAt, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$AppDatabase extends GeneratedDatabase {
   _$AppDatabase(QueryExecutor e) : super(e);
   $AppDatabaseManager get managers => $AppDatabaseManager(this);
@@ -1302,6 +2457,11 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   late final $ServerAddressesTable serverAddresses = $ServerAddressesTable(
     this,
   );
+  late final $LyricsProviderConfigsTable lyricsProviderConfigs =
+      $LyricsProviderConfigsTable(this);
+  late final $CoverProviderConfigsTable coverProviderConfigs =
+      $CoverProviderConfigsTable(this);
+  late final $LyricsCacheTable lyricsCache = $LyricsCacheTable(this);
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
@@ -1309,6 +2469,9 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   List<DatabaseSchemaEntity> get allSchemaEntities => [
     musicLibraries,
     serverAddresses,
+    lyricsProviderConfigs,
+    coverProviderConfigs,
+    lyricsCache,
   ];
   @override
   StreamQueryUpdateRules get streamUpdateRules => const StreamQueryUpdateRules([
@@ -2200,6 +3363,660 @@ typedef $$ServerAddressesTableProcessedTableManager =
       ServerAddressTableData,
       PrefetchHooks Function({bool libraryId})
     >;
+typedef $$LyricsProviderConfigsTableCreateCompanionBuilder =
+    LyricsProviderConfigsCompanion Function({
+      required String id,
+      required String sourceId,
+      Value<bool> enabled,
+      required int priority,
+      Value<String?> config,
+      Value<int> rowid,
+    });
+typedef $$LyricsProviderConfigsTableUpdateCompanionBuilder =
+    LyricsProviderConfigsCompanion Function({
+      Value<String> id,
+      Value<String> sourceId,
+      Value<bool> enabled,
+      Value<int> priority,
+      Value<String?> config,
+      Value<int> rowid,
+    });
+
+class $$LyricsProviderConfigsTableFilterComposer
+    extends Composer<_$AppDatabase, $LyricsProviderConfigsTable> {
+  $$LyricsProviderConfigsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get sourceId => $composableBuilder(
+    column: $table.sourceId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get enabled => $composableBuilder(
+    column: $table.enabled,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get priority => $composableBuilder(
+    column: $table.priority,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get config => $composableBuilder(
+    column: $table.config,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$LyricsProviderConfigsTableOrderingComposer
+    extends Composer<_$AppDatabase, $LyricsProviderConfigsTable> {
+  $$LyricsProviderConfigsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get sourceId => $composableBuilder(
+    column: $table.sourceId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get enabled => $composableBuilder(
+    column: $table.enabled,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get priority => $composableBuilder(
+    column: $table.priority,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get config => $composableBuilder(
+    column: $table.config,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$LyricsProviderConfigsTableAnnotationComposer
+    extends Composer<_$AppDatabase, $LyricsProviderConfigsTable> {
+  $$LyricsProviderConfigsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get sourceId =>
+      $composableBuilder(column: $table.sourceId, builder: (column) => column);
+
+  GeneratedColumn<bool> get enabled =>
+      $composableBuilder(column: $table.enabled, builder: (column) => column);
+
+  GeneratedColumn<int> get priority =>
+      $composableBuilder(column: $table.priority, builder: (column) => column);
+
+  GeneratedColumn<String> get config =>
+      $composableBuilder(column: $table.config, builder: (column) => column);
+}
+
+class $$LyricsProviderConfigsTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $LyricsProviderConfigsTable,
+          LyricsProviderConfigData,
+          $$LyricsProviderConfigsTableFilterComposer,
+          $$LyricsProviderConfigsTableOrderingComposer,
+          $$LyricsProviderConfigsTableAnnotationComposer,
+          $$LyricsProviderConfigsTableCreateCompanionBuilder,
+          $$LyricsProviderConfigsTableUpdateCompanionBuilder,
+          (
+            LyricsProviderConfigData,
+            BaseReferences<
+              _$AppDatabase,
+              $LyricsProviderConfigsTable,
+              LyricsProviderConfigData
+            >,
+          ),
+          LyricsProviderConfigData,
+          PrefetchHooks Function()
+        > {
+  $$LyricsProviderConfigsTableTableManager(
+    _$AppDatabase db,
+    $LyricsProviderConfigsTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$LyricsProviderConfigsTableFilterComposer(
+                $db: db,
+                $table: table,
+              ),
+          createOrderingComposer: () =>
+              $$LyricsProviderConfigsTableOrderingComposer(
+                $db: db,
+                $table: table,
+              ),
+          createComputedFieldComposer: () =>
+              $$LyricsProviderConfigsTableAnnotationComposer(
+                $db: db,
+                $table: table,
+              ),
+          updateCompanionCallback:
+              ({
+                Value<String> id = const Value.absent(),
+                Value<String> sourceId = const Value.absent(),
+                Value<bool> enabled = const Value.absent(),
+                Value<int> priority = const Value.absent(),
+                Value<String?> config = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => LyricsProviderConfigsCompanion(
+                id: id,
+                sourceId: sourceId,
+                enabled: enabled,
+                priority: priority,
+                config: config,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String id,
+                required String sourceId,
+                Value<bool> enabled = const Value.absent(),
+                required int priority,
+                Value<String?> config = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => LyricsProviderConfigsCompanion.insert(
+                id: id,
+                sourceId: sourceId,
+                enabled: enabled,
+                priority: priority,
+                config: config,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$LyricsProviderConfigsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $LyricsProviderConfigsTable,
+      LyricsProviderConfigData,
+      $$LyricsProviderConfigsTableFilterComposer,
+      $$LyricsProviderConfigsTableOrderingComposer,
+      $$LyricsProviderConfigsTableAnnotationComposer,
+      $$LyricsProviderConfigsTableCreateCompanionBuilder,
+      $$LyricsProviderConfigsTableUpdateCompanionBuilder,
+      (
+        LyricsProviderConfigData,
+        BaseReferences<
+          _$AppDatabase,
+          $LyricsProviderConfigsTable,
+          LyricsProviderConfigData
+        >,
+      ),
+      LyricsProviderConfigData,
+      PrefetchHooks Function()
+    >;
+typedef $$CoverProviderConfigsTableCreateCompanionBuilder =
+    CoverProviderConfigsCompanion Function({
+      required String id,
+      required String sourceId,
+      Value<bool> enabled,
+      required int priority,
+      Value<String?> config,
+      Value<int> rowid,
+    });
+typedef $$CoverProviderConfigsTableUpdateCompanionBuilder =
+    CoverProviderConfigsCompanion Function({
+      Value<String> id,
+      Value<String> sourceId,
+      Value<bool> enabled,
+      Value<int> priority,
+      Value<String?> config,
+      Value<int> rowid,
+    });
+
+class $$CoverProviderConfigsTableFilterComposer
+    extends Composer<_$AppDatabase, $CoverProviderConfigsTable> {
+  $$CoverProviderConfigsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get sourceId => $composableBuilder(
+    column: $table.sourceId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get enabled => $composableBuilder(
+    column: $table.enabled,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get priority => $composableBuilder(
+    column: $table.priority,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get config => $composableBuilder(
+    column: $table.config,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$CoverProviderConfigsTableOrderingComposer
+    extends Composer<_$AppDatabase, $CoverProviderConfigsTable> {
+  $$CoverProviderConfigsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get sourceId => $composableBuilder(
+    column: $table.sourceId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get enabled => $composableBuilder(
+    column: $table.enabled,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get priority => $composableBuilder(
+    column: $table.priority,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get config => $composableBuilder(
+    column: $table.config,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$CoverProviderConfigsTableAnnotationComposer
+    extends Composer<_$AppDatabase, $CoverProviderConfigsTable> {
+  $$CoverProviderConfigsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get sourceId =>
+      $composableBuilder(column: $table.sourceId, builder: (column) => column);
+
+  GeneratedColumn<bool> get enabled =>
+      $composableBuilder(column: $table.enabled, builder: (column) => column);
+
+  GeneratedColumn<int> get priority =>
+      $composableBuilder(column: $table.priority, builder: (column) => column);
+
+  GeneratedColumn<String> get config =>
+      $composableBuilder(column: $table.config, builder: (column) => column);
+}
+
+class $$CoverProviderConfigsTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $CoverProviderConfigsTable,
+          CoverProviderConfigData,
+          $$CoverProviderConfigsTableFilterComposer,
+          $$CoverProviderConfigsTableOrderingComposer,
+          $$CoverProviderConfigsTableAnnotationComposer,
+          $$CoverProviderConfigsTableCreateCompanionBuilder,
+          $$CoverProviderConfigsTableUpdateCompanionBuilder,
+          (
+            CoverProviderConfigData,
+            BaseReferences<
+              _$AppDatabase,
+              $CoverProviderConfigsTable,
+              CoverProviderConfigData
+            >,
+          ),
+          CoverProviderConfigData,
+          PrefetchHooks Function()
+        > {
+  $$CoverProviderConfigsTableTableManager(
+    _$AppDatabase db,
+    $CoverProviderConfigsTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$CoverProviderConfigsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$CoverProviderConfigsTableOrderingComposer(
+                $db: db,
+                $table: table,
+              ),
+          createComputedFieldComposer: () =>
+              $$CoverProviderConfigsTableAnnotationComposer(
+                $db: db,
+                $table: table,
+              ),
+          updateCompanionCallback:
+              ({
+                Value<String> id = const Value.absent(),
+                Value<String> sourceId = const Value.absent(),
+                Value<bool> enabled = const Value.absent(),
+                Value<int> priority = const Value.absent(),
+                Value<String?> config = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => CoverProviderConfigsCompanion(
+                id: id,
+                sourceId: sourceId,
+                enabled: enabled,
+                priority: priority,
+                config: config,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String id,
+                required String sourceId,
+                Value<bool> enabled = const Value.absent(),
+                required int priority,
+                Value<String?> config = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => CoverProviderConfigsCompanion.insert(
+                id: id,
+                sourceId: sourceId,
+                enabled: enabled,
+                priority: priority,
+                config: config,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$CoverProviderConfigsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $CoverProviderConfigsTable,
+      CoverProviderConfigData,
+      $$CoverProviderConfigsTableFilterComposer,
+      $$CoverProviderConfigsTableOrderingComposer,
+      $$CoverProviderConfigsTableAnnotationComposer,
+      $$CoverProviderConfigsTableCreateCompanionBuilder,
+      $$CoverProviderConfigsTableUpdateCompanionBuilder,
+      (
+        CoverProviderConfigData,
+        BaseReferences<
+          _$AppDatabase,
+          $CoverProviderConfigsTable,
+          CoverProviderConfigData
+        >,
+      ),
+      CoverProviderConfigData,
+      PrefetchHooks Function()
+    >;
+typedef $$LyricsCacheTableCreateCompanionBuilder =
+    LyricsCacheCompanion Function({
+      required String songId,
+      required String sourceId,
+      required String content,
+      Value<bool> hasSynced,
+      Value<String?> languages,
+      required int fetchedAt,
+      Value<int> rowid,
+    });
+typedef $$LyricsCacheTableUpdateCompanionBuilder =
+    LyricsCacheCompanion Function({
+      Value<String> songId,
+      Value<String> sourceId,
+      Value<String> content,
+      Value<bool> hasSynced,
+      Value<String?> languages,
+      Value<int> fetchedAt,
+      Value<int> rowid,
+    });
+
+class $$LyricsCacheTableFilterComposer
+    extends Composer<_$AppDatabase, $LyricsCacheTable> {
+  $$LyricsCacheTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get songId => $composableBuilder(
+    column: $table.songId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get sourceId => $composableBuilder(
+    column: $table.sourceId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get content => $composableBuilder(
+    column: $table.content,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get hasSynced => $composableBuilder(
+    column: $table.hasSynced,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get languages => $composableBuilder(
+    column: $table.languages,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get fetchedAt => $composableBuilder(
+    column: $table.fetchedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$LyricsCacheTableOrderingComposer
+    extends Composer<_$AppDatabase, $LyricsCacheTable> {
+  $$LyricsCacheTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get songId => $composableBuilder(
+    column: $table.songId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get sourceId => $composableBuilder(
+    column: $table.sourceId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get content => $composableBuilder(
+    column: $table.content,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get hasSynced => $composableBuilder(
+    column: $table.hasSynced,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get languages => $composableBuilder(
+    column: $table.languages,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get fetchedAt => $composableBuilder(
+    column: $table.fetchedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$LyricsCacheTableAnnotationComposer
+    extends Composer<_$AppDatabase, $LyricsCacheTable> {
+  $$LyricsCacheTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get songId =>
+      $composableBuilder(column: $table.songId, builder: (column) => column);
+
+  GeneratedColumn<String> get sourceId =>
+      $composableBuilder(column: $table.sourceId, builder: (column) => column);
+
+  GeneratedColumn<String> get content =>
+      $composableBuilder(column: $table.content, builder: (column) => column);
+
+  GeneratedColumn<bool> get hasSynced =>
+      $composableBuilder(column: $table.hasSynced, builder: (column) => column);
+
+  GeneratedColumn<String> get languages =>
+      $composableBuilder(column: $table.languages, builder: (column) => column);
+
+  GeneratedColumn<int> get fetchedAt =>
+      $composableBuilder(column: $table.fetchedAt, builder: (column) => column);
+}
+
+class $$LyricsCacheTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $LyricsCacheTable,
+          LyricsCacheData,
+          $$LyricsCacheTableFilterComposer,
+          $$LyricsCacheTableOrderingComposer,
+          $$LyricsCacheTableAnnotationComposer,
+          $$LyricsCacheTableCreateCompanionBuilder,
+          $$LyricsCacheTableUpdateCompanionBuilder,
+          (
+            LyricsCacheData,
+            BaseReferences<_$AppDatabase, $LyricsCacheTable, LyricsCacheData>,
+          ),
+          LyricsCacheData,
+          PrefetchHooks Function()
+        > {
+  $$LyricsCacheTableTableManager(_$AppDatabase db, $LyricsCacheTable table)
+    : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$LyricsCacheTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$LyricsCacheTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$LyricsCacheTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<String> songId = const Value.absent(),
+                Value<String> sourceId = const Value.absent(),
+                Value<String> content = const Value.absent(),
+                Value<bool> hasSynced = const Value.absent(),
+                Value<String?> languages = const Value.absent(),
+                Value<int> fetchedAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => LyricsCacheCompanion(
+                songId: songId,
+                sourceId: sourceId,
+                content: content,
+                hasSynced: hasSynced,
+                languages: languages,
+                fetchedAt: fetchedAt,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String songId,
+                required String sourceId,
+                required String content,
+                Value<bool> hasSynced = const Value.absent(),
+                Value<String?> languages = const Value.absent(),
+                required int fetchedAt,
+                Value<int> rowid = const Value.absent(),
+              }) => LyricsCacheCompanion.insert(
+                songId: songId,
+                sourceId: sourceId,
+                content: content,
+                hasSynced: hasSynced,
+                languages: languages,
+                fetchedAt: fetchedAt,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$LyricsCacheTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $LyricsCacheTable,
+      LyricsCacheData,
+      $$LyricsCacheTableFilterComposer,
+      $$LyricsCacheTableOrderingComposer,
+      $$LyricsCacheTableAnnotationComposer,
+      $$LyricsCacheTableCreateCompanionBuilder,
+      $$LyricsCacheTableUpdateCompanionBuilder,
+      (
+        LyricsCacheData,
+        BaseReferences<_$AppDatabase, $LyricsCacheTable, LyricsCacheData>,
+      ),
+      LyricsCacheData,
+      PrefetchHooks Function()
+    >;
 
 class $AppDatabaseManager {
   final _$AppDatabase _db;
@@ -2208,4 +4025,10 @@ class $AppDatabaseManager {
       $$MusicLibrariesTableTableManager(_db, _db.musicLibraries);
   $$ServerAddressesTableTableManager get serverAddresses =>
       $$ServerAddressesTableTableManager(_db, _db.serverAddresses);
+  $$LyricsProviderConfigsTableTableManager get lyricsProviderConfigs =>
+      $$LyricsProviderConfigsTableTableManager(_db, _db.lyricsProviderConfigs);
+  $$CoverProviderConfigsTableTableManager get coverProviderConfigs =>
+      $$CoverProviderConfigsTableTableManager(_db, _db.coverProviderConfigs);
+  $$LyricsCacheTableTableManager get lyricsCache =>
+      $$LyricsCacheTableTableManager(_db, _db.lyricsCache);
 }

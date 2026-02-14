@@ -112,6 +112,15 @@ class RandomSongsSection extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final randomSongsAsync = ref.watch(randomSongsProvider);
+    final colorScheme = Theme.of(context).colorScheme;
+    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+    final titleColor = isDarkMode ? Colors.white : colorScheme.onSurface;
+    final subtitleColor = isDarkMode
+        ? Colors.white.withValues(alpha: 0.78)
+        : colorScheme.onSurfaceVariant;
+    final trailingIconColor = isDarkMode
+        ? Colors.white.withValues(alpha: 0.72)
+        : colorScheme.onSurfaceVariant;
 
     return randomSongsAsync.when(
       data: (songs) {
@@ -140,13 +149,18 @@ class RandomSongsSection extends ConsumerWidget {
                 song.title,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: const TextStyle(fontWeight: FontWeight.w500),
+                style: TextStyle(
+                  fontWeight: FontWeight.w500,
+                  color: titleColor,
+                ),
               ),
               subtitle: Text(
                 song.artist ?? 'Unknown Artist',
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: Theme.of(context).textTheme.bodySmall,
+                style: Theme.of(
+                  context,
+                ).textTheme.bodySmall?.copyWith(color: subtitleColor),
               ),
               onTap: () {
                 // 播放歌曲
@@ -155,7 +169,7 @@ class RandomSongsSection extends ConsumerWidget {
                     .playQueue(songs, startIndex: index);
               },
               trailing: IconButton(
-                icon: const Icon(Icons.more_vert),
+                icon: Icon(Icons.more_vert, color: trailingIconColor),
                 onPressed: () {
                   // TODO: 显示更多操作菜单
                 },
@@ -286,6 +300,13 @@ class AlbumCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+    final titleColor = isDarkMode ? Colors.white : colorScheme.onSurface;
+    final subtitleColor = isDarkMode
+        ? Colors.white.withValues(alpha: 0.78)
+        : colorScheme.onSurfaceVariant;
+
     return Container(
       width: 140,
       margin: const EdgeInsets.only(right: 12),
@@ -310,14 +331,16 @@ class AlbumCard extends StatelessWidget {
               album.name,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(fontWeight: FontWeight.w500),
+              style: TextStyle(fontWeight: FontWeight.w500, color: titleColor),
             ),
             if (album.artist != null)
               Text(
                 album.artist!,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: Theme.of(context).textTheme.bodySmall,
+                style: Theme.of(
+                  context,
+                ).textTheme.bodySmall?.copyWith(color: subtitleColor),
               ),
           ],
         ),
@@ -334,6 +357,13 @@ class AlbumGridItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+    final titleColor = isDarkMode ? Colors.white : colorScheme.onSurface;
+    final subtitleColor = isDarkMode
+        ? Colors.white.withValues(alpha: 0.78)
+        : colorScheme.onSurfaceVariant;
+
     return InkWell(
       onTap: () {
         Navigator.push(
@@ -362,14 +392,16 @@ class AlbumGridItem extends StatelessWidget {
             album.name,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: const TextStyle(fontWeight: FontWeight.w500),
+            style: TextStyle(fontWeight: FontWeight.w500, color: titleColor),
           ),
           if (album.artist != null)
             Text(
               album.artist!,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: Theme.of(context).textTheme.bodySmall,
+              style: Theme.of(
+                context,
+              ).textTheme.bodySmall?.copyWith(color: subtitleColor),
             ),
         ],
       ),

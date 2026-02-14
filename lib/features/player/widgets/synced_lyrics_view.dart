@@ -1,21 +1,47 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:flutter/rendering.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 import 'package:echoes/providers/player_provider.dart';
 import 'package:echoes/data/models/structured_lyrics.dart';
 
+class _LyricsRenderParts {
+  final String primary;
+  final String? secondary;
+
+  const _LyricsRenderParts(this.primary, [this.secondary]);
+}
+
 class SyncedLyricsView extends ConsumerStatefulWidget {
   final StructuredLyrics lyrics;
+  final Color? activePrimaryColor;
+  final Color? activeSecondaryColor;
+  final Color? inactivePrimaryColor;
+  final Color? inactiveSecondaryColor;
 
-  const SyncedLyricsView({super.key, required this.lyrics});
+  const SyncedLyricsView({
+    super.key,
+    required this.lyrics,
+    this.activePrimaryColor,
+    this.activeSecondaryColor,
+    this.inactivePrimaryColor,
+    this.inactiveSecondaryColor,
+  });
 
   @override
   ConsumerState<SyncedLyricsView> createState() => _SyncedLyricsViewState();
 }
 
 class _SyncedLyricsViewState extends ConsumerState<SyncedLyricsView> {
+  static final RegExp _cjkRegExp = RegExp(r'[\u4e00-\u9fff]');
+  static final RegExp _latinRegExp = RegExp(r'[A-Za-z]');
+  static final RegExp _enZhBoundary = RegExp(
+    r'^(.*?[A-Za-z0-9][^\u4e00-\u9fff]*?)\s+([\u4e00-\u9fff].*)$',
+  );
+  static final RegExp _zhEnBoundary = RegExp(
+    r'^([\u4e00-\u9fff].*?)\s+([A-Za-z].*)$',
+  );
+
   final ItemScrollController _itemScrollController = ItemScrollController();
   final ItemPositionsListener _itemPositionsListener =
       ItemPositionsListener.create();
@@ -79,6 +105,37 @@ class _SyncedLyricsViewState extends ConsumerState<SyncedLyricsView> {
     return result;
   }
 
+  _LyricsRenderParts _splitBilingualLine(String raw) {
+    final text = raw.trim();
+    if (text.isEmpty) return const _LyricsRenderParts('');
+
+    final hasCjk = _cjkRegExp.hasMatch(text);
+    final hasLatin = _latinRegExp.hasMatch(text);
+    if (!hasCjk || !hasLatin) {
+      return _LyricsRenderParts(text);
+    }
+
+    final enZh = _enZhBoundary.firstMatch(text);
+    if (enZh != null) {
+      final first = enZh.group(1)?.trim() ?? '';
+      final second = enZh.group(2)?.trim() ?? '';
+      if (first.isNotEmpty && second.isNotEmpty) {
+        return _LyricsRenderParts(first, second);
+      }
+    }
+
+    final zhEn = _zhEnBoundary.firstMatch(text);
+    if (zhEn != null) {
+      final first = zhEn.group(1)?.trim() ?? '';
+      final second = zhEn.group(2)?.trim() ?? '';
+      if (first.isNotEmpty && second.isNotEmpty) {
+        return _LyricsRenderParts(first, second);
+      }
+    }
+
+    return _LyricsRenderParts(text);
+  }
+
   @override
   Widget build(BuildContext context) {
     // 只监听播放位置，不监听整个 PlayerState
@@ -87,6 +144,16 @@ class _SyncedLyricsViewState extends ConsumerState<SyncedLyricsView> {
 
     final lines = widget.lyrics.lines;
     final offsetMs = widget.lyrics.offsetMs;
+    final colorScheme = Theme.of(context).colorScheme;
+    final onSurface = colorScheme.onSurface;
+    final activePrimaryColor = widget.activePrimaryColor ?? colorScheme.primary;
+    final activeSecondaryColor =
+        widget.activeSecondaryColor ??
+        colorScheme.primary.withValues(alpha: 0.75);
+    final inactivePrimaryColor =
+        widget.inactivePrimaryColor ?? onSurface.withValues(alpha: 0.5);
+    final inactiveSecondaryColor =
+        widget.inactiveSecondaryColor ?? onSurface.withValues(alpha: 0.38);
 
     // 计算当前歌词行
     final newIndex = _findCurrentLineIndex(currentMs);
@@ -102,13 +169,22 @@ class _SyncedLyricsViewState extends ConsumerState<SyncedLyricsView> {
       });
     }
 
-    return NotificationListener<UserScrollNotification>(
+    return NotificationListener<ScrollNotification>(
       onNotification: (notification) {
-        if (notification.direction != ScrollDirection.idle) {
+        final isUserDragStart =
+            notification is ScrollStartNotification &&
+            notification.dragDetails != null;
+        final isUserDragUpdate =
+            notification is ScrollUpdateNotification &&
+            notification.dragDetails != null;
+        final isScrollEnd = notification is ScrollEndNotification;
+
+        if (isUserDragStart || isUserDragUpdate) {
           _isUserScrolling = true;
           _userScrollTimer?.cancel();
-        } else {
+        } else if (isScrollEnd && _isUserScrolling) {
           // 用户停止滚动后 3 秒恢复自动滚动
+          _userScrollTimer?.cancel();
           _userScrollTimer = Timer(const Duration(seconds: 3), () {
             if (mounted) {
               setState(() {
@@ -128,6 +204,8 @@ class _SyncedLyricsViewState extends ConsumerState<SyncedLyricsView> {
         itemBuilder: (context, index) {
           final line = lines[index];
           final isCurrent = widget.lyrics.synced && index == _currentIndex;
+          final renderParts = _splitBilingualLine(line.value);
+          final secondary = renderParts.secondary;
 
           return GestureDetector(
             onTap: () {
@@ -139,18 +217,34 @@ class _SyncedLyricsViewState extends ConsumerState<SyncedLyricsView> {
             },
             child: Container(
               padding: const EdgeInsets.symmetric(vertical: 8),
-              child: Text(
-                line.value,
-                style: TextStyle(
-                  fontSize: isCurrent ? 20 : 16,
-                  fontWeight: isCurrent ? FontWeight.bold : FontWeight.normal,
-                  color: isCurrent
-                      ? Theme.of(context).colorScheme.primary
-                      : Theme.of(
-                          context,
-                        ).colorScheme.onSurface.withValues(alpha: 0.5),
-                ),
-                textAlign: TextAlign.center,
+              child: Column(
+                children: [
+                  Text(
+                    renderParts.primary,
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w400,
+                      color: isCurrent
+                          ? activePrimaryColor
+                          : inactivePrimaryColor,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                  if (secondary != null && secondary.isNotEmpty) ...[
+                    const SizedBox(height: 2),
+                    Text(
+                      secondary,
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w400,
+                        color: isCurrent
+                            ? activeSecondaryColor
+                            : inactiveSecondaryColor,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                  ],
+                ],
               ),
             ),
           );

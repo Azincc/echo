@@ -91,13 +91,30 @@ LyricsSource _createLyricsSource(
   }
 }
 
+List<String> _extractOpenSubsonicExtensions(
+  Map<String, dynamic>? extensionsMap,
+) {
+  if (extensionsMap == null || extensionsMap.isEmpty) return const [];
+
+  // Current persisted shape: {'supported': ['songLyrics', ...], 'serverFingerprint': ...}
+  final supported = extensionsMap['supported'];
+  if (supported is List) {
+    return supported.whereType<String>().toList();
+  }
+
+  // Backward-compat fallback: extension names stored as top-level keys.
+  return extensionsMap.keys
+      .where((k) => k != 'supported' && k != 'serverFingerprint')
+      .toList();
+}
+
 final lyricsRepositoryProvider = Provider<LyricsRepository>((ref) {
   final db = ref.watch(appDatabaseProvider);
   final apiClient = ref.watch(subsonicApiClientProvider);
   final activeLib = ref.watch(activeLibraryProvider);
   final configs = ref.watch(lyricsProviderConfigsProvider).valueOrNull ?? [];
 
-  final extensions = activeLib?.extensions.keys.toList() ?? [];
+  final extensions = _extractOpenSubsonicExtensions(activeLib?.extensions);
   final subsonicSource = SubsonicLyricsSource(apiClient, extensions);
 
   final sources = configs

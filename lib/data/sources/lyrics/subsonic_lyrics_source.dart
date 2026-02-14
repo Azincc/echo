@@ -1,18 +1,18 @@
 import '../../../core/constants/api_constants.dart';
+import '../../../core/utils/lrc_parser.dart';
 import '../../../core/utils/logger.dart';
 import '../../../core/utils/structured_lyrics_parser.dart';
 import '../../models/lyrics.dart';
-import '../../models/lyrics_line.dart';
-import '../../models/structured_lyrics.dart';
 import '../subsonic_api_client.dart';
 import 'lyrics_source.dart';
 
 /// 服务端歌词源（OpenSubsonic / 传统 Subsonic）
 class SubsonicLyricsSource implements LyricsSource {
   final SubsonicApiClient _apiClient;
-  final List<String> _extensions;
+  final Set<String> _extensions;
 
-  SubsonicLyricsSource(this._apiClient, this._extensions);
+  SubsonicLyricsSource(this._apiClient, [List<String> extensions = const []])
+    : _extensions = extensions.toSet();
 
   @override
   String get id => 'subsonic';
@@ -32,7 +32,11 @@ class SubsonicLyricsSource implements LyricsSource {
     String? songId,
   }) async {
     // 优先尝试 OpenSubsonic getLyricsBySongId
-    if (_extensions.contains('songLyrics') && songId != null) {
+    // 兼容旧库扩展信息缺失：扩展列表为空时也尝试一次。
+    final canTryBySongId =
+        songId != null &&
+        (_extensions.isEmpty || _extensions.contains('songLyrics'));
+    if (canTryBySongId) {
       try {
         final response = await _apiClient.get(
           ApiConstants.getLyricsBySongId,
@@ -63,14 +67,8 @@ class SubsonicLyricsSource implements LyricsSource {
       if (lyricsData != null) {
         final value = lyricsData['value'] as String?;
         if (value != null && value.isNotEmpty) {
-          final lines = value
-              .split('\n')
-              .map((line) => LyricsLine(value: line))
-              .toList();
-          return Lyrics(
-            sourceId: id,
-            entries: [StructuredLyrics(synced: false, lines: lines)],
-          );
+          final parsed = LrcParser.parse(value);
+          return Lyrics(sourceId: id, entries: [parsed]);
         }
       }
     } catch (e) {

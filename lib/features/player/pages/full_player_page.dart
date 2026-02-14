@@ -95,6 +95,17 @@ class _FullPlayerPageState extends ConsumerState<FullPlayerPage>
     }
   }
 
+  Color _limitBackgroundLuminance(Color color, {double maxLuminance = 0.3}) {
+    final luminance = color.computeLuminance();
+    if (luminance <= maxLuminance) return color;
+
+    final blendFactor = ((luminance - maxLuminance) / (1 - maxLuminance)).clamp(
+      0.0,
+      0.82,
+    );
+    return Color.lerp(color, Colors.black, blendFactor) ?? color;
+  }
+
   @override
   Widget build(BuildContext context) {
     final playerState = ref.watch(playerProvider);
@@ -116,12 +127,23 @@ class _FullPlayerPageState extends ConsumerState<FullPlayerPage>
     }
 
     // 构建背景渐变
-    final backgroundColor =
+    final rawBackgroundColor =
         _paletteGenerator?.dominantColor?.color ??
         Theme.of(context).colorScheme.surface;
-    final onBackgroundColor =
-        _paletteGenerator?.dominantColor?.titleTextColor ??
-        Theme.of(context).colorScheme.onSurface;
+    final backgroundColor = _limitBackgroundLuminance(
+      rawBackgroundColor,
+      maxLuminance: 0.32,
+    );
+    final scaffoldBackgroundColor = _limitBackgroundLuminance(
+      Theme.of(context).scaffoldBackgroundColor,
+      maxLuminance: 0.2,
+    );
+    const primaryTextColor = Colors.white;
+    final secondaryTextColor = Colors.white.withValues(alpha: 0.78);
+    const lyricsActivePrimaryColor = Colors.white;
+    const lyricsActiveSecondaryColor = Colors.white;
+    final lyricsInactivePrimaryColor = Colors.white.withValues(alpha: 0.64);
+    final lyricsInactiveSecondaryColor = Colors.white.withValues(alpha: 0.5);
 
     return Scaffold(
       backgroundColor: Colors.transparent,
@@ -133,13 +155,13 @@ class _FullPlayerPageState extends ConsumerState<FullPlayerPage>
               tag: 'player-background',
               child: Container(
                 decoration: BoxDecoration(
-                  color: Theme.of(context).scaffoldBackgroundColor,
+                  color: scaffoldBackgroundColor,
                   gradient: LinearGradient(
                     begin: Alignment.topCenter,
                     end: Alignment.bottomCenter,
                     colors: [
-                      backgroundColor.withValues(alpha: 0.6),
-                      Theme.of(context).scaffoldBackgroundColor,
+                      backgroundColor.withValues(alpha: 0.85),
+                      scaffoldBackgroundColor,
                     ],
                   ),
                 ),
@@ -160,7 +182,7 @@ class _FullPlayerPageState extends ConsumerState<FullPlayerPage>
                       child: IconTheme(
                         data: Theme.of(
                           context,
-                        ).iconTheme.copyWith(color: onBackgroundColor),
+                        ).iconTheme.copyWith(color: primaryTextColor),
                         child: Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
@@ -171,7 +193,7 @@ class _FullPlayerPageState extends ConsumerState<FullPlayerPage>
                             Text(
                               '正在播放',
                               style: Theme.of(context).textTheme.titleMedium
-                                  ?.copyWith(color: onBackgroundColor),
+                                  ?.copyWith(color: primaryTextColor),
                             ),
                             IconButton(
                               icon: const Icon(Icons.more_vert),
@@ -206,6 +228,7 @@ class _FullPlayerPageState extends ConsumerState<FullPlayerPage>
                                           .titleMedium
                                           ?.copyWith(
                                             fontWeight: FontWeight.bold,
+                                            color: primaryTextColor,
                                           ),
                                       textAlign: TextAlign.center,
                                       maxLines: 1,
@@ -222,11 +245,7 @@ class _FullPlayerPageState extends ConsumerState<FullPlayerPage>
                                       style: Theme.of(context)
                                           .textTheme
                                           .bodySmall
-                                          ?.copyWith(
-                                            color: Theme.of(
-                                              context,
-                                            ).colorScheme.onSurfaceVariant,
-                                          ),
+                                          ?.copyWith(color: secondaryTextColor),
                                       textAlign: TextAlign.center,
                                       maxLines: 1,
                                       overflow: TextOverflow.ellipsis,
@@ -236,7 +255,18 @@ class _FullPlayerPageState extends ConsumerState<FullPlayerPage>
                                 ),
                               ),
                               // 歌词视图占满剩余空间
-                              Expanded(child: _buildLyricsView(lyricsAsync)),
+                              Expanded(
+                                child: _buildLyricsView(
+                                  lyricsAsync,
+                                  activePrimaryColor: lyricsActivePrimaryColor,
+                                  activeSecondaryColor:
+                                      lyricsActiveSecondaryColor,
+                                  inactivePrimaryColor:
+                                      lyricsInactivePrimaryColor,
+                                  inactiveSecondaryColor:
+                                      lyricsInactiveSecondaryColor,
+                                ),
+                              ),
                             ],
                           )
                         : // 封面模式：保持原有 SingleChildScrollView 布局
@@ -299,6 +329,7 @@ class _FullPlayerPageState extends ConsumerState<FullPlayerPage>
                                             .headlineSmall
                                             ?.copyWith(
                                               fontWeight: FontWeight.bold,
+                                              color: primaryTextColor,
                                             ),
                                         textAlign: TextAlign.center,
                                         maxLines: 2,
@@ -326,9 +357,7 @@ class _FullPlayerPageState extends ConsumerState<FullPlayerPage>
                                               .textTheme
                                               .bodyLarge
                                               ?.copyWith(
-                                                color: Theme.of(
-                                                  context,
-                                                ).colorScheme.onSurfaceVariant,
+                                                color: secondaryTextColor,
                                               ),
                                           textAlign: TextAlign.center,
                                           maxLines: 1,
@@ -387,7 +416,9 @@ class _FullPlayerPageState extends ConsumerState<FullPlayerPage>
                                           : Icons.favorite_border,
                                       color: currentSong.starred
                                           ? Colors.red
-                                          : null,
+                                          : Colors.white.withValues(
+                                              alpha: 0.78,
+                                            ),
                                     ),
                                     onPressed: () {
                                       ref
@@ -401,10 +432,10 @@ class _FullPlayerPageState extends ConsumerState<FullPlayerPage>
                                     icon: Icon(
                                       Icons.lyrics,
                                       color: _showLyrics
-                                          ? Theme.of(
-                                              context,
-                                            ).colorScheme.primary
-                                          : null,
+                                          ? Colors.white
+                                          : Colors.white.withValues(
+                                              alpha: 0.72,
+                                            ),
                                     ),
                                     onPressed: () {
                                       setState(() {
@@ -415,7 +446,12 @@ class _FullPlayerPageState extends ConsumerState<FullPlayerPage>
 
                                   // 播放队列按钮
                                   IconButton(
-                                    icon: const Icon(Icons.queue_music),
+                                    icon: Icon(
+                                      Icons.queue_music,
+                                      color: Colors.white.withValues(
+                                        alpha: 0.78,
+                                      ),
+                                    ),
                                     onPressed: () {
                                       showModalBottomSheet(
                                         context: context,
@@ -489,33 +525,53 @@ class _FullPlayerPageState extends ConsumerState<FullPlayerPage>
         Icon(
           icon,
           size: 12,
-          color: color ?? Theme.of(context).textTheme.bodySmall?.color,
+          color: color ?? Colors.white.withValues(alpha: 0.76),
         ),
         const SizedBox(width: 4),
         Text(
           text,
-          style: Theme.of(
-            context,
-          ).textTheme.bodySmall?.copyWith(fontSize: 10, color: color),
+          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+            fontSize: 10,
+            color: color ?? Colors.white.withValues(alpha: 0.76),
+          ),
         ),
       ],
     );
   }
 
-  Widget _buildLyricsView(AsyncValue<Lyrics?> lyricsAsync) {
+  Widget _buildLyricsView(
+    AsyncValue<Lyrics?> lyricsAsync, {
+    required Color activePrimaryColor,
+    required Color activeSecondaryColor,
+    required Color inactivePrimaryColor,
+    required Color inactiveSecondaryColor,
+  }) {
     return lyricsAsync.when(
       data: (lyrics) {
         if (lyrics == null || lyrics.isEmpty) {
-          return const Center(child: Text('暂无歌词'));
+          return Center(
+            child: Text('暂无歌词', style: TextStyle(color: activePrimaryColor)),
+          );
         }
         final bestLyrics = lyrics.getBest();
         if (bestLyrics == null) {
-          return const Center(child: Text('暂无歌词'));
+          return Center(
+            child: Text('暂无歌词', style: TextStyle(color: activePrimaryColor)),
+          );
         }
-        return SyncedLyricsView(lyrics: bestLyrics);
+        return SyncedLyricsView(
+          lyrics: bestLyrics,
+          activePrimaryColor: activePrimaryColor,
+          activeSecondaryColor: activeSecondaryColor,
+          inactivePrimaryColor: inactivePrimaryColor,
+          inactiveSecondaryColor: inactiveSecondaryColor,
+        );
       },
-      loading: () => const Center(child: CircularProgressIndicator()),
-      error: (err, stack) => Center(child: Text('加载歌词失败')),
+      loading: () =>
+          const Center(child: CircularProgressIndicator(color: Colors.white)),
+      error: (err, stack) => Center(
+        child: Text('加载歌词失败', style: TextStyle(color: activePrimaryColor)),
+      ),
     );
   }
 }
@@ -552,6 +608,9 @@ class _ProgressBarState extends ConsumerState<ProgressBar> {
     final displayPosition = _dragValue != null
         ? Duration(milliseconds: _dragValue!.toInt())
         : position;
+    final timeTextStyle = Theme.of(context).textTheme.bodySmall?.copyWith(
+      color: Colors.white.withValues(alpha: 0.78),
+    );
 
     return Column(
       children: [
@@ -584,14 +643,8 @@ class _ProgressBarState extends ConsumerState<ProgressBar> {
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(
-                _formatDuration(displayPosition),
-                style: Theme.of(context).textTheme.bodySmall,
-              ),
-              Text(
-                _formatDuration(duration),
-                style: Theme.of(context).textTheme.bodySmall,
-              ),
+              Text(_formatDuration(displayPosition), style: timeTextStyle),
+              Text(_formatDuration(duration), style: timeTextStyle),
             ],
           ),
         ),
@@ -615,6 +668,7 @@ class PlaybackControls extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final playerState = ref.watch(playerProvider);
+    final inactiveControlColor = Colors.white.withValues(alpha: 0.78);
 
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
@@ -624,8 +678,8 @@ class PlaybackControls extends ConsumerWidget {
           icon: Icon(
             Icons.shuffle,
             color: playerState.shuffleEnabled
-                ? Theme.of(context).colorScheme.primary
-                : null,
+                ? Colors.white
+                : inactiveControlColor,
           ),
           onPressed: () {
             ref.read(playerProvider.notifier).toggleShuffle();
@@ -637,7 +691,7 @@ class PlaybackControls extends ConsumerWidget {
         // 上一首按钮
         IconButton(
           iconSize: 36,
-          icon: const Icon(Icons.skip_previous),
+          icon: Icon(Icons.skip_previous, color: inactiveControlColor),
           onPressed: playerState.hasPrevious
               ? () {
                   ref.read(playerProvider.notifier).previous();
@@ -670,7 +724,7 @@ class PlaybackControls extends ConsumerWidget {
         // 下一首按钮
         IconButton(
           iconSize: 36,
-          icon: const Icon(Icons.skip_next),
+          icon: Icon(Icons.skip_next, color: inactiveControlColor),
           onPressed: playerState.hasNext
               ? () {
                   ref.read(playerProvider.notifier).next();
@@ -682,10 +736,12 @@ class PlaybackControls extends ConsumerWidget {
 
         // 循环模式按钮
         IconButton(
-          icon: Icon(_getLoopIcon(playerState.loopMode)),
-          color: playerState.loopMode != LoopMode.off
-              ? Theme.of(context).colorScheme.primary
-              : null,
+          icon: Icon(
+            _getLoopIcon(playerState.loopMode),
+            color: playerState.loopMode != LoopMode.off
+                ? Colors.white
+                : inactiveControlColor,
+          ),
           onPressed: () {
             ref.read(playerProvider.notifier).toggleLoopMode();
           },

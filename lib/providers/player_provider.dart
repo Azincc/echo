@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math';
 import 'dart:io' show File, Platform;
 import 'package:audio_service/audio_service.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
@@ -78,8 +79,9 @@ class PlayerState {
     );
   }
 
-  bool get hasNext => currentIndex < queue.length - 1;
-  bool get hasPrevious => currentIndex > 0;
+  bool get hasNext =>
+      shuffleEnabled ? queue.length > 1 : currentIndex < queue.length - 1;
+  bool get hasPrevious => shuffleEnabled ? queue.length > 1 : currentIndex > 0;
 }
 
 /// 播放器 Provider
@@ -99,6 +101,7 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
   AudioPlayer? _audioPlayer;
   EchoAudioHandler? _audioHandler;
   StreamSubscription? _cacheCompletionSubscription;
+  final Random _random = Random();
 
   /// 动态获取最新的 API client
   SubsonicApiClient get _apiClient => _ref.read(subsonicApiClientProvider);
@@ -463,6 +466,14 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
   Future<void> previous() async {
     if (!state.hasPrevious) return;
 
+    if (state.shuffleEnabled) {
+      final previousIndex = _getRandomIndexExcludingCurrent();
+      if (previousIndex == null) return;
+      final previousSong = state.queue[previousIndex];
+      await playSong(previousSong, queue: state.queue, index: previousIndex);
+      return;
+    }
+
     final previousIndex = state.currentIndex - 1;
     final previousSong = state.queue[previousIndex];
 
@@ -472,6 +483,14 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
   /// 下一首
   Future<void> next() async {
     if (!state.hasNext) return;
+
+    if (state.shuffleEnabled) {
+      final nextIndex = _getRandomIndexExcludingCurrent();
+      if (nextIndex == null) return;
+      final nextSong = state.queue[nextIndex];
+      await playSong(nextSong, queue: state.queue, index: nextIndex);
+      return;
+    }
 
     final nextIndex = state.currentIndex + 1;
     final nextSong = state.queue[nextIndex];
@@ -511,11 +530,29 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
   /// 设置随机播放
   Future<void> setShuffleEnabled(bool enabled) async {
     await _audioPlayer?.setShuffleModeEnabled(enabled);
+    if (mounted) {
+      state = state.copyWith(shuffleEnabled: enabled);
+    }
   }
 
   /// 切换随机播放
   Future<void> toggleShuffle() async {
     await setShuffleEnabled(!state.shuffleEnabled);
+  }
+
+  int? _getRandomIndexExcludingCurrent() {
+    final queueLength = state.queue.length;
+    if (queueLength <= 1) return null;
+
+    var index = state.currentIndex;
+    var tries = 0;
+    while (index == state.currentIndex && tries < 10) {
+      index = _random.nextInt(queueLength);
+      tries++;
+    }
+
+    if (index == state.currentIndex) return null;
+    return index;
   }
 
   /// 添加到队列末尾

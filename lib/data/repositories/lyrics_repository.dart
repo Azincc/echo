@@ -26,7 +26,8 @@ class LyricsRepository {
   }) async {
     // 先查缓存
     final cached = await _getFromCache(songId);
-    if (cached != null) return cached;
+    // 有同步歌词直接返回；非同步缓存尝试刷新一次（可升级为带时间轴版本）
+    if (cached != null && cached.hasSynced) return cached;
 
     // 按优先级逐一查询提供商
     for (final source in _sources) {
@@ -47,7 +48,8 @@ class LyricsRepository {
       }
     }
 
-    return null;
+    // 所有源都失败时，回退到旧缓存（即便是非同步）
+    return cached;
   }
 
   Future<Lyrics?> _getFromCache(String songId) async {

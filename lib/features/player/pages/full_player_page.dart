@@ -20,19 +20,53 @@ class FullPlayerPage extends ConsumerStatefulWidget {
   ConsumerState<FullPlayerPage> createState() => _FullPlayerPageState();
 }
 
-class _FullPlayerPageState extends ConsumerState<FullPlayerPage> {
+class _FullPlayerPageState extends ConsumerState<FullPlayerPage>
+    with SingleTickerProviderStateMixin {
   bool _showLyrics = false;
   PaletteGenerator? _paletteGenerator;
+  late AnimationController _controller;
+  late Animation<double> _topBarAnimation;
+  late Animation<double> _controlsAnimation;
+  late Animation<double> _bottomBarAnimation;
 
   @override
   void initState() {
     super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 800),
+    );
+
+    _topBarAnimation = CurvedAnimation(
+      parent: _controller,
+      // Delay top bar until background has likely covered the top area
+      curve: const Interval(0.6, 1.0, curve: Curves.easeOut),
+    );
+
+    _controlsAnimation = CurvedAnimation(
+      parent: _controller,
+      curve: const Interval(0.4, 0.9, curve: Curves.easeOut),
+    );
+
+    _bottomBarAnimation = CurvedAnimation(
+      parent: _controller,
+      curve: const Interval(0.5, 1.0, curve: Curves.easeOut),
+    );
+
+    _controller.forward();
+
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final song = ref.read(playerProvider).currentSong;
       if (song != null) {
         _updatePalette(song.coverArt);
       }
     });
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
   }
 
   Future<void> _updatePalette(String? coverArtId) async {
@@ -82,240 +116,322 @@ class _FullPlayerPageState extends ConsumerState<FullPlayerPage> {
     final backgroundColor =
         _paletteGenerator?.dominantColor?.color ??
         Theme.of(context).colorScheme.surface;
+    final onBackgroundColor = _paletteGenerator?.dominantColor?.titleTextColor ?? Theme.of(context).colorScheme.onSurface;
+
 
     return Scaffold(
-      body: Container(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [
-              backgroundColor.withValues(alpha: 0.6),
-              Theme.of(context).scaffoldBackgroundColor,
-            ],
-          ),
-        ),
-        child: SafeArea(
-          child: Column(
-            children: [
-              // 顶部操作栏
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 8),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    IconButton(
-                      icon: const Icon(Icons.keyboard_arrow_down),
-                      onPressed: () => Navigator.pop(context),
-                    ),
-                    Text(
-                      '正在播放',
-                      style: Theme.of(context).textTheme.titleMedium,
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.more_vert),
-                      onPressed: () {
-                        // TODO: 更多选项菜单
-                      },
-                    ),
-                  ],
+      backgroundColor: Colors.transparent,
+      body: Stack(
+        children: [
+          // 背景 Hero
+          Positioned.fill(
+            child: Hero(
+              tag: 'player-background',
+              child: Container(
+                decoration: BoxDecoration(
+                  color: Theme.of(context).scaffoldBackgroundColor,
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [
+                      backgroundColor.withValues(alpha: 0.6),
+                      Theme.of(context).scaffoldBackgroundColor,
+                    ],
+                  ),
                 ),
               ),
+            ),
+          ),
+          // 内容
+          SafeArea(
+            child: FadeTransition(
+              opacity: ModalRoute.of(context)!.animation!,
+              child: Column(
+                children: [
+                  // 顶部操作栏
+                  FadeTransition(
+                    opacity: _topBarAnimation,
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 8),
+                      child: IconTheme(
+                        data: Theme.of(context).iconTheme.copyWith(
+                          color: onBackgroundColor,
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            IconButton(
+                              icon: const Icon(Icons.keyboard_arrow_down),
+                              onPressed: () => Navigator.pop(context),
+                            ),
+                            Text(
+                              '正在播放',
+                              style: Theme.of(context).textTheme.titleMedium
+                                  ?.copyWith(color: onBackgroundColor),
+                            ),
+                            IconButton(
+                              icon: const Icon(Icons.more_vert),
+                              onPressed: () {
+                                // TODO: 更多选项菜单
+                              },
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
 
-              // 中间内容区域
-              Expanded(
-                child: _showLyrics
-                    ? // 歌词模式：歌词直接占满 Expanded，无外层 SingleChildScrollView
-                      Column(
-                        children: [
-                          // 歌曲信息（紧凑）
-                          Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 24),
-                            child: Column(
-                              children: [
-                                const SizedBox(height: 8),
-                                Text(
-                                  currentSong.title,
-                                  style: Theme.of(context).textTheme.titleMedium
-                                      ?.copyWith(fontWeight: FontWeight.bold),
-                                  textAlign: TextAlign.center,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
+                  // 中间内容区域
+                  Expanded(
+                    child: _showLyrics
+                        ? // 歌词模式：歌词直接占满 Expanded，无外层 SingleChildScrollView
+                          Column(
+                            children: [
+                              // 歌曲信息（紧凑）
+                              Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 24,
                                 ),
-                                const SizedBox(height: 4),
-                                Text(
-                                  [
-                                    if (currentSong.artist != null)
-                                      currentSong.artist!,
-                                    if (currentSong.album != null)
-                                      currentSong.album!,
-                                  ].join(' · '),
-                                  style: Theme.of(context).textTheme.bodySmall
-                                      ?.copyWith(
-                                        color: Theme.of(
-                                          context,
-                                        ).colorScheme.onSurfaceVariant,
+                                child: Column(
+                                  children: [
+                                    const SizedBox(height: 8),
+                                    Text(
+                                      currentSong.title,
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .titleMedium
+                                          ?.copyWith(
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                      textAlign: TextAlign.center,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      [
+                                        if (currentSong.artist != null)
+                                          currentSong.artist!,
+                                        if (currentSong.album != null)
+                                          currentSong.album!,
+                                      ].join(' · '),
+                                      style: Theme.of(
+                                        context,
+                                      ).textTheme.bodySmall?.copyWith(
+                                        color:
+                                            Theme.of(
+                                              context,
+                                            ).colorScheme.onSurfaceVariant,
                                       ),
-                                  textAlign: TextAlign.center,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
+                                      textAlign: TextAlign.center,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                    const SizedBox(height: 8),
+                                  ],
                                 ),
+                              ),
+                              // 歌词视图占满剩余空间
+                              Expanded(child: _buildLyricsView(lyricsAsync)),
+                            ],
+                          )
+                        : // 封面模式：保持原有 SingleChildScrollView 布局
+                          SingleChildScrollView(
+                            child: Padding(
+                              padding: const EdgeInsets.all(24),
+                              child: Column(
+                                children: [
+                                  const SizedBox(height: 32),
+
+                                  // 专辑封面
+                                  Center(
+                                    child: Hero(
+                                      tag: 'player-cover',
+                                      child: Container(
+                                        width: 320,
+                                        height: 320,
+                                        decoration: BoxDecoration(
+                                          borderRadius:
+                                              BorderRadius.circular(16),
+                                          color:
+                                              Theme.of(
+                                                context,
+                                              ).colorScheme.surfaceContainerHighest,
+                                          boxShadow: [
+                                            BoxShadow(
+                                              color: Colors.black.withValues(
+                                                alpha: 0.2,
+                                              ),
+                                              blurRadius: 20,
+                                              offset: const Offset(0, 10),
+                                            ),
+                                          ],
+                                        ),
+                                        child: ClipRRect(
+                                          borderRadius: BorderRadius.circular(
+                                            16,
+                                          ),
+                                          child: CoverArtImage(
+                                            coverArtId: currentSong.coverArt,
+                                            size: 320,
+                                            fit: BoxFit.contain,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+
+                                  const SizedBox(height: 32),
+
+                                  // 歌曲信息
+                                  Hero(
+                                    tag: 'player-title',
+                                    child: Material(
+                                      type: MaterialType.transparency,
+                                      child: Text(
+                                        currentSong.title,
+                                        style: Theme.of(
+                                          context,
+                                        ).textTheme.headlineSmall?.copyWith(
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                        textAlign: TextAlign.center,
+                                        maxLines: 2,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                  ),
+
                                 const SizedBox(height: 8),
+
+                                if (currentSong.artist != null ||
+                                    currentSong.album != null)
+                                  Hero(
+                                    tag: 'player-artist',
+                                    child: Material(
+                                      type: MaterialType.transparency,
+                                      child: Text(
+                                        [
+                                          if (currentSong.artist != null)
+                                            currentSong.artist!,
+                                          if (currentSong.album != null)
+                                            currentSong.album!,
+                                        ].join(' · '),
+                                        style: Theme.of(
+                                          context,
+                                        ).textTheme.bodyLarge?.copyWith(
+                                          color:
+                                              Theme.of(
+                                                context,
+                                              ).colorScheme.onSurfaceVariant,
+                                        ),
+                                        textAlign: TextAlign.center,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                  ),
+
+                                const SizedBox(height: 32),
                               ],
                             ),
                           ),
-                          // 歌词视图占满剩余空间
-                          Expanded(child: _buildLyricsView(lyricsAsync)),
-                        ],
-                      )
-                    : // 封面模式：保持原有 SingleChildScrollView 布局
-                      SingleChildScrollView(
-                        child: Padding(
-                          padding: const EdgeInsets.all(24),
-                          child: Column(
-                            children: [
-                              const SizedBox(height: 32),
-
-                              // 专辑封面
-                              Center(
-                                child: Container(
-                                  width: 320,
-                                  height: 320,
-                                  decoration: BoxDecoration(
-                                    borderRadius: BorderRadius.circular(16),
-                                    color: Theme.of(
-                                      context,
-                                    ).colorScheme.surfaceContainerHighest,
-                                    boxShadow: [
-                                      BoxShadow(
-                                        color: Colors.black.withValues(
-                                          alpha: 0.2,
-                                        ),
-                                        blurRadius: 20,
-                                        offset: const Offset(0, 10),
-                                      ),
-                                    ],
-                                  ),
-                                  child: ClipRRect(
-                                    borderRadius: BorderRadius.circular(16),
-                                    child: CoverArtImage(
-                                      coverArtId: currentSong.coverArt,
-                                      size: 320,
-                                      fit: BoxFit.contain,
-                                    ),
-                                  ),
-                                ),
-                              ),
-
-                              const SizedBox(height: 32),
-
-                              // 歌曲信息
-                              Text(
-                                currentSong.title,
-                                style: Theme.of(context).textTheme.headlineSmall
-                                    ?.copyWith(fontWeight: FontWeight.bold),
-                                textAlign: TextAlign.center,
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-
-                              const SizedBox(height: 8),
-
-                              Text(
-                                [
-                                  if (currentSong.artist != null)
-                                    currentSong.artist!,
-                                  if (currentSong.album != null)
-                                    currentSong.album!,
-                                ].join(' · '),
-                                style: Theme.of(context).textTheme.bodyLarge
-                                    ?.copyWith(
-                                      color: Theme.of(
-                                        context,
-                                      ).colorScheme.onSurfaceVariant,
-                                    ),
-                                textAlign: TextAlign.center,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-
-                              const SizedBox(height: 32),
-                            ],
-                          ),
                         ),
+                ),
+
+                // 底部固定控制栏
+                FadeTransition(
+                  opacity: _controlsAnimation,
+                  child: SlideTransition(
+                    position: _controlsAnimation.drive(
+                      Tween<Offset>(
+                        begin: const Offset(0, 0.2),
+                        end: Offset.zero,
                       ),
-              ),
-
-              // 底部固定控制栏
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 24,
-                  vertical: 16,
-                ),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    // 进度条
-                    const ProgressBar(),
-
-                    const SizedBox(height: 24),
-
-                    // 播放控制按钮
-                    const PlaybackControls(),
-
-                    const SizedBox(height: 16),
-
-                    // 底部操作按钮
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                      children: [
-                        // 收藏按钮
-                        IconButton(
-                          icon: Icon(
-                            currentSong.starred
-                                ? Icons.favorite
-                                : Icons.favorite_border,
-                            color: currentSong.starred ? Colors.red : null,
-                          ),
-                          onPressed: () {
-                            ref.read(playerProvider.notifier).toggleFavorite();
-                          },
-                        ),
-
-                        // 歌词按钮
-                        IconButton(
-                          icon: Icon(
-                            Icons.lyrics,
-                            color: _showLyrics
-                                ? Theme.of(context).colorScheme.primary
-                                : null,
-                          ),
-                          onPressed: () {
-                            setState(() {
-                              _showLyrics = !_showLyrics;
-                            });
-                          },
-                        ),
-
-                        // 播放队列按钮
-                        IconButton(
-                          icon: const Icon(Icons.queue_music),
-                          onPressed: () {
-                            showModalBottomSheet(
-                              context: context,
-                              builder: (context) => const PlayQueueSheet(),
-                              isScrollControlled: true,
-                            );
-                          },
-                        ),
-                      ],
                     ),
-                  ],
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 24,
+                        vertical: 16,
+                      ),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          // 进度条
+                          const ProgressBar(),
+
+                          const SizedBox(height: 24),
+
+                          // 播放控制按钮
+                          const PlaybackControls(),
+
+                          const SizedBox(height: 16),
+
+                          // 底部操作按钮
+                          FadeTransition(
+                            opacity: _bottomBarAnimation,
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                              children: [
+                                // 收藏按钮
+                                IconButton(
+                                  icon: Icon(
+                                    currentSong.starred
+                                        ? Icons.favorite
+                                        : Icons.favorite_border,
+                                    color:
+                                        currentSong.starred ? Colors.red : null,
+                                  ),
+                                  onPressed: () {
+                                    ref
+                                        .read(playerProvider.notifier)
+                                        .toggleFavorite();
+                                  },
+                                ),
+
+                                // 歌词按钮
+                                IconButton(
+                                  icon: Icon(
+                                    Icons.lyrics,
+                                    color:
+                                        _showLyrics
+                                            ? Theme.of(
+                                              context,
+                                            ).colorScheme.primary
+                                            : null,
+                                  ),
+                                  onPressed: () {
+                                    setState(() {
+                                      _showLyrics = !_showLyrics;
+                                    });
+                                  },
+                                ),
+
+                                // 播放队列按钮
+                                IconButton(
+                                  icon: const Icon(Icons.queue_music),
+                                  onPressed: () {
+                                    showModalBottomSheet(
+                                      context: context,
+                                      builder:
+                                          (context) => const PlayQueueSheet(),
+                                      isScrollControlled: true,
+                                    );
+                                  },
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
-        ),
+          ),
+        ],
       ),
     );
   }

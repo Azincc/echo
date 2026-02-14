@@ -37,6 +37,29 @@ final dioProvider = Provider<Dio>((ref) {
 // State provider for UI to listen to active address changes
 final activeAddressProvider = StateProvider<ServerAddress?>((ref) => null);
 
+/// Ensure an active address is ready before making network requests.
+/// Waits briefly for startup synchronization to avoid transient false negatives.
+final ensureActiveAddressProvider = FutureProvider<ServerAddress>((ref) async {
+  final active = ref.watch(activeAddressProvider);
+  if (active != null) return active;
+
+  final pool = ref.watch(addressPoolProvider);
+  final firstProbe = await pool.probeAll();
+  if (firstProbe != null) return firstProbe;
+
+  final start = DateTime.now();
+  while (DateTime.now().difference(start) < const Duration(seconds: 2)) {
+    await Future.delayed(const Duration(milliseconds: 200));
+    final current = ref.read(activeAddressProvider);
+    if (current != null) return current;
+
+    final probed = await pool.probeAll();
+    if (probed != null) return probed;
+  }
+
+  throw StateError('No active server address available');
+});
+
 // 自动回退开关 Provider
 final autoFallbackProvider = StateProvider<bool>((ref) => true);
 

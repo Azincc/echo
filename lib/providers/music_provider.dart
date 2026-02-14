@@ -17,25 +17,25 @@ final musicRepositoryProvider = Provider<MusicRepository?>((ref) {
 
 /// 随机歌曲 Provider（保持数据，不自动释放）
 final randomSongsProvider = FutureProvider<List<Song>>((ref) async {
-  ref.watch(activeAddressProvider); // 线路变化时重新获取
   final repository = ref.watch(musicRepositoryProvider);
   if (repository == null) return [];
+  await ref.watch(ensureActiveAddressProvider.future);
   return await repository.getRandomSongs(size: 20);
 });
 
 /// 最近播放专辑 Provider（保持数据，不自动释放）
 final recentAlbumsProvider = FutureProvider<List<Album>>((ref) async {
-  ref.watch(activeAddressProvider); // 线路变化时重新获取
   final repository = ref.watch(musicRepositoryProvider);
   if (repository == null) return [];
+  await ref.watch(ensureActiveAddressProvider.future);
   return await repository.getAlbumList(type: 'recent', size: 10);
 });
 
 /// 常听专辑 Provider（保持数据，不自动释放）
 final frequentAlbumsProvider = FutureProvider<List<Album>>((ref) async {
-  ref.watch(activeAddressProvider); // 线路变化时重新获取
   final repository = ref.watch(musicRepositoryProvider);
   if (repository == null) return [];
+  await ref.watch(ensureActiveAddressProvider.future);
   return await repository.getAlbumList(type: 'frequent', size: 10);
 });
 

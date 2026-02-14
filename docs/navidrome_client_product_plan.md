@@ -377,11 +377,11 @@ class FallbackInterceptor extends Interceptor {
 ### Phase 2 — 体验增强（6 周）
 
 - [x] 多后端支持
-- [ ] 音质切换 & 按网络自动切换
+- [ ] 音质切换 & 按网络自动切换 → v0.4.0
 - [x] 歌词展示 + 提供商切换
 - [x] 封面提供商切换
-- [ ] 下载管理器
-- [ ] 边听边缓存 + 智能淘汰
+- [ ] 下载管理器 → v0.4.0
+- [ ] 边听边缓存 + 智能淘汰 → v0.4.0
 
 ### Phase 3 — 精打细磨（4 周）
 
@@ -1275,3 +1275,366 @@ gantt
 | v0.1.0 | 🎵 能听歌            | 单服务器连接、音乐浏览、播放控制、后台播放         |
 | v0.2.0 | 🔄 多地址 Fallback   | 地址池管理、自动切换、心跳检测、侧栏音乐库管理     |
 | v0.3.0 | 🎤🖼️ 歌词 & 封面增强 | 多源歌词同步滚动、多源封面、背景色提取、提供商管理 |
+| v0.4.0 | 🎧📥💾 音质 & 下载 & 缓存 | 音质切换/自动切换、下载管理器、边听边缓存+LFU/LRU淘汰 |
+
+---
+
+### v0.4.0 — 音质切换 & 下载管理 & 智能缓存
+
+> **目标**：支持用户选择播放音质并按网络环境（Wi-Fi / 移动数据）自动切换；支持歌曲/专辑/歌单批量下载供离线播放（始终下载原始无损文件）；实现边听边缓存，基于 LFU+LRU 混合策略智能管理缓存空间。
+> **前置版本**：v0.3.0
+> **预计工期**：6 周
+
+#### 9.4.1 新增/修改目录结构
+
+```
+lib/
+├── core/
+│   ├── network/
+│   │   └── connectivity_monitor.dart       # ✏️ 暴露网络类型 Stream（Wi-Fi/Mobile/None）
+│   └── services/
+│       ├── audio_handler_service.dart       # (existing)
+│       ├── download_service.dart            # 🆕 下载服务（队列管理、并发控制、进度回调）
+│       └── audio_cache_service.dart         # 🆕 音频缓存服务（LFU+LRU 淘汰、空间管理）
+│
+├── data/
+│   ├── models/
+│   │   ├── audio_quality.dart              # 🆕 音质枚举 & 音质设置模型
+│   │   └── download_task.dart              # 🆕 下载任务模型（Plain Dart，含 fromJson/toJson）
+│   ├── repositories/
+│   │   ├── download_repository.dart        # 🆕 下载任务 CRUD（基于 Drift）
+│   │   └── audio_cache_repository.dart     # 🆕 缓存元数据 CRUD（基于 Drift）
+│   └── sources/
+│       ├── subsonic_api_client.dart         # ✏️ getStreamUrl 新增音质参数适配
+│       ├── local_storage.dart              # ✏️ 新增音质设置持久化
+│       └── database/
+│           ├── app_database.dart           # ✏️ 注册新表、schema 升级到 v3
+│           └── tables/
+│               ├── download_tasks_table.dart    # 🆕 下载任务表
+│               └── audio_cache_table.dart       # 🆕 音频缓存元数据表
+│
+├── providers/
+│   ├── audio_quality_provider.dart          # 🆕 音质设置状态 + 当前生效音质 Provider
+│   ├── download_provider.dart               # 🆕 下载管理状态（任务列表、进度）
+│   ├── audio_cache_provider.dart            # 🆕 缓存管理状态（空间使用、缓存列表）
+│   └── player_provider.dart                # ✏️ 改造 playSong：下载→缓存→流式 优先级
+│
+├── features/
+│   ├── settings/
+│   │   └── pages/
+│   │       └── audio_quality_page.dart     # 🆕 音质设置页面（独立页面，从侧栏进入）
+│   └── download/
+│       └── pages/
+│           └── download_manager_page.dart  # 🆕 下载管理器页面（替换侧栏"即将推出"）
+│
+└── widgets/
+    └── app_drawer.dart                     # ✏️ 新增「音质设置」入口 + 替换「下载管理」路由
+```
+
+#### 9.4.2 新增依赖
+
+```yaml
+# 无需新增外部依赖！
+# - LockCachingAudioSource 已内置于 just_audio ^0.9.42
+# - 下载功能使用已有的 dio ^5.7.0 + path_provider ^2.1.5
+# - 网络类型检测使用已有的 connectivity_plus ^6.1.1
+```
+
+#### 9.4.3 核心模块设计
+
+##### (a) 音质配置模型
+
+```dart
+/// 音质级别枚举
+enum AudioQualityLevel {
+  original,   // 原始直连（不传 maxBitRate 和 format）
+  high,       // 高品质 320kbps
+  standard,   // 标准 192kbps
+  dataSaver,  // 流量节省 128kbps
+}
+
+/// 获取对应的 maxBitRate（用于 /rest/stream 请求）
+extension AudioQualityLevelExt on AudioQualityLevel {
+  int? get maxBitRate => switch (this) {
+    AudioQualityLevel.original  => null,  // 不限制
+    AudioQualityLevel.high      => 320,
+    AudioQualityLevel.standard  => 192,
+    AudioQualityLevel.dataSaver => 128,
+  };
+
+  String get displayName => switch (this) {
+    AudioQualityLevel.original  => '原始无损',
+    AudioQualityLevel.high      => '高品质 (320kbps)',
+    AudioQualityLevel.standard  => '标准 (192kbps)',
+    AudioQualityLevel.dataSaver => '流量节省 (128kbps)',
+  };
+}
+
+/// 音质设置（持久化到 SharedPreferences）
+class AudioQualitySettings {
+  final AudioQualityLevel wifiQuality;     // Wi-Fi 下使用的音质
+  final AudioQualityLevel mobileQuality;   // 移动数据下使用的音质
+  final bool autoSwitch;                   // 是否按网络类型自动切换
+
+  const AudioQualitySettings({
+    this.wifiQuality = AudioQualityLevel.original,
+    this.mobileQuality = AudioQualityLevel.standard,
+    this.autoSwitch = true,
+  });
+}
+```
+
+##### (b) 音质生效流程
+
+```mermaid
+flowchart TD
+    A[播放歌曲] --> B{autoSwitch 开启?}
+    B -->|是| C{当前网络类型?}
+    C -->|Wi-Fi| D[使用 wifiQuality]
+    C -->|Mobile| E[使用 mobileQuality]
+    C -->|None| F[使用 mobileQuality 作为默认]
+    B -->|否| G[使用 wifiQuality 作为全局设置]
+    D --> H[构建 stream URL]
+    E --> H
+    F --> H
+    G --> H
+    H --> I{需要转码?}
+    I -->|是| J[format=mp3 + 选择的 maxBitRate]
+    I -->|否| K{quality == original?}
+    K -->|是| L[不传 maxBitRate 和 format]
+    K -->|否| M[仅传 maxBitRate]
+    J --> N[/rest/stream?id=xxx&maxBitRate=...&format=...]
+    L --> N
+    M --> N
+```
+
+> **关键细节**：当用户选择 `original` 时，`getStreamUrl` 不传 `maxBitRate` 和 `format`，服务端返回原始文件。当用户选择其他级别时，仅传 `maxBitRate` 限制码率，`format` 只在格式需要转码时传递（保持 v0.1.0 的 `_needsTranscoding` 逻辑）。
+
+##### (c) 下载管理器
+
+```dart
+/// 下载服务 — 队列管理 + 并发控制
+class DownloadService {
+  final Dio _dio;
+  final SubsonicApiClient _apiClient;
+  final DownloadRepository _repository;
+  final int maxConcurrent;                // 最大并发下载数，默认 3
+
+  final _activeDownloads = <String, CancelToken>{};  // taskId -> CancelToken
+
+  /// 添加下载任务（单曲）
+  /// 使用 /rest/download 始终获取原始无损文件
+  Future<void> enqueue(Song song, {required String libraryId});
+
+  /// 批量添加（专辑/歌单）
+  Future<void> enqueueBatch(List<Song> songs, {required String libraryId});
+
+  /// 暂停任务
+  Future<void> pause(String taskId);
+
+  /// 恢复任务
+  Future<void> resume(String taskId);
+
+  /// 取消并删除任务（含本地文件）
+  Future<void> cancel(String taskId);
+
+  /// 清除所有已完成任务记录
+  Future<void> clearCompleted();
+
+  /// 获取歌曲是否已下载
+  Future<bool> isDownloaded(String songId, String libraryId);
+
+  /// 获取已下载歌曲的本地路径
+  Future<String?> getDownloadedPath(String songId, String libraryId);
+}
+```
+
+**下载流程**：
+
+```
+添加下载任务
+  → 写入 download_tasks 表 (status=pending)
+  → 检查并发数 < maxConcurrent
+    → 是 → 开始下载
+    → 否 → 等待队列
+  → 构建下载 URL: /rest/download?id=xxx&认证参数
+  → Dio.download(url, savePath, onReceiveProgress: ...)
+    → 更新进度到 download_tasks 表
+  → 下载完成 → status=completed, 记录 filePath + fileSize
+  → 处理下一个 pending 任务
+```
+
+**文件存储路径**：
+
+```
+[applicationDocumentsDirectory]/
+  └── echo_downloads/
+      └── [libraryId]/
+          └── [songId].[originalSuffix]    # 如 abc123.flac
+```
+
+##### (d) 音频缓存管理器
+
+```dart
+/// 音频缓存服务 — LFU+LRU 混合淘汰
+class AudioCacheService {
+  final AudioCacheRepository _repository;
+  final int maxCacheSizeBytes;            // 默认 2GB = 2 * 1024 * 1024 * 1024
+  final int protectionThreshold;          // 播放次数保护阈值，默认 5
+
+  /// 获取缓存文件路径（若已缓存且未过期）
+  /// 同时更新 playCount 和 lastPlayedAt
+  Future<String?> getCachedPath({
+    required String songId,
+    required String libraryId,
+    required AudioQualityLevel quality,
+  });
+
+  /// 注册新的缓存条目（LockCachingAudioSource 缓存完成后调用）
+  Future<void> registerCache({
+    required String songId,
+    required String libraryId,
+    required String filePath,
+    required int fileSize,
+    required AudioQualityLevel quality,
+  });
+
+  /// 检查并执行缓存淘汰
+  Future<void> evictIfNeeded();
+
+  /// 获取当前缓存总大小
+  Future<int> getTotalCacheSize();
+
+  /// 清除所有缓存
+  Future<void> clearAll();
+
+  /// 清除指定音乐库的缓存
+  Future<void> clearByLibrary(String libraryId);
+}
+```
+
+**缓存淘汰算法**：
+
+```
+当 totalCacheSize > maxCacheSizeBytes 时触发淘汰：
+  1. 从 audio_cache_entries 查询所有非保护条目（play_count < 5）
+  2. 计算淘汰分数 = (play_count * 0.6) + (recency_score * 0.4)
+     其中 recency_score = 1 - (now - last_played_at) / max_age
+  3. 按分数从低到高排序
+  4. 依次删除文件 + 数据库记录，直到 totalCacheSize < maxCacheSizeBytes * 0.8
+     （淘汰到 80% 避免频繁触发）
+```
+
+**缓存文件存储路径**：
+
+```
+[applicationCacheDirectory]/
+  └── echo_audio_cache/
+      └── [libraryId]/
+          └── [songId]_[quality].cache     # 如 abc123_high.cache
+```
+
+##### (e) 播放器改造 — 音源优先级
+
+```mermaid
+flowchart TD
+    A[playSong 被调用] --> B{歌曲已下载?}
+    B -->|是| C["AudioSource.file(downloadPath)"]
+    B -->|否| D{歌曲已缓存?<br>且缓存音质 >= 请求音质}
+    D -->|是| E["AudioSource.file(cachePath)<br>+ 更新 playCount/lastPlayedAt"]
+    D -->|否| F[根据当前音质设置构建 stream URL]
+    F --> G["LockCachingAudioSource(streamUri,<br>cacheFile: cachePath)"]
+    G --> H[播放 + 后台写入缓存文件]
+    H --> I[缓存完成 → registerCache]
+    I --> J[evictIfNeeded]
+    C --> K[播放]
+    E --> K
+    K --> L["预缓存下一首（如果队列中有）"]
+```
+
+> **预缓存逻辑**：当前歌曲开始播放后，检查队列中下一首是否已缓存/下载。若未缓存，创建一个 `LockCachingAudioSource` 但不播放，仅让其下载缓存文件。
+
+#### 9.4.4 数据库 Schema 新增
+
+```sql
+-- 下载任务表
+CREATE TABLE download_tasks (
+  id            TEXT PRIMARY KEY,             -- UUID
+  library_id    TEXT NOT NULL,                -- 所属音乐库 ID
+  song_id       TEXT NOT NULL,                -- Subsonic song ID
+  title         TEXT NOT NULL,                -- 歌曲名（冗余存储，离线展示）
+  artist        TEXT,                          -- 歌手名
+  album         TEXT,                          -- 专辑名
+  cover_art     TEXT,                          -- 封面 ID（离线展示）
+  duration      INTEGER,                      -- 时长（秒）
+  suffix        TEXT,                          -- 文件后缀（flac/mp3/...）
+  file_path     TEXT,                          -- 下载完成后的本地路径
+  file_size     INTEGER,                      -- 文件大小（字节）
+  status        TEXT NOT NULL DEFAULT 'pending',  -- pending/downloading/completed/failed/paused
+  progress      REAL NOT NULL DEFAULT 0,      -- 下载进度 0.0~1.0
+  error_message TEXT,                          -- 失败时的错误信息
+  created_at    INTEGER NOT NULL,             -- 创建时间戳
+  completed_at  INTEGER,                      -- 完成时间戳
+  UNIQUE(library_id, song_id)                 -- 同一音乐库中同一首歌不重复下载
+);
+
+-- 音频缓存元数据表
+CREATE TABLE audio_cache_entries (
+  id              TEXT PRIMARY KEY,           -- UUID
+  library_id      TEXT NOT NULL,              -- 所属音乐库 ID
+  song_id         TEXT NOT NULL,              -- Subsonic song ID
+  quality         TEXT NOT NULL,              -- 缓存时的音质级别 (original/high/standard/dataSaver)
+  file_path       TEXT NOT NULL,              -- 缓存文件路径
+  file_size       INTEGER NOT NULL,           -- 文件大小（字节）
+  play_count      INTEGER NOT NULL DEFAULT 0, -- 播放次数（LFU 依据）
+  last_played_at  INTEGER,                    -- 最后播放时间戳（LRU 依据）
+  cached_at       INTEGER NOT NULL,           -- 缓存创建时间戳
+  is_complete     INTEGER NOT NULL DEFAULT 0, -- 缓存是否完整（LockCachingAudioSource 可能中途中断）
+  UNIQUE(library_id, song_id, quality)        -- 同一音乐库+歌曲+音质 不重复
+);
+```
+
+> **Schema 迁移**：`app_database.dart` 的 `schemaVersion` 从 `2` 升级到 `3`，`onUpgrade` 中 `from < 3` 时创建两张新表。
+
+#### 9.4.5 涉及的 Subsonic API
+
+| 端点 | 用途 | 参数 | 说明 |
+| --- | --- | --- | --- |
+| `GET /rest/stream` | 流式播放（可转码） | `id`（必填）、`maxBitRate`、`format` | 音质切换通过 `maxBitRate` 控制码率。`format` 仅在需要转码时传递（保持现有 `_needsTranscoding` 逻辑）。不传 `maxBitRate` 时返回原始码率 |
+| `GET /rest/download` | 下载原始文件 | `id`（必填） | **始终返回原始格式不转码**。用于下载管理器 |
+| `GET /rest/getCoverArt` | 离线封面 | `id`、`size` | 下载完成后可选缓存封面供离线展示 |
+
+#### 9.4.6 实现步骤
+
+| # | 任务 | 详细描述 | 验收标准 |
+| --- | --- | --- | --- |
+| 1 | **音质模型 & 持久化** | 实现 `audio_quality.dart`（`AudioQualityLevel` 枚举 + `AudioQualitySettings` 配置类）；在 `local_storage.dart` 新增 `getAudioQualitySettings()` / `setAudioQualitySettings()` 方法，使用 JSON 格式存储到 SharedPreferences | 音质设置可正确序列化/反序列化 |
+| 2 | **网络类型感知 Provider** | 改造 `connectivity_monitor.dart`，新增 `networkTypeStream`（`Stream<NetworkType>`，区分 Wi-Fi / Mobile / None）；创建 `audio_quality_provider.dart`，包含 `audioQualitySettingsProvider`（设置状态）和 `effectiveQualityProvider`（结合网络类型计算当前生效音质） | `effectiveQualityProvider` 在 Wi-Fi/移动数据切换时自动更新 |
+| 3 | **改造 PlayerNotifier.playSong** | 读取 `effectiveQualityProvider` 获取当前音质；将 `maxBitRate` 传入 `getStreamUrl`（`original` 时不传）；保留原有 `_needsTranscoding` 逻辑，仅在需要转码时额外传 `format`；全屏播放器底部显示当前音质和连接类型 | 切换音质设置后，下一首歌按新设置播放；Wi-Fi→移动数据切换后音质自动调整 |
+| 4 | **音质设置页面 UI** | 实现 `audio_quality_page.dart`：Wi-Fi 音质选择（4 个 RadioListTile）+ 移动数据音质选择（4 个 RadioListTile）+ 自动切换开关（SwitchListTile）；侧栏 `app_drawer.dart` 新增「音质设置」ListTile 入口（在「歌词提供商」上方） | 页面可正常设置，设置立即生效并持久化 |
+| 5 | **数据库 Schema 升级** | 创建 `download_tasks_table.dart` 和 `audio_cache_table.dart`（Drift 表定义）；修改 `app_database.dart`：注册新表、`schemaVersion` → `3`、迁移逻辑 `from < 3` 时 `createTable` | 数据库迁移正常，老用户升级不崩溃 |
+| 6 | **下载仓库 & 服务** | 实现 `download_repository.dart`（Drift CRUD：创建/查询/更新状态/删除）；实现 `download_service.dart`（队列管理、最多 3 并发下载、`Dio.download` + `onReceiveProgress` 进度回调、`CancelToken` 暂停/取消、文件存储到 `echo_downloads/[libraryId]/`） | 可添加下载任务，并发下载正常，进度实时更新 |
+| 7 | **下载管理器 UI** | 实现 `download_manager_page.dart`：展示所有下载任务列表（按状态分组：下载中 / 等待中 / 已完成 / 失败）；每个任务显示封面缩略图、歌名、进度条、暂停/恢复/删除按钮；顶部操作栏：全部暂停/全部恢复/清除已完成；替换侧栏 `_showComingSoonDialog('下载管理')` 为导航到此页面 | 下载管理器可正常展示和操作所有任务 |
+| 8 | **下载触发入口** | 在 `song_list_tile.dart` 长按菜单添加「下载」选项；在 `album_detail_page.dart` 添加「下载专辑」按钮（批量下载所有曲目）；在 `playlist_detail_page.dart` 添加「下载歌单」按钮；已下载的歌曲显示 ✓ 标记 | 各入口可正确触发下载，重复下载有提示 |
+| 9 | **缓存仓库 & 服务** | 实现 `audio_cache_repository.dart`（Drift CRUD：查询缓存/注册缓存/更新播放计数/删除条目/按淘汰分数排序查询）；实现 `audio_cache_service.dart`（`getCachedPath` 查询+命中更新、`registerCache` 注册+触发淘汰、`evictIfNeeded` 淘汰算法、`clearAll` 清除全部） | 缓存读写正常，淘汰算法在空间超限时正确触发 |
+| 10 | **播放器集成缓存** | 改造 `PlayerNotifier.playSong` 三级优先：① 已下载 → `AudioSource.file`；② 已缓存 → `AudioSource.file` + 更新计数；③ 未缓存 → `LockCachingAudioSource(streamUri, cacheFile: ...)` 边播边缓存；缓存完成后调用 `registerCache` | 首次播放边听边缓存，第二次播放同一歌曲命中缓存 |
+| 11 | **预缓存下一首** | 当前歌曲开始播放后，检查队列中下一首是否已缓存/已下载；若未缓存，后台创建 `LockCachingAudioSource` 预下载（不播放）；预缓存任务在切歌或暂停时取消 | 播放队列中下一首歌切换时秒开 |
+| 12 | **缓存管理 UI** | 在侧栏设置对话框中新增缓存管理区块：显示当前缓存大小 / 最大限制；「清除缓存」按钮；可选：滑动条调整最大缓存空间（512MB / 1GB / 2GB / 4GB / 无限制） | 缓存信息正确展示，清除操作生效 |
+| 13 | **全屏播放器音质指示** | 在全屏播放器底部增加音质指示文字（如 `FLAC · Wi-Fi` 或 `320kbps · 移动数据` 或 `离线`），当播放已下载/已缓存文件时显示 `离线` 标签 | 用户可在播放器中感知当前播放来源和音质 |
+| 14 | **集成测试 & 打磨** | 测试场景：Wi-Fi→移动数据自动切换音质、下载中断恢复、缓存淘汰后重新缓存、已下载歌曲优先离线播放、缓存空间超限时自动淘汰低频歌曲、预缓存下一首效果验证 | 所有场景通过，无崩溃 |
+
+#### 9.4.7 v0.4.0 验收标准（整体）
+
+- [ ] 可在独立设置页中选择 Wi-Fi 和移动数据各自的音质级别
+- [ ] 开启自动切换后，Wi-Fi→移动数据切换时下一首歌自动使用对应音质
+- [ ] 选择「原始无损」时不传 maxBitRate，服务端返回原始文件
+- [ ] 可从歌曲列表/专辑详情/歌单详情触发下载
+- [ ] 下载管理器展示所有任务，支持暂停/恢复/删除
+- [ ] 下载始终使用 `/rest/download` 获取原始文件
+- [ ] 已下载歌曲优先从本地播放，无需网络
+- [ ] 首次播放的歌曲边听边缓存到本地
+- [ ] 缓存空间超过限制时自动淘汰低频+最久未听的歌曲
+- [ ] 播放次数 ≥ 5 的缓存条目不参与自动淘汰
+- [ ] 当前歌曲播放时后台预缓存下一首
+- [ ] 下载和缓存使用独立的存储空间
+- [ ] 全屏播放器底部显示当前音质和播放来源

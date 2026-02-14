@@ -10,6 +10,8 @@ import 'tables/server_addresses_table.dart';
 import 'tables/lyrics_provider_configs_table.dart';
 import 'tables/cover_provider_configs_table.dart';
 import 'tables/lyrics_cache_table.dart';
+import 'tables/download_tasks_table.dart';
+import 'tables/audio_cache_table.dart';
 
 part 'app_database.g.dart';
 
@@ -20,13 +22,15 @@ part 'app_database.g.dart';
     LyricsProviderConfigs,
     CoverProviderConfigs,
     LyricsCache,
+    DownloadTasks,
+    AudioCacheEntries,
   ],
 )
 class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
 
   @override
-  int get schemaVersion => 2;
+  int get schemaVersion => 3;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -40,6 +44,10 @@ class AppDatabase extends _$AppDatabase {
         await m.createTable(coverProviderConfigs);
         await m.createTable(lyricsCache);
         await _insertDefaultProviderConfigs();
+      }
+      if (from < 3) {
+        await m.createTable(downloadTasks);
+        await m.createTable(audioCacheEntries);
       }
     },
   );

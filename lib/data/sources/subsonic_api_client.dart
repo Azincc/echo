@@ -141,12 +141,7 @@ class SubsonicApiClient {
   }
 
   /// Generate Stream URL
-  String getStreamUrl(
-    String songId, {
-    int? maxBitRate,
-    String? format,
-    bool useDownload = false,
-  }) {
+  String getStreamUrl(String songId, {int? maxBitRate, String? format}) {
     if (_library == null) return '';
     final baseUrl = _dio.options.baseUrl;
     if (baseUrl.isEmpty) return '';
@@ -162,11 +157,23 @@ class SubsonicApiClient {
       params['format'] = format;
     }
 
-    final endpoint = (useDownload || format != null)
-        ? ApiConstants.download
-        : ApiConstants.stream;
+    // 流式播放始终使用 /rest/stream（包括转码）
+    final uri = Uri.parse(baseUrl + ApiConstants.stream);
+    final urlWithParams = uri.replace(queryParameters: params);
+    return urlWithParams.toString();
+  }
 
-    final uri = Uri.parse(baseUrl + endpoint);
+  /// Generate Download URL（始终下载原始无损文件）
+  String getDownloadUrl(String songId) {
+    if (_library == null) return '';
+    final baseUrl = _dio.options.baseUrl;
+    if (baseUrl.isEmpty) return '';
+
+    final params = <String, String>{};
+    _addAuthParamsMap(params);
+    params['id'] = songId;
+
+    final uri = Uri.parse(baseUrl + ApiConstants.download);
     final urlWithParams = uri.replace(queryParameters: params);
     return urlWithParams.toString();
   }

@@ -1,11 +1,13 @@
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/server_config.dart';
+import '../models/audio_quality.dart';
 
 /// 本地存储封装（SharedPreferences）
 class LocalStorage {
   static const String _keyServerConfig = 'server_config';
   static const String _keyAutoFallback = 'auto_fallback';
+  static const String _keyAudioQualitySettings = 'audio_quality_settings';
 
   /// 保存服务器配置
   static Future<void> saveServerConfig(ServerConfig config) async {
@@ -50,5 +52,26 @@ class LocalStorage {
   static Future<void> setAutoFallback(bool value) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(_keyAutoFallback, value);
+  }
+
+  /// 读取音质设置
+  static Future<AudioQualitySettings> getAudioQualitySettings() async {
+    final prefs = await SharedPreferences.getInstance();
+    final json = prefs.getString(_keyAudioQualitySettings);
+    if (json == null) return const AudioQualitySettings();
+
+    try {
+      return AudioQualitySettings.fromJsonString(json);
+    } catch (e) {
+      return const AudioQualitySettings();
+    }
+  }
+
+  /// 保存音质设置
+  static Future<void> setAudioQualitySettings(
+    AudioQualitySettings settings,
+  ) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_keyAudioQualitySettings, settings.toJsonString());
   }
 }

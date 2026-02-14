@@ -12,6 +12,9 @@ import '../providers/playlist_provider.dart';
 import '../providers/music_provider.dart';
 import '../features/settings/pages/lyrics_providers_page.dart';
 import '../features/settings/pages/cover_providers_page.dart';
+import '../features/settings/pages/audio_quality_page.dart';
+import '../features/download/pages/download_manager_page.dart';
+import '../providers/audio_cache_provider.dart';
 
 /// 应用侧栏
 class AppDrawer extends ConsumerStatefulWidget {
@@ -246,6 +249,19 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
           },
         ),
 
+        // 音质设置
+        ListTile(
+          leading: const Icon(Icons.high_quality_outlined),
+          title: const Text('音质设置'),
+          onTap: () {
+            Navigator.pop(context);
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (context) => const AudioQualityPage()),
+            );
+          },
+        ),
+
         const Divider(),
 
         // 统计信息
@@ -264,7 +280,12 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
           title: const Text('下载管理'),
           onTap: () {
             Navigator.pop(context);
-            _showComingSoonDialog(context, '下载管理');
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => const DownloadManagerPage(),
+              ),
+            );
           },
         ),
 
@@ -383,6 +404,87 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
                       ref.read(autoFallbackProvider.notifier).state = value;
                       ref.read(addressPoolProvider).autoFallback = value;
                       await LocalStorage.setAutoFallback(value);
+                    },
+                  ),
+                  const Divider(height: 24),
+
+                  // 缓存管理
+                  Text(
+                    '缓存管理',
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Consumer(
+                    builder: (context, ref, _) {
+                      final sizeAsync = ref.watch(cacheSizeProvider);
+                      return sizeAsync.when(
+                        data: (size) {
+                          final mb = size / (1024 * 1024);
+                          final gb = mb / 1024;
+                          String sizeStr;
+                          if (gb >= 1) {
+                            sizeStr = '${gb.toStringAsFixed(2)} GB';
+                          } else {
+                            sizeStr = '${mb.toStringAsFixed(1)} MB';
+                          }
+
+                          return Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              _buildInfoRow('当前占用', sizeStr),
+                              const SizedBox(height: 8),
+                              SizedBox(
+                                width: double.infinity,
+                                child: OutlinedButton.icon(
+                                  onPressed: () async {
+                                    final confirmed = await showDialog<bool>(
+                                      context: context,
+                                      builder: (context) => AlertDialog(
+                                        title: const Text('清除缓存'),
+                                        content: const Text('确定要清除所有音频缓存吗？'),
+                                        actions: [
+                                          TextButton(
+                                            onPressed: () =>
+                                                Navigator.pop(context, false),
+                                            child: const Text('取消'),
+                                          ),
+                                          TextButton(
+                                            onPressed: () =>
+                                                Navigator.pop(context, true),
+                                            child: const Text('清除'),
+                                          ),
+                                        ],
+                                      ),
+                                    );
+
+                                    if (confirmed == true) {
+                                      await ref
+                                          .read(audioCacheServiceProvider)
+                                          .clearAll();
+                                      ref.invalidate(cacheSizeProvider);
+                                      if (context.mounted) {
+                                        ScaffoldMessenger.of(
+                                          context,
+                                        ).showSnackBar(
+                                          const SnackBar(
+                                            content: Text('缓存已清除'),
+                                          ),
+                                        );
+                                      }
+                                    }
+                                  },
+                                  icon: const Icon(Icons.delete_outline),
+                                  label: const Text('清除缓存'),
+                                ),
+                              ),
+                            ],
+                          );
+                        },
+                        loading: () => const Text('正在计算缓存大小...'),
+                        error: (_, __) => const Text('无法获取缓存大小'),
+                      );
                     },
                   ),
                 ],

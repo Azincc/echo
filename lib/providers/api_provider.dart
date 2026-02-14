@@ -115,20 +115,26 @@ final configuredDioProvider = Provider<Dio>((ref) {
 // These should be alive as long as the app is running or we are in a session.
 // We can make a "NetworkManager" class or just effect providers.
 
-final networkManagerProvider = Provider<void>((ref) {
+final connectivityMonitorProvider = Provider<ConnectivityMonitor>((ref) {
   final pool = ref.watch(addressPoolProvider);
+  final monitor = ConnectivityMonitor(pool);
+  monitor.start();
+  ref.onDispose(() => monitor.stop());
+  return monitor;
+});
 
+final networkManagerProvider = Provider<void>((ref) {
   // 初始化自动回退设置
   ref.watch(autoFallbackInitProvider);
 
-  final connectivityMonitor = ConnectivityMonitor(pool);
-  connectivityMonitor.start();
+  // 使用共享的 ConnectivityMonitor
+  ref.watch(connectivityMonitorProvider);
 
+  final pool = ref.watch(addressPoolProvider);
   final healthChecker = HealthChecker(pool);
   healthChecker.start();
 
   ref.onDispose(() {
-    connectivityMonitor.stop();
     healthChecker.stop();
   });
 });

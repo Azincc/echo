@@ -55,7 +55,7 @@ class MiniPlayer extends ConsumerWidget {
                 tag: 'player-background',
                 child: Material(
                   color: Theme.of(context).colorScheme.surfaceContainer,
-                  elevation: 8,
+                  elevation: 0,
                   child: Container(
                     decoration: BoxDecoration(
                       border: Border(
@@ -92,11 +92,22 @@ class MiniPlayer extends ConsumerWidget {
                         // 封面
                         Hero(
                           tag: 'player-cover',
-                          child: ClipRRect(
-                            borderRadius: BorderRadius.circular(4),
-                            child: CoverArtImage(
-                              coverArtId: song.coverArt,
-                              size: 48,
+                          child: Container(
+                            width: 48,
+                            height: 48,
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(4),
+                              color: Theme.of(
+                                context,
+                              ).colorScheme.surfaceContainerHighest,
+                            ),
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(4),
+                              child: CoverArtImage(
+                                coverArtId: song.coverArt,
+                                size: 48,
+                                fit: BoxFit.contain,
+                              ),
                             ),
                           ),
                         ),

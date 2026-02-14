@@ -7,7 +7,10 @@ import 'package:cached_network_image/cached_network_image.dart';
 import '../../../providers/player_provider.dart';
 import '../../../providers/lyrics_cover_provider.dart';
 import '../../../providers/api_provider.dart';
+import '../../../providers/audio_quality_provider.dart';
 import '../../../data/models/lyrics.dart';
+import '../../../data/models/audio_quality.dart';
+import '../../../core/network/connectivity_monitor.dart';
 import '../../../widgets/cover_art_image.dart';
 import '../widgets/play_queue_sheet.dart';
 import '../widgets/synced_lyrics_view.dart';
@@ -116,8 +119,9 @@ class _FullPlayerPageState extends ConsumerState<FullPlayerPage>
     final backgroundColor =
         _paletteGenerator?.dominantColor?.color ??
         Theme.of(context).colorScheme.surface;
-    final onBackgroundColor = _paletteGenerator?.dominantColor?.titleTextColor ?? Theme.of(context).colorScheme.onSurface;
-
+    final onBackgroundColor =
+        _paletteGenerator?.dominantColor?.titleTextColor ??
+        Theme.of(context).colorScheme.onSurface;
 
     return Scaffold(
       backgroundColor: Colors.transparent,
@@ -154,9 +158,9 @@ class _FullPlayerPageState extends ConsumerState<FullPlayerPage>
                     child: Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 8),
                       child: IconTheme(
-                        data: Theme.of(context).iconTheme.copyWith(
-                          color: onBackgroundColor,
-                        ),
+                        data: Theme.of(
+                          context,
+                        ).iconTheme.copyWith(color: onBackgroundColor),
                         child: Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
@@ -215,14 +219,14 @@ class _FullPlayerPageState extends ConsumerState<FullPlayerPage>
                                         if (currentSong.album != null)
                                           currentSong.album!,
                                       ].join(' · '),
-                                      style: Theme.of(
-                                        context,
-                                      ).textTheme.bodySmall?.copyWith(
-                                        color:
-                                            Theme.of(
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .bodySmall
+                                          ?.copyWith(
+                                            color: Theme.of(
                                               context,
                                             ).colorScheme.onSurfaceVariant,
-                                      ),
+                                          ),
                                       textAlign: TextAlign.center,
                                       maxLines: 1,
                                       overflow: TextOverflow.ellipsis,
@@ -251,12 +255,12 @@ class _FullPlayerPageState extends ConsumerState<FullPlayerPage>
                                         width: 320,
                                         height: 320,
                                         decoration: BoxDecoration(
-                                          borderRadius:
-                                              BorderRadius.circular(16),
-                                          color:
-                                              Theme.of(
-                                                context,
-                                              ).colorScheme.surfaceContainerHighest,
+                                          borderRadius: BorderRadius.circular(
+                                            16,
+                                          ),
+                                          color: Theme.of(
+                                            context,
+                                          ).colorScheme.surfaceContainerHighest,
                                           boxShadow: [
                                             BoxShadow(
                                               color: Colors.black.withValues(
@@ -290,11 +294,12 @@ class _FullPlayerPageState extends ConsumerState<FullPlayerPage>
                                       type: MaterialType.transparency,
                                       child: Text(
                                         currentSong.title,
-                                        style: Theme.of(
-                                          context,
-                                        ).textTheme.headlineSmall?.copyWith(
-                                          fontWeight: FontWeight.bold,
-                                        ),
+                                        style: Theme.of(context)
+                                            .textTheme
+                                            .headlineSmall
+                                            ?.copyWith(
+                                              fontWeight: FontWeight.bold,
+                                            ),
                                         textAlign: TextAlign.center,
                                         maxLines: 2,
                                         overflow: TextOverflow.ellipsis,
@@ -302,137 +307,198 @@ class _FullPlayerPageState extends ConsumerState<FullPlayerPage>
                                     ),
                                   ),
 
-                                const SizedBox(height: 8),
+                                  const SizedBox(height: 8),
 
-                                if (currentSong.artist != null ||
-                                    currentSong.album != null)
-                                  Hero(
-                                    tag: 'player-artist',
-                                    child: Material(
-                                      type: MaterialType.transparency,
-                                      child: Text(
-                                        [
-                                          if (currentSong.artist != null)
-                                            currentSong.artist!,
-                                          if (currentSong.album != null)
-                                            currentSong.album!,
-                                        ].join(' · '),
-                                        style: Theme.of(
-                                          context,
-                                        ).textTheme.bodyLarge?.copyWith(
-                                          color:
-                                              Theme.of(
-                                                context,
-                                              ).colorScheme.onSurfaceVariant,
+                                  if (currentSong.artist != null ||
+                                      currentSong.album != null)
+                                    Hero(
+                                      tag: 'player-artist',
+                                      child: Material(
+                                        type: MaterialType.transparency,
+                                        child: Text(
+                                          [
+                                            if (currentSong.artist != null)
+                                              currentSong.artist!,
+                                            if (currentSong.album != null)
+                                              currentSong.album!,
+                                          ].join(' · '),
+                                          style: Theme.of(context)
+                                              .textTheme
+                                              .bodyLarge
+                                              ?.copyWith(
+                                                color: Theme.of(
+                                                  context,
+                                                ).colorScheme.onSurfaceVariant,
+                                              ),
+                                          textAlign: TextAlign.center,
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
                                         ),
-                                        textAlign: TextAlign.center,
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
                                       ),
                                     ),
-                                  ),
 
-                                const SizedBox(height: 32),
-                              ],
+                                  const SizedBox(height: 32),
+                                ],
+                              ),
                             ),
                           ),
+                  ),
+
+                  // 底部固定控制栏
+                  FadeTransition(
+                    opacity: _controlsAnimation,
+                    child: SlideTransition(
+                      position: _controlsAnimation.drive(
+                        Tween<Offset>(
+                          begin: const Offset(0, 0.2),
+                          end: Offset.zero,
                         ),
-                ),
-
-                // 底部固定控制栏
-                FadeTransition(
-                  opacity: _controlsAnimation,
-                  child: SlideTransition(
-                    position: _controlsAnimation.drive(
-                      Tween<Offset>(
-                        begin: const Offset(0, 0.2),
-                        end: Offset.zero,
                       ),
-                    ),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 24,
-                        vertical: 16,
-                      ),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          // 进度条
-                          const ProgressBar(),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 24,
+                          vertical: 16,
+                        ),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            // 进度条
+                            const ProgressBar(),
 
-                          const SizedBox(height: 24),
+                            const SizedBox(height: 24),
 
-                          // 播放控制按钮
-                          const PlaybackControls(),
+                            // 播放控制按钮
+                            const PlaybackControls(),
 
-                          const SizedBox(height: 16),
+                            const SizedBox(height: 16),
 
-                          // 底部操作按钮
-                          FadeTransition(
-                            opacity: _bottomBarAnimation,
-                            child: Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                              children: [
-                                // 收藏按钮
-                                IconButton(
-                                  icon: Icon(
-                                    currentSong.starred
-                                        ? Icons.favorite
-                                        : Icons.favorite_border,
-                                    color:
-                                        currentSong.starred ? Colors.red : null,
+                            // 底部操作按钮
+                            FadeTransition(
+                              opacity: _bottomBarAnimation,
+                              child: Row(
+                                mainAxisAlignment:
+                                    MainAxisAlignment.spaceEvenly,
+                                children: [
+                                  // 收藏按钮
+                                  IconButton(
+                                    icon: Icon(
+                                      currentSong.starred
+                                          ? Icons.favorite
+                                          : Icons.favorite_border,
+                                      color: currentSong.starred
+                                          ? Colors.red
+                                          : null,
+                                    ),
+                                    onPressed: () {
+                                      ref
+                                          .read(playerProvider.notifier)
+                                          .toggleFavorite();
+                                    },
                                   ),
-                                  onPressed: () {
-                                    ref
-                                        .read(playerProvider.notifier)
-                                        .toggleFavorite();
-                                  },
-                                ),
 
-                                // 歌词按钮
-                                IconButton(
-                                  icon: Icon(
-                                    Icons.lyrics,
-                                    color:
-                                        _showLyrics
-                                            ? Theme.of(
+                                  // 歌词按钮
+                                  IconButton(
+                                    icon: Icon(
+                                      Icons.lyrics,
+                                      color: _showLyrics
+                                          ? Theme.of(
                                               context,
                                             ).colorScheme.primary
-                                            : null,
+                                          : null,
+                                    ),
+                                    onPressed: () {
+                                      setState(() {
+                                        _showLyrics = !_showLyrics;
+                                      });
+                                    },
                                   ),
-                                  onPressed: () {
-                                    setState(() {
-                                      _showLyrics = !_showLyrics;
-                                    });
-                                  },
-                                ),
 
-                                // 播放队列按钮
-                                IconButton(
-                                  icon: const Icon(Icons.queue_music),
-                                  onPressed: () {
-                                    showModalBottomSheet(
-                                      context: context,
-                                      builder:
-                                          (context) => const PlayQueueSheet(),
-                                      isScrollControlled: true,
-                                    );
-                                  },
-                                ),
-                              ],
+                                  // 播放队列按钮
+                                  IconButton(
+                                    icon: const Icon(Icons.queue_music),
+                                    onPressed: () {
+                                      showModalBottomSheet(
+                                        context: context,
+                                        builder: (context) =>
+                                            const PlayQueueSheet(),
+                                        isScrollControlled: true,
+                                      );
+                                    },
+                                  ),
+                                ],
+                              ),
                             ),
-                          ),
-                        ],
+
+                            // 音质指示
+                            const SizedBox(height: 4),
+                            _buildQualityIndicator(ref),
+                          ],
+                        ),
                       ),
                     ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
-          ),
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildQualityIndicator(WidgetRef ref) {
+    final playerState = ref.watch(playerProvider);
+    final quality = playerState.currentQuality;
+    final source = playerState.playbackSource;
+    final networkType = ref.watch(currentNetworkTypeProvider).valueOrNull;
+
+    if (quality == null) return const SizedBox.shrink();
+
+    String text;
+    IconData icon;
+    Color? color;
+
+    switch (source) {
+      case PlaybackSource.downloaded:
+        text = '已下载 · ${quality.displayName}';
+        icon = Icons.offline_pin;
+        color = Colors.green;
+        break;
+      case PlaybackSource.cached:
+        text = '已缓存 · ${quality.displayName}';
+        icon = Icons.check_circle_outline;
+        color = Colors.blue;
+        break;
+      case PlaybackSource.stream:
+      default:
+        final netName = switch (networkType) {
+          NetworkType.wifi => 'Wi-Fi',
+          NetworkType.mobile => '移动数据',
+          NetworkType.none => '无网络',
+          null => '未知网络',
+        };
+        text = '$netName · ${quality.displayName}';
+        icon = Icons.cloud_queue;
+        color = null;
+        break;
+    }
+
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        Icon(
+          icon,
+          size: 12,
+          color: color ?? Theme.of(context).textTheme.bodySmall?.color,
+        ),
+        const SizedBox(width: 4),
+        Text(
+          text,
+          style: Theme.of(
+            context,
+          ).textTheme.bodySmall?.copyWith(fontSize: 10, color: color),
+        ),
+      ],
     );
   }
 

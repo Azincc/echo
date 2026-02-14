@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../providers/music_provider.dart';
 import '../../../providers/player_provider.dart';
+import '../../../providers/download_provider.dart';
+import '../../../providers/auth_provider.dart';
 import '../../../widgets/cover_art_image.dart';
 import 'package:marquee/marquee.dart';
 
@@ -248,6 +250,25 @@ class AlbumDetailPage extends ConsumerWidget {
                               color: album.starred ? Colors.red : null,
                             ),
                           ),
+                          // 下载专辑按钮
+                          IconButton(
+                            onPressed: () {
+                              final authState = ref.read(authStateProvider);
+                              final libraryId =
+                                  authState.currentLibrary?.id ?? '';
+                              if (libraryId.isEmpty) return;
+
+                              final service = ref.read(downloadServiceProvider);
+                              service.enqueueBatch(songs, libraryId: libraryId);
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text('已添加 ${songs.length} 首歌曲到下载队列'),
+                                ),
+                              );
+                            },
+                            icon: const Icon(Icons.download_outlined),
+                            tooltip: '下载专辑',
+                          ),
                         ],
                       ),
                     ],
@@ -270,6 +291,9 @@ class AlbumDetailPage extends ConsumerWidget {
                           .read(playerProvider.notifier)
                           .playQueue(songs, startIndex: index);
                     },
+                    onLongPress: () {
+                      _showSongContextMenu(context, ref, song);
+                    },
                   );
                 }, childCount: songs.length),
               ),
@@ -286,6 +310,36 @@ class AlbumDetailPage extends ConsumerWidget {
               Text('加载失败: $error'),
             ],
           ),
+        ),
+      ),
+    );
+  }
+
+  void _showSongContextMenu(BuildContext context, WidgetRef ref, dynamic song) {
+    showModalBottomSheet(
+      context: context,
+      builder: (context) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.download),
+              title: const Text('下载'),
+              onTap: () {
+                Navigator.pop(context);
+                final authState = ref.read(authStateProvider);
+                final libraryId = authState.currentLibrary?.id ?? '';
+                if (libraryId.isEmpty) return;
+
+                ref
+                    .read(downloadServiceProvider)
+                    .enqueue(song, libraryId: libraryId);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('已添加「${song.title}」到下载队列')),
+                );
+              },
+            ),
+          ],
         ),
       ),
     );

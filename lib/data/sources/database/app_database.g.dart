@@ -2450,6 +2450,1528 @@ class LyricsCacheCompanion extends UpdateCompanion<LyricsCacheData> {
   }
 }
 
+class $DownloadTasksTable extends DownloadTasks
+    with TableInfo<$DownloadTasksTable, DownloadTaskData> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $DownloadTasksTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
+    'id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _libraryIdMeta = const VerificationMeta(
+    'libraryId',
+  );
+  @override
+  late final GeneratedColumn<String> libraryId = GeneratedColumn<String>(
+    'library_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _songIdMeta = const VerificationMeta('songId');
+  @override
+  late final GeneratedColumn<String> songId = GeneratedColumn<String>(
+    'song_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _titleMeta = const VerificationMeta('title');
+  @override
+  late final GeneratedColumn<String> title = GeneratedColumn<String>(
+    'title',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _artistMeta = const VerificationMeta('artist');
+  @override
+  late final GeneratedColumn<String> artist = GeneratedColumn<String>(
+    'artist',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _albumMeta = const VerificationMeta('album');
+  @override
+  late final GeneratedColumn<String> album = GeneratedColumn<String>(
+    'album',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _coverArtMeta = const VerificationMeta(
+    'coverArt',
+  );
+  @override
+  late final GeneratedColumn<String> coverArt = GeneratedColumn<String>(
+    'cover_art',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _durationMeta = const VerificationMeta(
+    'duration',
+  );
+  @override
+  late final GeneratedColumn<int> duration = GeneratedColumn<int>(
+    'duration',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _suffixMeta = const VerificationMeta('suffix');
+  @override
+  late final GeneratedColumn<String> suffix = GeneratedColumn<String>(
+    'suffix',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _filePathMeta = const VerificationMeta(
+    'filePath',
+  );
+  @override
+  late final GeneratedColumn<String> filePath = GeneratedColumn<String>(
+    'file_path',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _fileSizeMeta = const VerificationMeta(
+    'fileSize',
+  );
+  @override
+  late final GeneratedColumn<int> fileSize = GeneratedColumn<int>(
+    'file_size',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _statusMeta = const VerificationMeta('status');
+  @override
+  late final GeneratedColumn<String> status = GeneratedColumn<String>(
+    'status',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant('pending'),
+  );
+  static const VerificationMeta _progressMeta = const VerificationMeta(
+    'progress',
+  );
+  @override
+  late final GeneratedColumn<double> progress = GeneratedColumn<double>(
+    'progress',
+    aliasedName,
+    false,
+    type: DriftSqlType.double,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0.0),
+  );
+  static const VerificationMeta _errorMessageMeta = const VerificationMeta(
+    'errorMessage',
+  );
+  @override
+  late final GeneratedColumn<String> errorMessage = GeneratedColumn<String>(
+    'error_message',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _createdAtMeta = const VerificationMeta(
+    'createdAt',
+  );
+  @override
+  late final GeneratedColumn<int> createdAt = GeneratedColumn<int>(
+    'created_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _completedAtMeta = const VerificationMeta(
+    'completedAt',
+  );
+  @override
+  late final GeneratedColumn<int> completedAt = GeneratedColumn<int>(
+    'completed_at',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    libraryId,
+    songId,
+    title,
+    artist,
+    album,
+    coverArt,
+    duration,
+    suffix,
+    filePath,
+    fileSize,
+    status,
+    progress,
+    errorMessage,
+    createdAt,
+    completedAt,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'download_tasks';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<DownloadTaskData> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
+    }
+    if (data.containsKey('library_id')) {
+      context.handle(
+        _libraryIdMeta,
+        libraryId.isAcceptableOrUnknown(data['library_id']!, _libraryIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_libraryIdMeta);
+    }
+    if (data.containsKey('song_id')) {
+      context.handle(
+        _songIdMeta,
+        songId.isAcceptableOrUnknown(data['song_id']!, _songIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_songIdMeta);
+    }
+    if (data.containsKey('title')) {
+      context.handle(
+        _titleMeta,
+        title.isAcceptableOrUnknown(data['title']!, _titleMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_titleMeta);
+    }
+    if (data.containsKey('artist')) {
+      context.handle(
+        _artistMeta,
+        artist.isAcceptableOrUnknown(data['artist']!, _artistMeta),
+      );
+    }
+    if (data.containsKey('album')) {
+      context.handle(
+        _albumMeta,
+        album.isAcceptableOrUnknown(data['album']!, _albumMeta),
+      );
+    }
+    if (data.containsKey('cover_art')) {
+      context.handle(
+        _coverArtMeta,
+        coverArt.isAcceptableOrUnknown(data['cover_art']!, _coverArtMeta),
+      );
+    }
+    if (data.containsKey('duration')) {
+      context.handle(
+        _durationMeta,
+        duration.isAcceptableOrUnknown(data['duration']!, _durationMeta),
+      );
+    }
+    if (data.containsKey('suffix')) {
+      context.handle(
+        _suffixMeta,
+        suffix.isAcceptableOrUnknown(data['suffix']!, _suffixMeta),
+      );
+    }
+    if (data.containsKey('file_path')) {
+      context.handle(
+        _filePathMeta,
+        filePath.isAcceptableOrUnknown(data['file_path']!, _filePathMeta),
+      );
+    }
+    if (data.containsKey('file_size')) {
+      context.handle(
+        _fileSizeMeta,
+        fileSize.isAcceptableOrUnknown(data['file_size']!, _fileSizeMeta),
+      );
+    }
+    if (data.containsKey('status')) {
+      context.handle(
+        _statusMeta,
+        status.isAcceptableOrUnknown(data['status']!, _statusMeta),
+      );
+    }
+    if (data.containsKey('progress')) {
+      context.handle(
+        _progressMeta,
+        progress.isAcceptableOrUnknown(data['progress']!, _progressMeta),
+      );
+    }
+    if (data.containsKey('error_message')) {
+      context.handle(
+        _errorMessageMeta,
+        errorMessage.isAcceptableOrUnknown(
+          data['error_message']!,
+          _errorMessageMeta,
+        ),
+      );
+    }
+    if (data.containsKey('created_at')) {
+      context.handle(
+        _createdAtMeta,
+        createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_createdAtMeta);
+    }
+    if (data.containsKey('completed_at')) {
+      context.handle(
+        _completedAtMeta,
+        completedAt.isAcceptableOrUnknown(
+          data['completed_at']!,
+          _completedAtMeta,
+        ),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  List<Set<GeneratedColumn>> get uniqueKeys => [
+    {libraryId, songId},
+  ];
+  @override
+  DownloadTaskData map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return DownloadTaskData(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}id'],
+      )!,
+      libraryId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}library_id'],
+      )!,
+      songId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}song_id'],
+      )!,
+      title: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}title'],
+      )!,
+      artist: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}artist'],
+      ),
+      album: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}album'],
+      ),
+      coverArt: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}cover_art'],
+      ),
+      duration: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}duration'],
+      ),
+      suffix: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}suffix'],
+      ),
+      filePath: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}file_path'],
+      ),
+      fileSize: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}file_size'],
+      ),
+      status: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}status'],
+      )!,
+      progress: attachedDatabase.typeMapping.read(
+        DriftSqlType.double,
+        data['${effectivePrefix}progress'],
+      )!,
+      errorMessage: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}error_message'],
+      ),
+      createdAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}created_at'],
+      )!,
+      completedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}completed_at'],
+      ),
+    );
+  }
+
+  @override
+  $DownloadTasksTable createAlias(String alias) {
+    return $DownloadTasksTable(attachedDatabase, alias);
+  }
+}
+
+class DownloadTaskData extends DataClass
+    implements Insertable<DownloadTaskData> {
+  final String id;
+  final String libraryId;
+  final String songId;
+  final String title;
+  final String? artist;
+  final String? album;
+  final String? coverArt;
+  final int? duration;
+  final String? suffix;
+  final String? filePath;
+  final int? fileSize;
+  final String status;
+  final double progress;
+  final String? errorMessage;
+  final int createdAt;
+  final int? completedAt;
+  const DownloadTaskData({
+    required this.id,
+    required this.libraryId,
+    required this.songId,
+    required this.title,
+    this.artist,
+    this.album,
+    this.coverArt,
+    this.duration,
+    this.suffix,
+    this.filePath,
+    this.fileSize,
+    required this.status,
+    required this.progress,
+    this.errorMessage,
+    required this.createdAt,
+    this.completedAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<String>(id);
+    map['library_id'] = Variable<String>(libraryId);
+    map['song_id'] = Variable<String>(songId);
+    map['title'] = Variable<String>(title);
+    if (!nullToAbsent || artist != null) {
+      map['artist'] = Variable<String>(artist);
+    }
+    if (!nullToAbsent || album != null) {
+      map['album'] = Variable<String>(album);
+    }
+    if (!nullToAbsent || coverArt != null) {
+      map['cover_art'] = Variable<String>(coverArt);
+    }
+    if (!nullToAbsent || duration != null) {
+      map['duration'] = Variable<int>(duration);
+    }
+    if (!nullToAbsent || suffix != null) {
+      map['suffix'] = Variable<String>(suffix);
+    }
+    if (!nullToAbsent || filePath != null) {
+      map['file_path'] = Variable<String>(filePath);
+    }
+    if (!nullToAbsent || fileSize != null) {
+      map['file_size'] = Variable<int>(fileSize);
+    }
+    map['status'] = Variable<String>(status);
+    map['progress'] = Variable<double>(progress);
+    if (!nullToAbsent || errorMessage != null) {
+      map['error_message'] = Variable<String>(errorMessage);
+    }
+    map['created_at'] = Variable<int>(createdAt);
+    if (!nullToAbsent || completedAt != null) {
+      map['completed_at'] = Variable<int>(completedAt);
+    }
+    return map;
+  }
+
+  DownloadTasksCompanion toCompanion(bool nullToAbsent) {
+    return DownloadTasksCompanion(
+      id: Value(id),
+      libraryId: Value(libraryId),
+      songId: Value(songId),
+      title: Value(title),
+      artist: artist == null && nullToAbsent
+          ? const Value.absent()
+          : Value(artist),
+      album: album == null && nullToAbsent
+          ? const Value.absent()
+          : Value(album),
+      coverArt: coverArt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(coverArt),
+      duration: duration == null && nullToAbsent
+          ? const Value.absent()
+          : Value(duration),
+      suffix: suffix == null && nullToAbsent
+          ? const Value.absent()
+          : Value(suffix),
+      filePath: filePath == null && nullToAbsent
+          ? const Value.absent()
+          : Value(filePath),
+      fileSize: fileSize == null && nullToAbsent
+          ? const Value.absent()
+          : Value(fileSize),
+      status: Value(status),
+      progress: Value(progress),
+      errorMessage: errorMessage == null && nullToAbsent
+          ? const Value.absent()
+          : Value(errorMessage),
+      createdAt: Value(createdAt),
+      completedAt: completedAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(completedAt),
+    );
+  }
+
+  factory DownloadTaskData.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return DownloadTaskData(
+      id: serializer.fromJson<String>(json['id']),
+      libraryId: serializer.fromJson<String>(json['libraryId']),
+      songId: serializer.fromJson<String>(json['songId']),
+      title: serializer.fromJson<String>(json['title']),
+      artist: serializer.fromJson<String?>(json['artist']),
+      album: serializer.fromJson<String?>(json['album']),
+      coverArt: serializer.fromJson<String?>(json['coverArt']),
+      duration: serializer.fromJson<int?>(json['duration']),
+      suffix: serializer.fromJson<String?>(json['suffix']),
+      filePath: serializer.fromJson<String?>(json['filePath']),
+      fileSize: serializer.fromJson<int?>(json['fileSize']),
+      status: serializer.fromJson<String>(json['status']),
+      progress: serializer.fromJson<double>(json['progress']),
+      errorMessage: serializer.fromJson<String?>(json['errorMessage']),
+      createdAt: serializer.fromJson<int>(json['createdAt']),
+      completedAt: serializer.fromJson<int?>(json['completedAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<String>(id),
+      'libraryId': serializer.toJson<String>(libraryId),
+      'songId': serializer.toJson<String>(songId),
+      'title': serializer.toJson<String>(title),
+      'artist': serializer.toJson<String?>(artist),
+      'album': serializer.toJson<String?>(album),
+      'coverArt': serializer.toJson<String?>(coverArt),
+      'duration': serializer.toJson<int?>(duration),
+      'suffix': serializer.toJson<String?>(suffix),
+      'filePath': serializer.toJson<String?>(filePath),
+      'fileSize': serializer.toJson<int?>(fileSize),
+      'status': serializer.toJson<String>(status),
+      'progress': serializer.toJson<double>(progress),
+      'errorMessage': serializer.toJson<String?>(errorMessage),
+      'createdAt': serializer.toJson<int>(createdAt),
+      'completedAt': serializer.toJson<int?>(completedAt),
+    };
+  }
+
+  DownloadTaskData copyWith({
+    String? id,
+    String? libraryId,
+    String? songId,
+    String? title,
+    Value<String?> artist = const Value.absent(),
+    Value<String?> album = const Value.absent(),
+    Value<String?> coverArt = const Value.absent(),
+    Value<int?> duration = const Value.absent(),
+    Value<String?> suffix = const Value.absent(),
+    Value<String?> filePath = const Value.absent(),
+    Value<int?> fileSize = const Value.absent(),
+    String? status,
+    double? progress,
+    Value<String?> errorMessage = const Value.absent(),
+    int? createdAt,
+    Value<int?> completedAt = const Value.absent(),
+  }) => DownloadTaskData(
+    id: id ?? this.id,
+    libraryId: libraryId ?? this.libraryId,
+    songId: songId ?? this.songId,
+    title: title ?? this.title,
+    artist: artist.present ? artist.value : this.artist,
+    album: album.present ? album.value : this.album,
+    coverArt: coverArt.present ? coverArt.value : this.coverArt,
+    duration: duration.present ? duration.value : this.duration,
+    suffix: suffix.present ? suffix.value : this.suffix,
+    filePath: filePath.present ? filePath.value : this.filePath,
+    fileSize: fileSize.present ? fileSize.value : this.fileSize,
+    status: status ?? this.status,
+    progress: progress ?? this.progress,
+    errorMessage: errorMessage.present ? errorMessage.value : this.errorMessage,
+    createdAt: createdAt ?? this.createdAt,
+    completedAt: completedAt.present ? completedAt.value : this.completedAt,
+  );
+  DownloadTaskData copyWithCompanion(DownloadTasksCompanion data) {
+    return DownloadTaskData(
+      id: data.id.present ? data.id.value : this.id,
+      libraryId: data.libraryId.present ? data.libraryId.value : this.libraryId,
+      songId: data.songId.present ? data.songId.value : this.songId,
+      title: data.title.present ? data.title.value : this.title,
+      artist: data.artist.present ? data.artist.value : this.artist,
+      album: data.album.present ? data.album.value : this.album,
+      coverArt: data.coverArt.present ? data.coverArt.value : this.coverArt,
+      duration: data.duration.present ? data.duration.value : this.duration,
+      suffix: data.suffix.present ? data.suffix.value : this.suffix,
+      filePath: data.filePath.present ? data.filePath.value : this.filePath,
+      fileSize: data.fileSize.present ? data.fileSize.value : this.fileSize,
+      status: data.status.present ? data.status.value : this.status,
+      progress: data.progress.present ? data.progress.value : this.progress,
+      errorMessage: data.errorMessage.present
+          ? data.errorMessage.value
+          : this.errorMessage,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+      completedAt: data.completedAt.present
+          ? data.completedAt.value
+          : this.completedAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('DownloadTaskData(')
+          ..write('id: $id, ')
+          ..write('libraryId: $libraryId, ')
+          ..write('songId: $songId, ')
+          ..write('title: $title, ')
+          ..write('artist: $artist, ')
+          ..write('album: $album, ')
+          ..write('coverArt: $coverArt, ')
+          ..write('duration: $duration, ')
+          ..write('suffix: $suffix, ')
+          ..write('filePath: $filePath, ')
+          ..write('fileSize: $fileSize, ')
+          ..write('status: $status, ')
+          ..write('progress: $progress, ')
+          ..write('errorMessage: $errorMessage, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('completedAt: $completedAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    id,
+    libraryId,
+    songId,
+    title,
+    artist,
+    album,
+    coverArt,
+    duration,
+    suffix,
+    filePath,
+    fileSize,
+    status,
+    progress,
+    errorMessage,
+    createdAt,
+    completedAt,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is DownloadTaskData &&
+          other.id == this.id &&
+          other.libraryId == this.libraryId &&
+          other.songId == this.songId &&
+          other.title == this.title &&
+          other.artist == this.artist &&
+          other.album == this.album &&
+          other.coverArt == this.coverArt &&
+          other.duration == this.duration &&
+          other.suffix == this.suffix &&
+          other.filePath == this.filePath &&
+          other.fileSize == this.fileSize &&
+          other.status == this.status &&
+          other.progress == this.progress &&
+          other.errorMessage == this.errorMessage &&
+          other.createdAt == this.createdAt &&
+          other.completedAt == this.completedAt);
+}
+
+class DownloadTasksCompanion extends UpdateCompanion<DownloadTaskData> {
+  final Value<String> id;
+  final Value<String> libraryId;
+  final Value<String> songId;
+  final Value<String> title;
+  final Value<String?> artist;
+  final Value<String?> album;
+  final Value<String?> coverArt;
+  final Value<int?> duration;
+  final Value<String?> suffix;
+  final Value<String?> filePath;
+  final Value<int?> fileSize;
+  final Value<String> status;
+  final Value<double> progress;
+  final Value<String?> errorMessage;
+  final Value<int> createdAt;
+  final Value<int?> completedAt;
+  final Value<int> rowid;
+  const DownloadTasksCompanion({
+    this.id = const Value.absent(),
+    this.libraryId = const Value.absent(),
+    this.songId = const Value.absent(),
+    this.title = const Value.absent(),
+    this.artist = const Value.absent(),
+    this.album = const Value.absent(),
+    this.coverArt = const Value.absent(),
+    this.duration = const Value.absent(),
+    this.suffix = const Value.absent(),
+    this.filePath = const Value.absent(),
+    this.fileSize = const Value.absent(),
+    this.status = const Value.absent(),
+    this.progress = const Value.absent(),
+    this.errorMessage = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.completedAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  DownloadTasksCompanion.insert({
+    required String id,
+    required String libraryId,
+    required String songId,
+    required String title,
+    this.artist = const Value.absent(),
+    this.album = const Value.absent(),
+    this.coverArt = const Value.absent(),
+    this.duration = const Value.absent(),
+    this.suffix = const Value.absent(),
+    this.filePath = const Value.absent(),
+    this.fileSize = const Value.absent(),
+    this.status = const Value.absent(),
+    this.progress = const Value.absent(),
+    this.errorMessage = const Value.absent(),
+    required int createdAt,
+    this.completedAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  }) : id = Value(id),
+       libraryId = Value(libraryId),
+       songId = Value(songId),
+       title = Value(title),
+       createdAt = Value(createdAt);
+  static Insertable<DownloadTaskData> custom({
+    Expression<String>? id,
+    Expression<String>? libraryId,
+    Expression<String>? songId,
+    Expression<String>? title,
+    Expression<String>? artist,
+    Expression<String>? album,
+    Expression<String>? coverArt,
+    Expression<int>? duration,
+    Expression<String>? suffix,
+    Expression<String>? filePath,
+    Expression<int>? fileSize,
+    Expression<String>? status,
+    Expression<double>? progress,
+    Expression<String>? errorMessage,
+    Expression<int>? createdAt,
+    Expression<int>? completedAt,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (libraryId != null) 'library_id': libraryId,
+      if (songId != null) 'song_id': songId,
+      if (title != null) 'title': title,
+      if (artist != null) 'artist': artist,
+      if (album != null) 'album': album,
+      if (coverArt != null) 'cover_art': coverArt,
+      if (duration != null) 'duration': duration,
+      if (suffix != null) 'suffix': suffix,
+      if (filePath != null) 'file_path': filePath,
+      if (fileSize != null) 'file_size': fileSize,
+      if (status != null) 'status': status,
+      if (progress != null) 'progress': progress,
+      if (errorMessage != null) 'error_message': errorMessage,
+      if (createdAt != null) 'created_at': createdAt,
+      if (completedAt != null) 'completed_at': completedAt,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  DownloadTasksCompanion copyWith({
+    Value<String>? id,
+    Value<String>? libraryId,
+    Value<String>? songId,
+    Value<String>? title,
+    Value<String?>? artist,
+    Value<String?>? album,
+    Value<String?>? coverArt,
+    Value<int?>? duration,
+    Value<String?>? suffix,
+    Value<String?>? filePath,
+    Value<int?>? fileSize,
+    Value<String>? status,
+    Value<double>? progress,
+    Value<String?>? errorMessage,
+    Value<int>? createdAt,
+    Value<int?>? completedAt,
+    Value<int>? rowid,
+  }) {
+    return DownloadTasksCompanion(
+      id: id ?? this.id,
+      libraryId: libraryId ?? this.libraryId,
+      songId: songId ?? this.songId,
+      title: title ?? this.title,
+      artist: artist ?? this.artist,
+      album: album ?? this.album,
+      coverArt: coverArt ?? this.coverArt,
+      duration: duration ?? this.duration,
+      suffix: suffix ?? this.suffix,
+      filePath: filePath ?? this.filePath,
+      fileSize: fileSize ?? this.fileSize,
+      status: status ?? this.status,
+      progress: progress ?? this.progress,
+      errorMessage: errorMessage ?? this.errorMessage,
+      createdAt: createdAt ?? this.createdAt,
+      completedAt: completedAt ?? this.completedAt,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<String>(id.value);
+    }
+    if (libraryId.present) {
+      map['library_id'] = Variable<String>(libraryId.value);
+    }
+    if (songId.present) {
+      map['song_id'] = Variable<String>(songId.value);
+    }
+    if (title.present) {
+      map['title'] = Variable<String>(title.value);
+    }
+    if (artist.present) {
+      map['artist'] = Variable<String>(artist.value);
+    }
+    if (album.present) {
+      map['album'] = Variable<String>(album.value);
+    }
+    if (coverArt.present) {
+      map['cover_art'] = Variable<String>(coverArt.value);
+    }
+    if (duration.present) {
+      map['duration'] = Variable<int>(duration.value);
+    }
+    if (suffix.present) {
+      map['suffix'] = Variable<String>(suffix.value);
+    }
+    if (filePath.present) {
+      map['file_path'] = Variable<String>(filePath.value);
+    }
+    if (fileSize.present) {
+      map['file_size'] = Variable<int>(fileSize.value);
+    }
+    if (status.present) {
+      map['status'] = Variable<String>(status.value);
+    }
+    if (progress.present) {
+      map['progress'] = Variable<double>(progress.value);
+    }
+    if (errorMessage.present) {
+      map['error_message'] = Variable<String>(errorMessage.value);
+    }
+    if (createdAt.present) {
+      map['created_at'] = Variable<int>(createdAt.value);
+    }
+    if (completedAt.present) {
+      map['completed_at'] = Variable<int>(completedAt.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('DownloadTasksCompanion(')
+          ..write('id: $id, ')
+          ..write('libraryId: $libraryId, ')
+          ..write('songId: $songId, ')
+          ..write('title: $title, ')
+          ..write('artist: $artist, ')
+          ..write('album: $album, ')
+          ..write('coverArt: $coverArt, ')
+          ..write('duration: $duration, ')
+          ..write('suffix: $suffix, ')
+          ..write('filePath: $filePath, ')
+          ..write('fileSize: $fileSize, ')
+          ..write('status: $status, ')
+          ..write('progress: $progress, ')
+          ..write('errorMessage: $errorMessage, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('completedAt: $completedAt, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $AudioCacheEntriesTable extends AudioCacheEntries
+    with TableInfo<$AudioCacheEntriesTable, AudioCacheEntryData> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $AudioCacheEntriesTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
+    'id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _libraryIdMeta = const VerificationMeta(
+    'libraryId',
+  );
+  @override
+  late final GeneratedColumn<String> libraryId = GeneratedColumn<String>(
+    'library_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _songIdMeta = const VerificationMeta('songId');
+  @override
+  late final GeneratedColumn<String> songId = GeneratedColumn<String>(
+    'song_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _qualityMeta = const VerificationMeta(
+    'quality',
+  );
+  @override
+  late final GeneratedColumn<String> quality = GeneratedColumn<String>(
+    'quality',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _filePathMeta = const VerificationMeta(
+    'filePath',
+  );
+  @override
+  late final GeneratedColumn<String> filePath = GeneratedColumn<String>(
+    'file_path',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _fileSizeMeta = const VerificationMeta(
+    'fileSize',
+  );
+  @override
+  late final GeneratedColumn<int> fileSize = GeneratedColumn<int>(
+    'file_size',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _playCountMeta = const VerificationMeta(
+    'playCount',
+  );
+  @override
+  late final GeneratedColumn<int> playCount = GeneratedColumn<int>(
+    'play_count',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  static const VerificationMeta _lastPlayedAtMeta = const VerificationMeta(
+    'lastPlayedAt',
+  );
+  @override
+  late final GeneratedColumn<int> lastPlayedAt = GeneratedColumn<int>(
+    'last_played_at',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _cachedAtMeta = const VerificationMeta(
+    'cachedAt',
+  );
+  @override
+  late final GeneratedColumn<int> cachedAt = GeneratedColumn<int>(
+    'cached_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _isCompleteMeta = const VerificationMeta(
+    'isComplete',
+  );
+  @override
+  late final GeneratedColumn<bool> isComplete = GeneratedColumn<bool>(
+    'is_complete',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("is_complete" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    libraryId,
+    songId,
+    quality,
+    filePath,
+    fileSize,
+    playCount,
+    lastPlayedAt,
+    cachedAt,
+    isComplete,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'audio_cache_entries';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<AudioCacheEntryData> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
+    }
+    if (data.containsKey('library_id')) {
+      context.handle(
+        _libraryIdMeta,
+        libraryId.isAcceptableOrUnknown(data['library_id']!, _libraryIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_libraryIdMeta);
+    }
+    if (data.containsKey('song_id')) {
+      context.handle(
+        _songIdMeta,
+        songId.isAcceptableOrUnknown(data['song_id']!, _songIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_songIdMeta);
+    }
+    if (data.containsKey('quality')) {
+      context.handle(
+        _qualityMeta,
+        quality.isAcceptableOrUnknown(data['quality']!, _qualityMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_qualityMeta);
+    }
+    if (data.containsKey('file_path')) {
+      context.handle(
+        _filePathMeta,
+        filePath.isAcceptableOrUnknown(data['file_path']!, _filePathMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_filePathMeta);
+    }
+    if (data.containsKey('file_size')) {
+      context.handle(
+        _fileSizeMeta,
+        fileSize.isAcceptableOrUnknown(data['file_size']!, _fileSizeMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_fileSizeMeta);
+    }
+    if (data.containsKey('play_count')) {
+      context.handle(
+        _playCountMeta,
+        playCount.isAcceptableOrUnknown(data['play_count']!, _playCountMeta),
+      );
+    }
+    if (data.containsKey('last_played_at')) {
+      context.handle(
+        _lastPlayedAtMeta,
+        lastPlayedAt.isAcceptableOrUnknown(
+          data['last_played_at']!,
+          _lastPlayedAtMeta,
+        ),
+      );
+    }
+    if (data.containsKey('cached_at')) {
+      context.handle(
+        _cachedAtMeta,
+        cachedAt.isAcceptableOrUnknown(data['cached_at']!, _cachedAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_cachedAtMeta);
+    }
+    if (data.containsKey('is_complete')) {
+      context.handle(
+        _isCompleteMeta,
+        isComplete.isAcceptableOrUnknown(data['is_complete']!, _isCompleteMeta),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  List<Set<GeneratedColumn>> get uniqueKeys => [
+    {libraryId, songId, quality},
+  ];
+  @override
+  AudioCacheEntryData map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return AudioCacheEntryData(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}id'],
+      )!,
+      libraryId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}library_id'],
+      )!,
+      songId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}song_id'],
+      )!,
+      quality: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}quality'],
+      )!,
+      filePath: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}file_path'],
+      )!,
+      fileSize: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}file_size'],
+      )!,
+      playCount: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}play_count'],
+      )!,
+      lastPlayedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}last_played_at'],
+      ),
+      cachedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}cached_at'],
+      )!,
+      isComplete: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}is_complete'],
+      )!,
+    );
+  }
+
+  @override
+  $AudioCacheEntriesTable createAlias(String alias) {
+    return $AudioCacheEntriesTable(attachedDatabase, alias);
+  }
+}
+
+class AudioCacheEntryData extends DataClass
+    implements Insertable<AudioCacheEntryData> {
+  final String id;
+  final String libraryId;
+  final String songId;
+  final String quality;
+  final String filePath;
+  final int fileSize;
+  final int playCount;
+  final int? lastPlayedAt;
+  final int cachedAt;
+  final bool isComplete;
+  const AudioCacheEntryData({
+    required this.id,
+    required this.libraryId,
+    required this.songId,
+    required this.quality,
+    required this.filePath,
+    required this.fileSize,
+    required this.playCount,
+    this.lastPlayedAt,
+    required this.cachedAt,
+    required this.isComplete,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<String>(id);
+    map['library_id'] = Variable<String>(libraryId);
+    map['song_id'] = Variable<String>(songId);
+    map['quality'] = Variable<String>(quality);
+    map['file_path'] = Variable<String>(filePath);
+    map['file_size'] = Variable<int>(fileSize);
+    map['play_count'] = Variable<int>(playCount);
+    if (!nullToAbsent || lastPlayedAt != null) {
+      map['last_played_at'] = Variable<int>(lastPlayedAt);
+    }
+    map['cached_at'] = Variable<int>(cachedAt);
+    map['is_complete'] = Variable<bool>(isComplete);
+    return map;
+  }
+
+  AudioCacheEntriesCompanion toCompanion(bool nullToAbsent) {
+    return AudioCacheEntriesCompanion(
+      id: Value(id),
+      libraryId: Value(libraryId),
+      songId: Value(songId),
+      quality: Value(quality),
+      filePath: Value(filePath),
+      fileSize: Value(fileSize),
+      playCount: Value(playCount),
+      lastPlayedAt: lastPlayedAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(lastPlayedAt),
+      cachedAt: Value(cachedAt),
+      isComplete: Value(isComplete),
+    );
+  }
+
+  factory AudioCacheEntryData.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return AudioCacheEntryData(
+      id: serializer.fromJson<String>(json['id']),
+      libraryId: serializer.fromJson<String>(json['libraryId']),
+      songId: serializer.fromJson<String>(json['songId']),
+      quality: serializer.fromJson<String>(json['quality']),
+      filePath: serializer.fromJson<String>(json['filePath']),
+      fileSize: serializer.fromJson<int>(json['fileSize']),
+      playCount: serializer.fromJson<int>(json['playCount']),
+      lastPlayedAt: serializer.fromJson<int?>(json['lastPlayedAt']),
+      cachedAt: serializer.fromJson<int>(json['cachedAt']),
+      isComplete: serializer.fromJson<bool>(json['isComplete']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<String>(id),
+      'libraryId': serializer.toJson<String>(libraryId),
+      'songId': serializer.toJson<String>(songId),
+      'quality': serializer.toJson<String>(quality),
+      'filePath': serializer.toJson<String>(filePath),
+      'fileSize': serializer.toJson<int>(fileSize),
+      'playCount': serializer.toJson<int>(playCount),
+      'lastPlayedAt': serializer.toJson<int?>(lastPlayedAt),
+      'cachedAt': serializer.toJson<int>(cachedAt),
+      'isComplete': serializer.toJson<bool>(isComplete),
+    };
+  }
+
+  AudioCacheEntryData copyWith({
+    String? id,
+    String? libraryId,
+    String? songId,
+    String? quality,
+    String? filePath,
+    int? fileSize,
+    int? playCount,
+    Value<int?> lastPlayedAt = const Value.absent(),
+    int? cachedAt,
+    bool? isComplete,
+  }) => AudioCacheEntryData(
+    id: id ?? this.id,
+    libraryId: libraryId ?? this.libraryId,
+    songId: songId ?? this.songId,
+    quality: quality ?? this.quality,
+    filePath: filePath ?? this.filePath,
+    fileSize: fileSize ?? this.fileSize,
+    playCount: playCount ?? this.playCount,
+    lastPlayedAt: lastPlayedAt.present ? lastPlayedAt.value : this.lastPlayedAt,
+    cachedAt: cachedAt ?? this.cachedAt,
+    isComplete: isComplete ?? this.isComplete,
+  );
+  AudioCacheEntryData copyWithCompanion(AudioCacheEntriesCompanion data) {
+    return AudioCacheEntryData(
+      id: data.id.present ? data.id.value : this.id,
+      libraryId: data.libraryId.present ? data.libraryId.value : this.libraryId,
+      songId: data.songId.present ? data.songId.value : this.songId,
+      quality: data.quality.present ? data.quality.value : this.quality,
+      filePath: data.filePath.present ? data.filePath.value : this.filePath,
+      fileSize: data.fileSize.present ? data.fileSize.value : this.fileSize,
+      playCount: data.playCount.present ? data.playCount.value : this.playCount,
+      lastPlayedAt: data.lastPlayedAt.present
+          ? data.lastPlayedAt.value
+          : this.lastPlayedAt,
+      cachedAt: data.cachedAt.present ? data.cachedAt.value : this.cachedAt,
+      isComplete: data.isComplete.present
+          ? data.isComplete.value
+          : this.isComplete,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('AudioCacheEntryData(')
+          ..write('id: $id, ')
+          ..write('libraryId: $libraryId, ')
+          ..write('songId: $songId, ')
+          ..write('quality: $quality, ')
+          ..write('filePath: $filePath, ')
+          ..write('fileSize: $fileSize, ')
+          ..write('playCount: $playCount, ')
+          ..write('lastPlayedAt: $lastPlayedAt, ')
+          ..write('cachedAt: $cachedAt, ')
+          ..write('isComplete: $isComplete')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    id,
+    libraryId,
+    songId,
+    quality,
+    filePath,
+    fileSize,
+    playCount,
+    lastPlayedAt,
+    cachedAt,
+    isComplete,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is AudioCacheEntryData &&
+          other.id == this.id &&
+          other.libraryId == this.libraryId &&
+          other.songId == this.songId &&
+          other.quality == this.quality &&
+          other.filePath == this.filePath &&
+          other.fileSize == this.fileSize &&
+          other.playCount == this.playCount &&
+          other.lastPlayedAt == this.lastPlayedAt &&
+          other.cachedAt == this.cachedAt &&
+          other.isComplete == this.isComplete);
+}
+
+class AudioCacheEntriesCompanion extends UpdateCompanion<AudioCacheEntryData> {
+  final Value<String> id;
+  final Value<String> libraryId;
+  final Value<String> songId;
+  final Value<String> quality;
+  final Value<String> filePath;
+  final Value<int> fileSize;
+  final Value<int> playCount;
+  final Value<int?> lastPlayedAt;
+  final Value<int> cachedAt;
+  final Value<bool> isComplete;
+  final Value<int> rowid;
+  const AudioCacheEntriesCompanion({
+    this.id = const Value.absent(),
+    this.libraryId = const Value.absent(),
+    this.songId = const Value.absent(),
+    this.quality = const Value.absent(),
+    this.filePath = const Value.absent(),
+    this.fileSize = const Value.absent(),
+    this.playCount = const Value.absent(),
+    this.lastPlayedAt = const Value.absent(),
+    this.cachedAt = const Value.absent(),
+    this.isComplete = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  AudioCacheEntriesCompanion.insert({
+    required String id,
+    required String libraryId,
+    required String songId,
+    required String quality,
+    required String filePath,
+    required int fileSize,
+    this.playCount = const Value.absent(),
+    this.lastPlayedAt = const Value.absent(),
+    required int cachedAt,
+    this.isComplete = const Value.absent(),
+    this.rowid = const Value.absent(),
+  }) : id = Value(id),
+       libraryId = Value(libraryId),
+       songId = Value(songId),
+       quality = Value(quality),
+       filePath = Value(filePath),
+       fileSize = Value(fileSize),
+       cachedAt = Value(cachedAt);
+  static Insertable<AudioCacheEntryData> custom({
+    Expression<String>? id,
+    Expression<String>? libraryId,
+    Expression<String>? songId,
+    Expression<String>? quality,
+    Expression<String>? filePath,
+    Expression<int>? fileSize,
+    Expression<int>? playCount,
+    Expression<int>? lastPlayedAt,
+    Expression<int>? cachedAt,
+    Expression<bool>? isComplete,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (libraryId != null) 'library_id': libraryId,
+      if (songId != null) 'song_id': songId,
+      if (quality != null) 'quality': quality,
+      if (filePath != null) 'file_path': filePath,
+      if (fileSize != null) 'file_size': fileSize,
+      if (playCount != null) 'play_count': playCount,
+      if (lastPlayedAt != null) 'last_played_at': lastPlayedAt,
+      if (cachedAt != null) 'cached_at': cachedAt,
+      if (isComplete != null) 'is_complete': isComplete,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  AudioCacheEntriesCompanion copyWith({
+    Value<String>? id,
+    Value<String>? libraryId,
+    Value<String>? songId,
+    Value<String>? quality,
+    Value<String>? filePath,
+    Value<int>? fileSize,
+    Value<int>? playCount,
+    Value<int?>? lastPlayedAt,
+    Value<int>? cachedAt,
+    Value<bool>? isComplete,
+    Value<int>? rowid,
+  }) {
+    return AudioCacheEntriesCompanion(
+      id: id ?? this.id,
+      libraryId: libraryId ?? this.libraryId,
+      songId: songId ?? this.songId,
+      quality: quality ?? this.quality,
+      filePath: filePath ?? this.filePath,
+      fileSize: fileSize ?? this.fileSize,
+      playCount: playCount ?? this.playCount,
+      lastPlayedAt: lastPlayedAt ?? this.lastPlayedAt,
+      cachedAt: cachedAt ?? this.cachedAt,
+      isComplete: isComplete ?? this.isComplete,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<String>(id.value);
+    }
+    if (libraryId.present) {
+      map['library_id'] = Variable<String>(libraryId.value);
+    }
+    if (songId.present) {
+      map['song_id'] = Variable<String>(songId.value);
+    }
+    if (quality.present) {
+      map['quality'] = Variable<String>(quality.value);
+    }
+    if (filePath.present) {
+      map['file_path'] = Variable<String>(filePath.value);
+    }
+    if (fileSize.present) {
+      map['file_size'] = Variable<int>(fileSize.value);
+    }
+    if (playCount.present) {
+      map['play_count'] = Variable<int>(playCount.value);
+    }
+    if (lastPlayedAt.present) {
+      map['last_played_at'] = Variable<int>(lastPlayedAt.value);
+    }
+    if (cachedAt.present) {
+      map['cached_at'] = Variable<int>(cachedAt.value);
+    }
+    if (isComplete.present) {
+      map['is_complete'] = Variable<bool>(isComplete.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('AudioCacheEntriesCompanion(')
+          ..write('id: $id, ')
+          ..write('libraryId: $libraryId, ')
+          ..write('songId: $songId, ')
+          ..write('quality: $quality, ')
+          ..write('filePath: $filePath, ')
+          ..write('fileSize: $fileSize, ')
+          ..write('playCount: $playCount, ')
+          ..write('lastPlayedAt: $lastPlayedAt, ')
+          ..write('cachedAt: $cachedAt, ')
+          ..write('isComplete: $isComplete, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$AppDatabase extends GeneratedDatabase {
   _$AppDatabase(QueryExecutor e) : super(e);
   $AppDatabaseManager get managers => $AppDatabaseManager(this);
@@ -2462,6 +3984,9 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   late final $CoverProviderConfigsTable coverProviderConfigs =
       $CoverProviderConfigsTable(this);
   late final $LyricsCacheTable lyricsCache = $LyricsCacheTable(this);
+  late final $DownloadTasksTable downloadTasks = $DownloadTasksTable(this);
+  late final $AudioCacheEntriesTable audioCacheEntries =
+      $AudioCacheEntriesTable(this);
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
@@ -2472,6 +3997,8 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     lyricsProviderConfigs,
     coverProviderConfigs,
     lyricsCache,
+    downloadTasks,
+    audioCacheEntries,
   ];
   @override
   StreamQueryUpdateRules get streamUpdateRules => const StreamQueryUpdateRules([
@@ -4017,6 +5544,735 @@ typedef $$LyricsCacheTableProcessedTableManager =
       LyricsCacheData,
       PrefetchHooks Function()
     >;
+typedef $$DownloadTasksTableCreateCompanionBuilder =
+    DownloadTasksCompanion Function({
+      required String id,
+      required String libraryId,
+      required String songId,
+      required String title,
+      Value<String?> artist,
+      Value<String?> album,
+      Value<String?> coverArt,
+      Value<int?> duration,
+      Value<String?> suffix,
+      Value<String?> filePath,
+      Value<int?> fileSize,
+      Value<String> status,
+      Value<double> progress,
+      Value<String?> errorMessage,
+      required int createdAt,
+      Value<int?> completedAt,
+      Value<int> rowid,
+    });
+typedef $$DownloadTasksTableUpdateCompanionBuilder =
+    DownloadTasksCompanion Function({
+      Value<String> id,
+      Value<String> libraryId,
+      Value<String> songId,
+      Value<String> title,
+      Value<String?> artist,
+      Value<String?> album,
+      Value<String?> coverArt,
+      Value<int?> duration,
+      Value<String?> suffix,
+      Value<String?> filePath,
+      Value<int?> fileSize,
+      Value<String> status,
+      Value<double> progress,
+      Value<String?> errorMessage,
+      Value<int> createdAt,
+      Value<int?> completedAt,
+      Value<int> rowid,
+    });
+
+class $$DownloadTasksTableFilterComposer
+    extends Composer<_$AppDatabase, $DownloadTasksTable> {
+  $$DownloadTasksTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get libraryId => $composableBuilder(
+    column: $table.libraryId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get songId => $composableBuilder(
+    column: $table.songId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get title => $composableBuilder(
+    column: $table.title,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get artist => $composableBuilder(
+    column: $table.artist,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get album => $composableBuilder(
+    column: $table.album,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get coverArt => $composableBuilder(
+    column: $table.coverArt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get duration => $composableBuilder(
+    column: $table.duration,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get suffix => $composableBuilder(
+    column: $table.suffix,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get filePath => $composableBuilder(
+    column: $table.filePath,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get fileSize => $composableBuilder(
+    column: $table.fileSize,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get status => $composableBuilder(
+    column: $table.status,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<double> get progress => $composableBuilder(
+    column: $table.progress,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get errorMessage => $composableBuilder(
+    column: $table.errorMessage,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get completedAt => $composableBuilder(
+    column: $table.completedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$DownloadTasksTableOrderingComposer
+    extends Composer<_$AppDatabase, $DownloadTasksTable> {
+  $$DownloadTasksTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get libraryId => $composableBuilder(
+    column: $table.libraryId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get songId => $composableBuilder(
+    column: $table.songId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get title => $composableBuilder(
+    column: $table.title,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get artist => $composableBuilder(
+    column: $table.artist,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get album => $composableBuilder(
+    column: $table.album,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get coverArt => $composableBuilder(
+    column: $table.coverArt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get duration => $composableBuilder(
+    column: $table.duration,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get suffix => $composableBuilder(
+    column: $table.suffix,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get filePath => $composableBuilder(
+    column: $table.filePath,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get fileSize => $composableBuilder(
+    column: $table.fileSize,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get status => $composableBuilder(
+    column: $table.status,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<double> get progress => $composableBuilder(
+    column: $table.progress,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get errorMessage => $composableBuilder(
+    column: $table.errorMessage,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get completedAt => $composableBuilder(
+    column: $table.completedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$DownloadTasksTableAnnotationComposer
+    extends Composer<_$AppDatabase, $DownloadTasksTable> {
+  $$DownloadTasksTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get libraryId =>
+      $composableBuilder(column: $table.libraryId, builder: (column) => column);
+
+  GeneratedColumn<String> get songId =>
+      $composableBuilder(column: $table.songId, builder: (column) => column);
+
+  GeneratedColumn<String> get title =>
+      $composableBuilder(column: $table.title, builder: (column) => column);
+
+  GeneratedColumn<String> get artist =>
+      $composableBuilder(column: $table.artist, builder: (column) => column);
+
+  GeneratedColumn<String> get album =>
+      $composableBuilder(column: $table.album, builder: (column) => column);
+
+  GeneratedColumn<String> get coverArt =>
+      $composableBuilder(column: $table.coverArt, builder: (column) => column);
+
+  GeneratedColumn<int> get duration =>
+      $composableBuilder(column: $table.duration, builder: (column) => column);
+
+  GeneratedColumn<String> get suffix =>
+      $composableBuilder(column: $table.suffix, builder: (column) => column);
+
+  GeneratedColumn<String> get filePath =>
+      $composableBuilder(column: $table.filePath, builder: (column) => column);
+
+  GeneratedColumn<int> get fileSize =>
+      $composableBuilder(column: $table.fileSize, builder: (column) => column);
+
+  GeneratedColumn<String> get status =>
+      $composableBuilder(column: $table.status, builder: (column) => column);
+
+  GeneratedColumn<double> get progress =>
+      $composableBuilder(column: $table.progress, builder: (column) => column);
+
+  GeneratedColumn<String> get errorMessage => $composableBuilder(
+    column: $table.errorMessage,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+
+  GeneratedColumn<int> get completedAt => $composableBuilder(
+    column: $table.completedAt,
+    builder: (column) => column,
+  );
+}
+
+class $$DownloadTasksTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $DownloadTasksTable,
+          DownloadTaskData,
+          $$DownloadTasksTableFilterComposer,
+          $$DownloadTasksTableOrderingComposer,
+          $$DownloadTasksTableAnnotationComposer,
+          $$DownloadTasksTableCreateCompanionBuilder,
+          $$DownloadTasksTableUpdateCompanionBuilder,
+          (
+            DownloadTaskData,
+            BaseReferences<
+              _$AppDatabase,
+              $DownloadTasksTable,
+              DownloadTaskData
+            >,
+          ),
+          DownloadTaskData,
+          PrefetchHooks Function()
+        > {
+  $$DownloadTasksTableTableManager(_$AppDatabase db, $DownloadTasksTable table)
+    : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$DownloadTasksTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$DownloadTasksTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$DownloadTasksTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<String> id = const Value.absent(),
+                Value<String> libraryId = const Value.absent(),
+                Value<String> songId = const Value.absent(),
+                Value<String> title = const Value.absent(),
+                Value<String?> artist = const Value.absent(),
+                Value<String?> album = const Value.absent(),
+                Value<String?> coverArt = const Value.absent(),
+                Value<int?> duration = const Value.absent(),
+                Value<String?> suffix = const Value.absent(),
+                Value<String?> filePath = const Value.absent(),
+                Value<int?> fileSize = const Value.absent(),
+                Value<String> status = const Value.absent(),
+                Value<double> progress = const Value.absent(),
+                Value<String?> errorMessage = const Value.absent(),
+                Value<int> createdAt = const Value.absent(),
+                Value<int?> completedAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => DownloadTasksCompanion(
+                id: id,
+                libraryId: libraryId,
+                songId: songId,
+                title: title,
+                artist: artist,
+                album: album,
+                coverArt: coverArt,
+                duration: duration,
+                suffix: suffix,
+                filePath: filePath,
+                fileSize: fileSize,
+                status: status,
+                progress: progress,
+                errorMessage: errorMessage,
+                createdAt: createdAt,
+                completedAt: completedAt,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String id,
+                required String libraryId,
+                required String songId,
+                required String title,
+                Value<String?> artist = const Value.absent(),
+                Value<String?> album = const Value.absent(),
+                Value<String?> coverArt = const Value.absent(),
+                Value<int?> duration = const Value.absent(),
+                Value<String?> suffix = const Value.absent(),
+                Value<String?> filePath = const Value.absent(),
+                Value<int?> fileSize = const Value.absent(),
+                Value<String> status = const Value.absent(),
+                Value<double> progress = const Value.absent(),
+                Value<String?> errorMessage = const Value.absent(),
+                required int createdAt,
+                Value<int?> completedAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => DownloadTasksCompanion.insert(
+                id: id,
+                libraryId: libraryId,
+                songId: songId,
+                title: title,
+                artist: artist,
+                album: album,
+                coverArt: coverArt,
+                duration: duration,
+                suffix: suffix,
+                filePath: filePath,
+                fileSize: fileSize,
+                status: status,
+                progress: progress,
+                errorMessage: errorMessage,
+                createdAt: createdAt,
+                completedAt: completedAt,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$DownloadTasksTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $DownloadTasksTable,
+      DownloadTaskData,
+      $$DownloadTasksTableFilterComposer,
+      $$DownloadTasksTableOrderingComposer,
+      $$DownloadTasksTableAnnotationComposer,
+      $$DownloadTasksTableCreateCompanionBuilder,
+      $$DownloadTasksTableUpdateCompanionBuilder,
+      (
+        DownloadTaskData,
+        BaseReferences<_$AppDatabase, $DownloadTasksTable, DownloadTaskData>,
+      ),
+      DownloadTaskData,
+      PrefetchHooks Function()
+    >;
+typedef $$AudioCacheEntriesTableCreateCompanionBuilder =
+    AudioCacheEntriesCompanion Function({
+      required String id,
+      required String libraryId,
+      required String songId,
+      required String quality,
+      required String filePath,
+      required int fileSize,
+      Value<int> playCount,
+      Value<int?> lastPlayedAt,
+      required int cachedAt,
+      Value<bool> isComplete,
+      Value<int> rowid,
+    });
+typedef $$AudioCacheEntriesTableUpdateCompanionBuilder =
+    AudioCacheEntriesCompanion Function({
+      Value<String> id,
+      Value<String> libraryId,
+      Value<String> songId,
+      Value<String> quality,
+      Value<String> filePath,
+      Value<int> fileSize,
+      Value<int> playCount,
+      Value<int?> lastPlayedAt,
+      Value<int> cachedAt,
+      Value<bool> isComplete,
+      Value<int> rowid,
+    });
+
+class $$AudioCacheEntriesTableFilterComposer
+    extends Composer<_$AppDatabase, $AudioCacheEntriesTable> {
+  $$AudioCacheEntriesTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get libraryId => $composableBuilder(
+    column: $table.libraryId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get songId => $composableBuilder(
+    column: $table.songId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get quality => $composableBuilder(
+    column: $table.quality,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get filePath => $composableBuilder(
+    column: $table.filePath,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get fileSize => $composableBuilder(
+    column: $table.fileSize,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get playCount => $composableBuilder(
+    column: $table.playCount,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get lastPlayedAt => $composableBuilder(
+    column: $table.lastPlayedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get cachedAt => $composableBuilder(
+    column: $table.cachedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get isComplete => $composableBuilder(
+    column: $table.isComplete,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$AudioCacheEntriesTableOrderingComposer
+    extends Composer<_$AppDatabase, $AudioCacheEntriesTable> {
+  $$AudioCacheEntriesTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get libraryId => $composableBuilder(
+    column: $table.libraryId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get songId => $composableBuilder(
+    column: $table.songId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get quality => $composableBuilder(
+    column: $table.quality,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get filePath => $composableBuilder(
+    column: $table.filePath,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get fileSize => $composableBuilder(
+    column: $table.fileSize,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get playCount => $composableBuilder(
+    column: $table.playCount,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get lastPlayedAt => $composableBuilder(
+    column: $table.lastPlayedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get cachedAt => $composableBuilder(
+    column: $table.cachedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get isComplete => $composableBuilder(
+    column: $table.isComplete,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$AudioCacheEntriesTableAnnotationComposer
+    extends Composer<_$AppDatabase, $AudioCacheEntriesTable> {
+  $$AudioCacheEntriesTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get libraryId =>
+      $composableBuilder(column: $table.libraryId, builder: (column) => column);
+
+  GeneratedColumn<String> get songId =>
+      $composableBuilder(column: $table.songId, builder: (column) => column);
+
+  GeneratedColumn<String> get quality =>
+      $composableBuilder(column: $table.quality, builder: (column) => column);
+
+  GeneratedColumn<String> get filePath =>
+      $composableBuilder(column: $table.filePath, builder: (column) => column);
+
+  GeneratedColumn<int> get fileSize =>
+      $composableBuilder(column: $table.fileSize, builder: (column) => column);
+
+  GeneratedColumn<int> get playCount =>
+      $composableBuilder(column: $table.playCount, builder: (column) => column);
+
+  GeneratedColumn<int> get lastPlayedAt => $composableBuilder(
+    column: $table.lastPlayedAt,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get cachedAt =>
+      $composableBuilder(column: $table.cachedAt, builder: (column) => column);
+
+  GeneratedColumn<bool> get isComplete => $composableBuilder(
+    column: $table.isComplete,
+    builder: (column) => column,
+  );
+}
+
+class $$AudioCacheEntriesTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $AudioCacheEntriesTable,
+          AudioCacheEntryData,
+          $$AudioCacheEntriesTableFilterComposer,
+          $$AudioCacheEntriesTableOrderingComposer,
+          $$AudioCacheEntriesTableAnnotationComposer,
+          $$AudioCacheEntriesTableCreateCompanionBuilder,
+          $$AudioCacheEntriesTableUpdateCompanionBuilder,
+          (
+            AudioCacheEntryData,
+            BaseReferences<
+              _$AppDatabase,
+              $AudioCacheEntriesTable,
+              AudioCacheEntryData
+            >,
+          ),
+          AudioCacheEntryData,
+          PrefetchHooks Function()
+        > {
+  $$AudioCacheEntriesTableTableManager(
+    _$AppDatabase db,
+    $AudioCacheEntriesTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$AudioCacheEntriesTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$AudioCacheEntriesTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$AudioCacheEntriesTableAnnotationComposer(
+                $db: db,
+                $table: table,
+              ),
+          updateCompanionCallback:
+              ({
+                Value<String> id = const Value.absent(),
+                Value<String> libraryId = const Value.absent(),
+                Value<String> songId = const Value.absent(),
+                Value<String> quality = const Value.absent(),
+                Value<String> filePath = const Value.absent(),
+                Value<int> fileSize = const Value.absent(),
+                Value<int> playCount = const Value.absent(),
+                Value<int?> lastPlayedAt = const Value.absent(),
+                Value<int> cachedAt = const Value.absent(),
+                Value<bool> isComplete = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => AudioCacheEntriesCompanion(
+                id: id,
+                libraryId: libraryId,
+                songId: songId,
+                quality: quality,
+                filePath: filePath,
+                fileSize: fileSize,
+                playCount: playCount,
+                lastPlayedAt: lastPlayedAt,
+                cachedAt: cachedAt,
+                isComplete: isComplete,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String id,
+                required String libraryId,
+                required String songId,
+                required String quality,
+                required String filePath,
+                required int fileSize,
+                Value<int> playCount = const Value.absent(),
+                Value<int?> lastPlayedAt = const Value.absent(),
+                required int cachedAt,
+                Value<bool> isComplete = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => AudioCacheEntriesCompanion.insert(
+                id: id,
+                libraryId: libraryId,
+                songId: songId,
+                quality: quality,
+                filePath: filePath,
+                fileSize: fileSize,
+                playCount: playCount,
+                lastPlayedAt: lastPlayedAt,
+                cachedAt: cachedAt,
+                isComplete: isComplete,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$AudioCacheEntriesTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $AudioCacheEntriesTable,
+      AudioCacheEntryData,
+      $$AudioCacheEntriesTableFilterComposer,
+      $$AudioCacheEntriesTableOrderingComposer,
+      $$AudioCacheEntriesTableAnnotationComposer,
+      $$AudioCacheEntriesTableCreateCompanionBuilder,
+      $$AudioCacheEntriesTableUpdateCompanionBuilder,
+      (
+        AudioCacheEntryData,
+        BaseReferences<
+          _$AppDatabase,
+          $AudioCacheEntriesTable,
+          AudioCacheEntryData
+        >,
+      ),
+      AudioCacheEntryData,
+      PrefetchHooks Function()
+    >;
 
 class $AppDatabaseManager {
   final _$AppDatabase _db;
@@ -4031,4 +6287,8 @@ class $AppDatabaseManager {
       $$CoverProviderConfigsTableTableManager(_db, _db.coverProviderConfigs);
   $$LyricsCacheTableTableManager get lyricsCache =>
       $$LyricsCacheTableTableManager(_db, _db.lyricsCache);
+  $$DownloadTasksTableTableManager get downloadTasks =>
+      $$DownloadTasksTableTableManager(_db, _db.downloadTasks);
+  $$AudioCacheEntriesTableTableManager get audioCacheEntries =>
+      $$AudioCacheEntriesTableTableManager(_db, _db.audioCacheEntries);
 }

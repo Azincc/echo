@@ -1,9 +1,10 @@
-import 'dart:io' show Platform;
+import 'dart:io' show File, Platform;
 import 'package:audio_service/audio_service.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:just_audio/just_audio.dart';
 import '../data/models/song.dart';
+import '../data/models/audio_quality.dart';
 import '../data/sources/subsonic_api_client.dart';
 import '../data/repositories/music_repository.dart';
 import '../core/constants/api_constants.dart';
@@ -12,6 +13,17 @@ import '../core/services/audio_handler_service.dart';
 
 import 'music_provider.dart';
 import 'api_provider.dart';
+import 'audio_quality_provider.dart';
+import 'download_provider.dart';
+import 'audio_cache_provider.dart';
+import '../providers/auth_provider.dart';
+
+/// 播放来源
+enum PlaybackSource {
+  downloaded, // 已下载的本地文件
+  cached, // 缓存的本地文件
+  stream, // 在线流式播放
+}
 
 /// 播放器状态
 class PlayerState {
@@ -23,6 +35,8 @@ class PlayerState {
   final Duration duration;
   final LoopMode loopMode;
   final bool shuffleEnabled;
+  final AudioQualityLevel? currentQuality;
+  final PlaybackSource? playbackSource;
 
   PlayerState({
     this.currentSong,
@@ -33,6 +47,8 @@ class PlayerState {
     this.duration = Duration.zero,
     this.loopMode = LoopMode.off,
     this.shuffleEnabled = false,
+    this.currentQuality,
+    this.playbackSource,
   });
 
   PlayerState copyWith({
@@ -44,6 +60,8 @@ class PlayerState {
     Duration? duration,
     LoopMode? loopMode,
     bool? shuffleEnabled,
+    AudioQualityLevel? currentQuality,
+    PlaybackSource? playbackSource,
   }) {
     return PlayerState(
       currentSong: currentSong ?? this.currentSong,
@@ -54,6 +72,8 @@ class PlayerState {
       duration: duration ?? this.duration,
       loopMode: loopMode ?? this.loopMode,
       shuffleEnabled: shuffleEnabled ?? this.shuffleEnabled,
+      currentQuality: currentQuality ?? this.currentQuality,
+      playbackSource: playbackSource ?? this.playbackSource,
     );
   }
 
@@ -173,12 +193,71 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
       // 更新通知栏媒体信息
       _updateMediaItem(song);
 
-      // 优先使用原始格式流式播放，只对确定不支持的格式转码
+      // 获取当前音质设置
+      final effectiveQuality = _ref.read(effectiveQualityProvider);
+      final downloadService = _ref.read(downloadServiceProvider);
+      final cacheService = _ref.read(audioCacheServiceProvider);
+
+      // 获取当前活跃的音乐库 ID
+      final authState = _ref.read(authStateProvider);
+      final libraryId = authState.currentLibrary?.id ?? '';
+
+      // ---- 三级优先音源 ----
+
+      // 1. 检查是否已下载
+      final downloadedPath = await downloadService.getDownloadedPath(
+        song.id,
+        libraryId,
+      );
+      if (downloadedPath != null && File(downloadedPath).existsSync()) {
+        Logger.info('Playing from download: ${song.title}');
+        await _audioPlayer?.setFilePath(downloadedPath);
+        await _audioPlayer?.play();
+        state = state.copyWith(
+          currentQuality: AudioQualityLevel.original,
+          playbackSource: PlaybackSource.downloaded,
+        );
+        await _scrobble(song.id, submission: false);
+        _preCacheNextSong();
+        return;
+      }
+
+      // 2. 检查是否已缓存
+      final cachedPath = await cacheService.getCachedPath(
+        songId: song.id,
+        libraryId: libraryId,
+        quality: effectiveQuality,
+      );
+      if (cachedPath != null && File(cachedPath).existsSync()) {
+        Logger.info('Playing from cache: ${song.title}');
+        await _audioPlayer?.setFilePath(cachedPath);
+        await _audioPlayer?.play();
+        state = state.copyWith(
+          currentQuality: effectiveQuality,
+          playbackSource: PlaybackSource.cached,
+        );
+        await _scrobble(song.id, submission: false);
+        _preCacheNextSong();
+        return;
+      }
+
+      // 3. 流式播放（边播边缓存）
       final String? transcodeFormat = _needsTranscoding(song.suffix);
+      final int? maxBitRate;
+      if (transcodeFormat != null) {
+        // 需要转码时，使用音质设置的 maxBitRate
+        maxBitRate = effectiveQuality.maxBitRate ?? 320;
+      } else if (effectiveQuality == AudioQualityLevel.original) {
+        // 原始无损 — 不传 maxBitRate
+        maxBitRate = null;
+      } else {
+        maxBitRate = effectiveQuality.maxBitRate;
+      }
+
       final streamUrl = _apiClient.getStreamUrl(
         song.id,
         format: transcodeFormat,
-        maxBitRate: transcodeFormat != null ? 320 : null, // 转码时限制最大比特率
+        maxBitRate: maxBitRate,
       );
 
       if (transcodeFormat != null) {
@@ -186,16 +265,67 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
           'Transcoding ${song.suffix} to $transcodeFormat for: ${song.title}',
         );
       } else {
-        Logger.info('Playing original format (${song.suffix}): ${song.title}');
+        Logger.info(
+          'Playing original format (${song.suffix}): ${song.title} '
+          '[quality=${effectiveQuality.name}]',
+        );
       }
 
-      await _audioPlayer?.setUrl(streamUrl);
-      await _audioPlayer?.play();
+      // 使用 LockCachingAudioSource 边播边缓存
+      if (!kIsWeb && libraryId.isNotEmpty) {
+        try {
+          final cacheFilePath = await cacheService.getCacheFilePath(
+            songId: song.id,
+            libraryId: libraryId,
+            quality: effectiveQuality,
+          );
+          final cacheFile = File(cacheFilePath);
+          final audioSource = LockCachingAudioSource(
+            Uri.parse(streamUrl),
+            cacheFile: cacheFile,
+          );
+          await _audioPlayer?.setAudioSource(audioSource);
+          await _audioPlayer?.play();
+
+          state = state.copyWith(
+            currentQuality: effectiveQuality,
+            playbackSource: PlaybackSource.stream,
+          );
+
+          // 后台注册缓存（等缓存完成后调用）
+          _registerCacheWhenComplete(
+            cacheFile: cacheFile,
+            songId: song.id,
+            libraryId: libraryId,
+            quality: effectiveQuality,
+          );
+        } catch (e) {
+          // Fallback: 直接流式播放不缓存
+          Logger.warn('LockCachingAudioSource failed, falling back to URL', e);
+          await _audioPlayer?.setUrl(streamUrl);
+          await _audioPlayer?.play();
+          state = state.copyWith(
+            currentQuality: effectiveQuality,
+            playbackSource: PlaybackSource.stream,
+          );
+        }
+      } else {
+        // Web 平台或无 libraryId — 直接流式播放
+        await _audioPlayer?.setUrl(streamUrl);
+        await _audioPlayer?.play();
+        state = state.copyWith(
+          currentQuality: effectiveQuality,
+          playbackSource: PlaybackSource.stream,
+        );
+      }
 
       // 上报"正在播放"
       await _scrobble(song.id, submission: false);
 
       Logger.info('Playing: ${song.title}');
+
+      // 预缓存下一首
+      _preCacheNextSong();
     } catch (e) {
       Logger.error('Failed to play song', e);
 
@@ -504,6 +634,92 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
       Logger.info('Toggled favorite for ${currentSong.title}: $newStarred');
     } catch (e) {
       Logger.error('Failed to toggle favorite', e);
+    }
+  }
+
+  /// 缓存完成后注册缓存元数据
+  Future<void> _registerCacheWhenComplete({
+    required File cacheFile,
+    required String songId,
+    required String libraryId,
+    required AudioQualityLevel quality,
+  }) async {
+    // 延迟检查缓存文件是否完整（播放完成后）
+    // 使用 playerState 完成事件来触发
+    _audioPlayer?.playerStateStream
+        .firstWhere((s) => s.processingState == ProcessingState.completed)
+        .then((_) async {
+          try {
+            if (await cacheFile.exists()) {
+              final fileSize = await cacheFile.length();
+              if (fileSize > 0) {
+                final cacheService = _ref.read(audioCacheServiceProvider);
+                await cacheService.registerCache(
+                  songId: songId,
+                  libraryId: libraryId,
+                  filePath: cacheFile.path,
+                  fileSize: fileSize,
+                  quality: quality,
+                );
+                Logger.info('Cache registered for: $songId');
+              }
+            }
+          } catch (e) {
+            Logger.warn('Failed to register cache', e);
+          }
+        })
+        .ignore();
+  }
+
+  /// 预缓存队列中下一首歌
+  void _preCacheNextSong() async {
+    if (!state.hasNext) return;
+    if (kIsWeb) return; // Web 平台不预缓存
+
+    final nextSong = state.queue[state.currentIndex + 1];
+    final authState = _ref.read(authStateProvider);
+    final libraryId = authState.currentLibrary?.id ?? '';
+    if (libraryId.isEmpty) return;
+
+    final downloadService = _ref.read(downloadServiceProvider);
+    final cacheService = _ref.read(audioCacheServiceProvider);
+    final effectiveQuality = _ref.read(effectiveQualityProvider);
+
+    // 已下载则不需要预缓存
+    final downloaded = await downloadService.isDownloaded(
+      nextSong.id,
+      libraryId,
+    );
+    if (downloaded) return;
+
+    // 已缓存则不需要预缓存
+    final cached = await cacheService.getCachedPath(
+      songId: nextSong.id,
+      libraryId: libraryId,
+      quality: effectiveQuality,
+    );
+    if (cached != null) return;
+
+    // 预缓存：构建 LockCachingAudioSource 但不播放
+    try {
+      final streamUrl = _apiClient.getStreamUrl(
+        nextSong.id,
+        format: _needsTranscoding(nextSong.suffix),
+        maxBitRate: effectiveQuality.maxBitRate,
+      );
+      final cacheFilePath = await cacheService.getCacheFilePath(
+        songId: nextSong.id,
+        libraryId: libraryId,
+        quality: effectiveQuality,
+      );
+      // 创建 LockCachingAudioSource 会自动开始下载缓存
+      LockCachingAudioSource(
+        Uri.parse(streamUrl),
+        cacheFile: File(cacheFilePath),
+      );
+      Logger.info('Pre-caching next song: ${nextSong.title}');
+    } catch (e) {
+      Logger.warn('Pre-cache failed for next song', e);
     }
   }
 

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import '../features/player/widgets/mini_player.dart';
 import 'app_drawer.dart';
@@ -19,33 +20,38 @@ class MainScaffold extends StatefulWidget {
 class _MainScaffoldState extends State<MainScaffold> {
   DateTime? _lastPressedAt;
 
+  Future<void> _handleBackPressed() async {
+    // 如果当前不是在第一个 Tab (首页)，则跳转到首页
+    if (widget.navigationShell.currentIndex != 0) {
+      widget.navigationShell.goBranch(0, initialLocation: true);
+      return;
+    }
+
+    // 如果在首页，检测两次点击间隔
+    final now = DateTime.now();
+    if (_lastPressedAt == null ||
+        now.difference(_lastPressedAt!) > const Duration(seconds: 2)) {
+      _lastPressedAt = now;
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('再按一次退出应用'),
+          duration: Duration(seconds: 2),
+        ),
+      );
+      return;
+    }
+
+    await SystemNavigator.pop();
+  }
+
   @override
   Widget build(BuildContext context) {
-    return WillPopScope(
-      onWillPop: () async {
-        // 如果当前不是在第一个 Tab (首页)，则跳转到首页
-        if (widget.navigationShell.currentIndex != 0) {
-          widget.navigationShell.goBranch(
-            0,
-            initialLocation: true,
-          );
-          return false;
-        }
-
-        // 如果在首页，检测两次点击间隔
-        final now = DateTime.now();
-        if (_lastPressedAt == null ||
-            now.difference(_lastPressedAt!) > const Duration(seconds: 2)) {
-          _lastPressedAt = now;
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('再按一次退出应用'),
-              duration: Duration(seconds: 2),
-            ),
-          );
-          return false;
-        }
-        return true;
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop) return;
+        _handleBackPressed();
       },
       child: Scaffold(
         key: scaffoldKey,

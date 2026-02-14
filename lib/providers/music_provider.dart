@@ -107,7 +107,8 @@ final searchProvider = FutureProvider.autoDispose.family<SearchResult, String>((
 /// 收藏列表 Provider
 final starredProvider = FutureProvider.autoDispose<StarredResult>((ref) async {
   final repository = ref.watch(musicRepositoryProvider);
-  if (repository == null)
+  if (repository == null) {
     return StarredResult(artists: [], albums: [], songs: []);
+  }
   return await repository.getStarred();
 });

@@ -285,6 +285,7 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
             quality: effectiveQuality,
           );
           final cacheFile = File(cacheFilePath);
+          // ignore: experimental_member_use
           final audioSource = LockCachingAudioSource(
             Uri.parse(streamUrl),
             cacheFile: cacheFile,
@@ -725,6 +726,7 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
         quality: effectiveQuality,
       );
       // 创建 LockCachingAudioSource 会自动开始下载缓存
+      // ignore: experimental_member_use
       LockCachingAudioSource(
         Uri.parse(streamUrl),
         cacheFile: File(cacheFilePath),

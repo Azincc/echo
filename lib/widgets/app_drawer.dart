@@ -175,26 +175,6 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
     return ListView(
       padding: EdgeInsets.zero,
       children: [
-        // 音乐流
-        ListTile(
-          leading: const Icon(Icons.explore),
-          title: const Text('音乐流'),
-          onTap: () {
-            Navigator.pop(context);
-            context.go('/home');
-          },
-        ),
-
-        // 我的音乐库
-        ListTile(
-          leading: const Icon(Icons.library_music),
-          title: const Text('我的音乐库'),
-          onTap: () {
-            Navigator.pop(context);
-            context.go('/library');
-          },
-        ),
-
         // 切换线路
         ListTile(
           leading: const Icon(Icons.router),
@@ -483,7 +463,7 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
                           );
                         },
                         loading: () => const Text('正在计算缓存大小...'),
-                        error: (_, __) => const Text('无法获取缓存大小'),
+                        error: (error, stackTrace) => const Text('无法获取缓存大小'),
                       );
                     },
                   ),

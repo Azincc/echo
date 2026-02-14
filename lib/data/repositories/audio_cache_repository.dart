@@ -1,5 +1,4 @@
 import 'package:drift/drift.dart';
-import '../../core/utils/logger.dart';
 import '../../data/models/audio_quality.dart';
 import '../sources/database/app_database.dart';
 

@@ -56,13 +56,13 @@ class AlbumDetailPage extends ConsumerWidget {
                             colors: [
                               Theme.of(
                                 context,
-                              ).scaffoldBackgroundColor.withOpacity(0.0),
+                              ).scaffoldBackgroundColor.withValues(alpha: 0.0),
                               Theme.of(
                                 context,
-                              ).scaffoldBackgroundColor.withOpacity(0.5),
+                              ).scaffoldBackgroundColor.withValues(alpha: 0.5),
                               Theme.of(
                                 context,
-                              ).scaffoldBackgroundColor.withOpacity(0.9),
+                              ).scaffoldBackgroundColor.withValues(alpha: 0.9),
                             ],
                             // Smooth fade from top of this container to bottom
                             stops: const [0.0, 0.6, 1.0],
@@ -103,8 +103,8 @@ class AlbumDetailPage extends ConsumerWidget {
                                 ? Colors.white
                                 : Colors.black;
                             final shadowColor = isDark
-                                ? Colors.black.withOpacity(0.8)
-                                : Colors.white.withOpacity(0.8);
+                                ? Colors.black.withValues(alpha: 0.8)
+                                : Colors.white.withValues(alpha: 0.8);
 
                             final textStyle = TextStyle(
                               color: textColor,

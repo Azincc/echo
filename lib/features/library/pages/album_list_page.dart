@@ -19,7 +19,7 @@ class AlbumListPage extends ConsumerStatefulWidget {
 
 class _AlbumListPageState extends ConsumerState<AlbumListPage> {
   // Use generic object or custom class for row data
-  List<AzItem<List<Album>>> _azAlbumRows = [];
+  final List<AzItem<List<Album>>> _azAlbumRows = [];
   bool _isLoaded = false;
 
   void _processAlbums(List<Album> albums) {

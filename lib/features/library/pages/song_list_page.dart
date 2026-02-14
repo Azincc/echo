@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../data/models/song.dart';
 import '../../../providers/music_provider.dart';
+import '../../../providers/player_provider.dart';
 import '../../../utils/az_item.dart';
 import '../../../utils/pinyin_helper.dart';
 
@@ -81,9 +82,10 @@ class _SongListPageState extends ConsumerState<SongListPage> {
                   style: const TextStyle(color: Colors.grey, fontSize: 12),
                 ), // Debug/Optional: show tag
                 onTap: () {
-                  // Play song
-                  // ref.read(playerProvider.notifier).play(song);
-                  // TODO: Implement playback logic based on existing app patterns
+                  final queue = _azSongs.map((e) => e.data).toList();
+                  ref
+                      .read(playerProvider.notifier)
+                      .playQueue(queue, startIndex: index);
                 },
               );
             },

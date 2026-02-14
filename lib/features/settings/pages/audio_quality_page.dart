@@ -90,19 +90,17 @@ class AudioQualityPage extends ConsumerWidget {
             ),
           ),
           ...AudioQualityLevel.values.map(
-            (quality) => RadioListTile<AudioQualityLevel>(
-              title: Text(quality.displayName),
+            (quality) => _buildQualityTile(
+              context: context,
+              quality: quality,
+              selected: settings.wifiQuality,
               subtitle: quality == AudioQualityLevel.original
-                  ? const Text('不限制码率，直接播放原始文件')
+                  ? '不限制码率，直接播放原始文件'
                   : null,
-              value: quality,
-              groupValue: settings.wifiQuality,
-              onChanged: (value) {
-                if (value != null) {
-                  ref
-                      .read(audioQualitySettingsProvider.notifier)
-                      .setWifiQuality(value);
-                }
+              onTap: () {
+                ref
+                    .read(audioQualitySettingsProvider.notifier)
+                    .setWifiQuality(quality);
               },
             ),
           ),
@@ -120,19 +118,17 @@ class AudioQualityPage extends ConsumerWidget {
               ),
             ),
             ...AudioQualityLevel.values.map(
-              (quality) => RadioListTile<AudioQualityLevel>(
-                title: Text(quality.displayName),
+              (quality) => _buildQualityTile(
+                context: context,
+                quality: quality,
+                selected: settings.mobileQuality,
                 subtitle: quality == AudioQualityLevel.dataSaver
-                    ? const Text('节省流量，适合移动网络')
+                    ? '节省流量，适合移动网络'
                     : null,
-                value: quality,
-                groupValue: settings.mobileQuality,
-                onChanged: (value) {
-                  if (value != null) {
-                    ref
-                        .read(audioQualitySettingsProvider.notifier)
-                        .setMobileQuality(value);
-                  }
+                onTap: () {
+                  ref
+                      .read(audioQualitySettingsProvider.notifier)
+                      .setMobileQuality(quality);
                 },
               ),
             ),
@@ -153,4 +149,23 @@ class AudioQualityPage extends ConsumerWidget {
     NetworkType.mobile => '移动数据',
     NetworkType.none => '无网络',
   };
+
+  Widget _buildQualityTile({
+    required BuildContext context,
+    required AudioQualityLevel quality,
+    required AudioQualityLevel selected,
+    required VoidCallback onTap,
+    String? subtitle,
+  }) {
+    final isSelected = quality == selected;
+    return ListTile(
+      title: Text(quality.displayName),
+      subtitle: subtitle != null ? Text(subtitle) : null,
+      leading: Icon(
+        isSelected ? Icons.radio_button_checked : Icons.radio_button_unchecked,
+        color: isSelected ? Theme.of(context).colorScheme.primary : null,
+      ),
+      onTap: onTap,
+    );
+  }
 }

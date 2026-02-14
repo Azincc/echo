@@ -13,5 +13,8 @@ void main() {
 
     // Verify that the app displays the splash screen
     expect(find.text('SubSonic Flow'), findsOneWidget);
+
+    // Drain splash delay timer to avoid pending timer failure.
+    await tester.pump(const Duration(milliseconds: 600));
   });
 }

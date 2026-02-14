@@ -25,12 +25,7 @@ class HealthChecker {
     // Check if current active connection is still good
     if (active != null) {
       final probedCurrent = await _addressPool.probeAddress(active);
-
-      // 仅更新探测状态，不触发 setManualMode 切换
-      final index = _addressPool.addresses.indexWhere((a) => a.id == probedCurrent.id);
-      if (index != -1) {
-        _addressPool.onAddressUpdated?.call(probedCurrent);
-      }
+      _addressPool.updateProbedAddress(probedCurrent);
 
       if (probedCurrent.status != ServerAddressStatus.ok) {
         // 手动模式 + 自动回退关闭时，不自动切换
@@ -39,8 +34,8 @@ class HealthChecker {
         }
 
         final next = _addressPool.getNextAvailable();
-        if (next != null) {
-          _addressPool.switchTo(next);
+        if (next != null && next.id != probedCurrent.id) {
+          await _addressPool.switchTo(next, manual: false);
         }
       } else {
         // Current is OK.
@@ -56,9 +51,10 @@ class HealthChecker {
         if (sorted.isNotEmpty && active.id != sorted.first.id) {
           final best = sorted.first;
           final bestProbed = await _addressPool.probeAddress(best);
+          _addressPool.updateProbedAddress(bestProbed);
 
           if (bestProbed.status == ServerAddressStatus.ok) {
-            _addressPool.switchTo(bestProbed);
+            await _addressPool.switchTo(bestProbed, manual: false);
           }
         }
       }

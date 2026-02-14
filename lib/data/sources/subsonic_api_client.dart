@@ -181,7 +181,7 @@ class SubsonicApiClient {
   /// Get Music Folders
   Future<List<Map<String, dynamic>>> getMusicFolders() async {
     try {
-      final response = await _dio.get('getMusicFolders');
+      final response = await _dio.get(ApiConstants.getMusicFolders);
       final data = response.data as Map<String, dynamic>;
       _checkResponse(data);
 

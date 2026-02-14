@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:dio/dio.dart';
 import 'package:echoes/data/models/server_address.dart';
 
@@ -113,6 +111,21 @@ class AddressPool {
     }
   }
 
+  /// 应用探测结果到内存状态并持久化（保留锁定状态）
+  void updateProbedAddress(ServerAddress probed) {
+    final index = _addresses.indexWhere((a) => a.id == probed.id);
+    if (index == -1) return;
+
+    final current = _addresses[index];
+    final updated = probed.copyWith(isLocked: current.isLocked);
+    _addresses[index] = updated;
+    onAddressUpdated?.call(updated);
+
+    if (_activeAddress?.id == updated.id) {
+      _activeAddress = updated;
+    }
+  }
+
   /// 标记某地址探测失败
   void markFailed(ServerAddress addr) {
     final index = _addresses.indexWhere((a) => a.id == addr.id);
@@ -121,6 +134,9 @@ class AddressPool {
         status: ServerAddressStatus.failed,
       );
       onAddressUpdated?.call(_addresses[index]);
+      if (_activeAddress?.id == addr.id) {
+        _activeAddress = _addresses[index];
+      }
     }
   }
 
@@ -189,8 +205,34 @@ class AddressPool {
   }
 
   /// 切换到指定地址 (Deprecated: use setManualMode)
-  Future<bool> switchTo(ServerAddress addr) async {
-    await setManualMode(addr);
+  Future<bool> switchTo(ServerAddress addr, {bool manual = true}) async {
+    if (manual) {
+      await setManualMode(addr);
+      return _activeAddress?.status == ServerAddressStatus.ok;
+    }
+
+    final probed = await probeAddress(addr);
+    ServerAddress? newActive;
+
+    for (int i = 0; i < _addresses.length; i++) {
+      final current = _addresses[i];
+      if (current.id == addr.id) {
+        _addresses[i] = probed.copyWith(isLocked: false);
+        onAddressUpdated?.call(_addresses[i]);
+        newActive = _addresses[i];
+      } else if (current.isLocked) {
+        _addresses[i] = current.copyWith(isLocked: false);
+        onAddressUpdated?.call(_addresses[i]);
+      }
+    }
+
+    if (newActive != null && _activeAddress?.id != newActive.id) {
+      _activeAddress = newActive;
+      onActiveAddressChanged?.call(_activeAddress);
+    } else if (newActive != null) {
+      _activeAddress = newActive;
+    }
+
     return _activeAddress?.status == ServerAddressStatus.ok;
   }
 

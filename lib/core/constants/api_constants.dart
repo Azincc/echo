@@ -26,6 +26,7 @@ class ApiConstants {
   static const String search3 = '/rest/search3';
   static const String getPlaylists = '/rest/getPlaylists';
   static const String getPlaylist = '/rest/getPlaylist';
+  static const String getMusicFolders = '/rest/getMusicFolders';
   static const String createPlaylist = '/rest/createPlaylist';
   static const String updatePlaylist = '/rest/updatePlaylist';
   static const String deletePlaylist = '/rest/deletePlaylist';

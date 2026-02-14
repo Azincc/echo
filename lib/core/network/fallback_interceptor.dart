@@ -36,9 +36,9 @@ class FallbackInterceptor extends Interceptor {
           _addressPool.markFailed(currentAddress);
 
           final next = _addressPool.getNextAvailable();
-          if (next != null) {
+          if (next != null && next.id != currentAddress.id) {
             // Try probing/switching to next
-            final success = await _addressPool.switchTo(next);
+            final success = await _addressPool.switchTo(next, manual: false);
             if (success) {
               _consecutiveFailures = 0;
               Fluttertoast.showToast(

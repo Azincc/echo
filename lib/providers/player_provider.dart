@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io' show File, Platform;
 import 'package:audio_service/audio_service.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
@@ -97,6 +98,7 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
   final Ref _ref;
   AudioPlayer? _audioPlayer;
   EchoAudioHandler? _audioHandler;
+  StreamSubscription? _cacheCompletionSubscription;
 
   /// 动态获取最新的 API client
   SubsonicApiClient get _apiClient => _ref.read(subsonicApiClientProvider);
@@ -175,6 +177,9 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
   /// 播放单曲
   Future<void> playSong(Song song, {List<Song>? queue, int? index}) async {
     try {
+      await _cacheCompletionSubscription?.cancel();
+      _cacheCompletionSubscription = null;
+
       final playQueue = queue ?? [song];
       final playIndex = index ?? 0;
 
@@ -644,31 +649,38 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
     required String libraryId,
     required AudioQualityLevel quality,
   }) async {
-    // 延迟检查缓存文件是否完整（播放完成后）
-    // 使用 playerState 完成事件来触发
-    _audioPlayer?.playerStateStream
-        .firstWhere((s) => s.processingState == ProcessingState.completed)
-        .then((_) async {
-          try {
-            if (await cacheFile.exists()) {
-              final fileSize = await cacheFile.length();
-              if (fileSize > 0) {
-                final cacheService = _ref.read(audioCacheServiceProvider);
-                await cacheService.registerCache(
-                  songId: songId,
-                  libraryId: libraryId,
-                  filePath: cacheFile.path,
-                  fileSize: fileSize,
-                  quality: quality,
-                );
-                Logger.info('Cache registered for: $songId');
-              }
-            }
-          } catch (e) {
-            Logger.warn('Failed to register cache', e);
+    final player = _audioPlayer;
+    if (player == null) return;
+
+    _cacheCompletionSubscription?.cancel();
+    _cacheCompletionSubscription = player.playerStateStream.listen((ps) async {
+      if (ps.processingState != ProcessingState.completed) return;
+
+      await _cacheCompletionSubscription?.cancel();
+      _cacheCompletionSubscription = null;
+
+      // 仅为当前播放歌曲注册缓存，避免切歌后误写元数据
+      if (state.currentSong?.id != songId) return;
+
+      try {
+        if (await cacheFile.exists()) {
+          final fileSize = await cacheFile.length();
+          if (fileSize > 0) {
+            final cacheService = _ref.read(audioCacheServiceProvider);
+            await cacheService.registerCache(
+              songId: songId,
+              libraryId: libraryId,
+              filePath: cacheFile.path,
+              fileSize: fileSize,
+              quality: quality,
+            );
+            Logger.info('Cache registered for: $songId');
           }
-        })
-        .ignore();
+        }
+      } catch (e) {
+        Logger.warn('Failed to register cache', e);
+      }
+    });
   }
 
   /// 预缓存队列中下一首歌
@@ -725,6 +737,7 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
 
   @override
   void dispose() {
+    _cacheCompletionSubscription?.cancel();
     // Check if initialized/assigned before disposing
     // Since it was 'late', we can't check.
     // Converting to nullable field:

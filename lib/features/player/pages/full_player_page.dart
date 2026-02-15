@@ -10,6 +10,7 @@ import '../../../providers/api_provider.dart';
 import '../../../providers/audio_quality_provider.dart';
 import '../../../data/models/lyrics.dart';
 import '../../../data/models/audio_quality.dart';
+import '../../../data/models/song.dart';
 import '../../../core/network/connectivity_monitor.dart';
 import '../../../widgets/cover_art_image.dart';
 import '../widgets/play_queue_sheet.dart';
@@ -397,71 +398,55 @@ class _FullPlayerPageState extends ConsumerState<FullPlayerPage>
                             const SizedBox(height: 24),
 
                             // 播放控制按钮
-                            const PlaybackControls(),
+                            PlaybackControls(currentSong: currentSong),
 
-                            const SizedBox(height: 16),
+                            const SizedBox(height: 8),
 
                             // 底部操作按钮
                             FadeTransition(
                               opacity: _bottomBarAnimation,
-                              child: Row(
-                                mainAxisAlignment:
-                                    MainAxisAlignment.spaceEvenly,
-                                children: [
-                                  // 收藏按钮
-                                  IconButton(
-                                    icon: Icon(
-                                      currentSong.starred
-                                          ? Icons.favorite
-                                          : Icons.favorite_border,
-                                      color: currentSong.starred
-                                          ? Colors.red
-                                          : Colors.white.withValues(
-                                              alpha: 0.78,
-                                            ),
-                                    ),
-                                    onPressed: () {
-                                      ref
-                                          .read(playerProvider.notifier)
-                                          .toggleFavorite();
-                                    },
-                                  ),
-
-                                  // 歌词按钮
-                                  IconButton(
-                                    icon: Icon(
-                                      Icons.lyrics,
-                                      color: _showLyrics
-                                          ? Colors.white
-                                          : Colors.white.withValues(
-                                              alpha: 0.72,
-                                            ),
-                                    ),
-                                    onPressed: () {
-                                      setState(() {
-                                        _showLyrics = !_showLyrics;
-                                      });
-                                    },
-                                  ),
-
-                                  // 播放队列按钮
-                                  IconButton(
-                                    icon: Icon(
-                                      Icons.queue_music,
-                                      color: Colors.white.withValues(
-                                        alpha: 0.78,
+                              child: SizedBox(
+                                width: 160,
+                                child: Row(
+                                  mainAxisAlignment:
+                                      MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    // 歌词按钮
+                                    IconButton(
+                                      icon: Icon(
+                                        Icons.lyrics,
+                                        color: _showLyrics
+                                            ? Colors.white
+                                            : Colors.white.withValues(
+                                                alpha: 0.72,
+                                              ),
                                       ),
+                                      onPressed: () {
+                                        setState(() {
+                                          _showLyrics = !_showLyrics;
+                                        });
+                                      },
                                     ),
-                                    onPressed: () {
-                                      showModalBottomSheet(
-                                        context: context,
-                                        builder: (context) =>
-                                            const PlayQueueSheet(),
-                                        isScrollControlled: true,
-                                      );
-                                    },
-                                  ),
-                                ],
+
+                                    // 播放队列按钮
+                                    IconButton(
+                                      icon: Icon(
+                                        Icons.queue_music,
+                                        color: Colors.white.withValues(
+                                          alpha: 0.78,
+                                        ),
+                                      ),
+                                      onPressed: () {
+                                        showModalBottomSheet(
+                                          context: context,
+                                          builder: (context) =>
+                                              const PlayQueueSheet(),
+                                          isScrollControlled: true,
+                                        );
+                                      },
+                                    ),
+                                  ],
+                                ),
                               ),
                             ),
 
@@ -663,26 +648,28 @@ class _ProgressBarState extends ConsumerState<ProgressBar> {
 
 /// 播放控制按钮
 class PlaybackControls extends ConsumerWidget {
-  const PlaybackControls({super.key});
+  final Song currentSong;
+
+  const PlaybackControls({super.key, required this.currentSong});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final playerState = ref.watch(playerProvider);
     final inactiveControlColor = Colors.white.withValues(alpha: 0.78);
+    final playbackMode = playerState.shuffleEnabled
+        ? PlaybackMode.shuffle
+        : (playerState.loopMode == LoopMode.one
+              ? PlaybackMode.repeatOne
+              : PlaybackMode.repeatAll);
 
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
-        // 随机播放按钮
+        // 播放模式按钮（三态）
         IconButton(
-          icon: Icon(
-            Icons.shuffle,
-            color: playerState.shuffleEnabled
-                ? Colors.white
-                : inactiveControlColor,
-          ),
+          icon: Icon(_getPlaybackModeIcon(playbackMode), color: Colors.white),
           onPressed: () {
-            ref.read(playerProvider.notifier).toggleShuffle();
+            ref.read(playerProvider.notifier).cyclePlaybackMode();
           },
         ),
 
@@ -734,30 +721,25 @@ class PlaybackControls extends ConsumerWidget {
 
         const SizedBox(width: 12),
 
-        // 循环模式按钮
+        // 收藏按钮
         IconButton(
           icon: Icon(
-            _getLoopIcon(playerState.loopMode),
-            color: playerState.loopMode != LoopMode.off
-                ? Colors.white
-                : inactiveControlColor,
+            currentSong.starred ? Icons.favorite : Icons.favorite_border,
+            color: currentSong.starred ? Colors.red : inactiveControlColor,
           ),
           onPressed: () {
-            ref.read(playerProvider.notifier).toggleLoopMode();
+            ref.read(playerProvider.notifier).toggleFavorite();
           },
         ),
       ],
     );
   }
 
-  IconData _getLoopIcon(LoopMode loopMode) {
-    switch (loopMode) {
-      case LoopMode.off:
-        return Icons.repeat;
-      case LoopMode.all:
-        return Icons.repeat;
-      case LoopMode.one:
-        return Icons.repeat_one;
-    }
+  IconData _getPlaybackModeIcon(PlaybackMode mode) {
+    return switch (mode) {
+      PlaybackMode.shuffle => Icons.shuffle,
+      PlaybackMode.repeatAll => Icons.repeat,
+      PlaybackMode.repeatOne => Icons.repeat_one,
+    };
   }
 }

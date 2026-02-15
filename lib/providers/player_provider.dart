@@ -27,6 +27,9 @@ enum PlaybackSource {
   stream, // 在线流式播放
 }
 
+/// 播放模式（用于播放器控制区三态切换）
+enum PlaybackMode { shuffle, repeatAll, repeatOne }
+
 /// 播放器状态
 class PlayerState {
   final Song? currentSong;
@@ -538,6 +541,51 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
   /// 切换随机播放
   Future<void> toggleShuffle() async {
     await setShuffleEnabled(!state.shuffleEnabled);
+  }
+
+  /// 当前播放模式（三态）
+  PlaybackMode get playbackMode {
+    if (state.shuffleEnabled) return PlaybackMode.shuffle;
+    if (state.loopMode == LoopMode.one) return PlaybackMode.repeatOne;
+    return PlaybackMode.repeatAll;
+  }
+
+  /// 设置三态播放模式
+  Future<void> setPlaybackMode(PlaybackMode mode) async {
+    switch (mode) {
+      case PlaybackMode.shuffle:
+        await _audioPlayer?.setLoopMode(LoopMode.all);
+        await _audioPlayer?.setShuffleModeEnabled(true);
+        if (mounted) {
+          state = state.copyWith(loopMode: LoopMode.all, shuffleEnabled: true);
+        }
+        break;
+      case PlaybackMode.repeatAll:
+        await _audioPlayer?.setShuffleModeEnabled(false);
+        await _audioPlayer?.setLoopMode(LoopMode.all);
+        if (mounted) {
+          state = state.copyWith(loopMode: LoopMode.all, shuffleEnabled: false);
+        }
+        break;
+      case PlaybackMode.repeatOne:
+        await _audioPlayer?.setShuffleModeEnabled(false);
+        await _audioPlayer?.setLoopMode(LoopMode.one);
+        if (mounted) {
+          state = state.copyWith(loopMode: LoopMode.one, shuffleEnabled: false);
+        }
+        break;
+    }
+  }
+
+  /// 循环切换三态播放模式：
+  /// 随机 -> 列表循环 -> 单曲循环 -> 随机
+  Future<void> cyclePlaybackMode() async {
+    final nextMode = switch (playbackMode) {
+      PlaybackMode.shuffle => PlaybackMode.repeatAll,
+      PlaybackMode.repeatAll => PlaybackMode.repeatOne,
+      PlaybackMode.repeatOne => PlaybackMode.shuffle,
+    };
+    await setPlaybackMode(nextMode);
   }
 
   int? _getRandomIndexExcludingCurrent() {

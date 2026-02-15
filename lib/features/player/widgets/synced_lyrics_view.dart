@@ -73,14 +73,22 @@ class _SyncedLyricsViewState extends ConsumerState<SyncedLyricsView> {
   void _scrollToLine(int index) {
     if (_isUserScrolling) return;
     if (!widget.lyrics.synced) return;
+    if (index < 0 || index >= widget.lyrics.lines.length) return;
 
-    // 使用 scrollable_positioned_list 直接滚动到指定索引并居中
+    final renderParts = _splitBilingualLine(widget.lyrics.lines[index].value);
+    final hasSecondary =
+        renderParts.secondary != null && renderParts.secondary!.isNotEmpty;
+    // scrollable_positioned_list 的 alignment 作用在“条目顶部”。
+    // 双行歌词需要把条目顶部再往上提一点，才能让第二行进入视觉焦点区。
+    final alignment = hasSecondary ? 0.44 : 0.47;
+
+    // 使用 scrollable_positioned_list 直接滚动到指定索引
     try {
       _itemScrollController.scrollTo(
         index: index,
         duration: const Duration(milliseconds: 300),
         curve: Curves.easeInOut,
-        alignment: 0.5, // 0.5 表示居中
+        alignment: alignment,
       );
     } catch (e) {
       // 忽略控制器未挂载等错误

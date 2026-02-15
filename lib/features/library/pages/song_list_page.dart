@@ -1,12 +1,16 @@
+import 'dart:math' as math;
+
 import 'package:azlistview/azlistview.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 
 import '../../../data/models/song.dart';
 import '../../../providers/music_provider.dart';
 import '../../../providers/player_provider.dart';
 import '../../../utils/az_item.dart';
 import '../../../utils/pinyin_helper.dart';
+import '../../../widgets/cover_art_image.dart';
 
 class SongListPage extends ConsumerStatefulWidget {
   const SongListPage({super.key});
@@ -16,12 +20,61 @@ class SongListPage extends ConsumerStatefulWidget {
 }
 
 class _SongListPageState extends ConsumerState<SongListPage> {
+  static const double _tileLeadingSize = 48;
   List<AzItem<Song>> _azSongs = [];
   bool _isLoaded = false;
+  late final ItemPositionsListener _itemPositionsListener;
+  int _coverLoadStart = 0;
+  int _coverLoadEnd = -1;
 
   @override
   void initState() {
     super.initState();
+    _itemPositionsListener = ItemPositionsListener.create();
+    _itemPositionsListener.itemPositions.addListener(_onItemPositionsChanged);
+  }
+
+  @override
+  void dispose() {
+    _itemPositionsListener.itemPositions.removeListener(
+      _onItemPositionsChanged,
+    );
+    super.dispose();
+  }
+
+  void _onItemPositionsChanged() {
+    if (!mounted || _azSongs.isEmpty) return;
+    final positions = _itemPositionsListener.itemPositions.value;
+    if (positions.isEmpty) return;
+
+    // 只统计当前可见项（进入 viewport 的条目）。
+    final visible = positions
+        .where((p) => p.itemTrailingEdge > 0 && p.itemLeadingEdge < 1)
+        .toList();
+    if (visible.isEmpty) return;
+
+    final minVisibleIndex = visible
+        .map((e) => e.index)
+        .reduce((a, b) => math.min(a, b));
+    final maxVisibleIndex = visible
+        .map((e) => e.index)
+        .reduce((a, b) => math.max(a, b));
+
+    final visibleCount = maxVisibleIndex - minVisibleIndex + 1;
+    // 预加载可见数量的 100%，总计约 200%。
+    final extraTotal = math.max(1, visibleCount);
+    final extraBefore = extraTotal ~/ 2;
+    final extraAfter = extraTotal - extraBefore;
+
+    final nextStart = math.max(0, minVisibleIndex - extraBefore);
+    final nextEnd = math.min(_azSongs.length - 1, maxVisibleIndex + extraAfter);
+
+    if (nextStart == _coverLoadStart && nextEnd == _coverLoadEnd) return;
+
+    setState(() {
+      _coverLoadStart = nextStart;
+      _coverLoadEnd = nextEnd;
+    });
   }
 
   void _processSongs(List<Song> songs) {
@@ -71,16 +124,23 @@ class _SongListPageState extends ConsumerState<SongListPage> {
           return AzListView(
             data: _azSongs,
             itemCount: _azSongs.length,
+            itemPositionsListener: _itemPositionsListener,
             itemBuilder: (context, index) {
               final item = _azSongs[index];
               final song = item.data;
+              final shouldLoadCover =
+                  index >= _coverLoadStart && index <= _coverLoadEnd;
+
               return ListTile(
                 title: Text(song.title),
                 subtitle: Text(song.artist ?? '未知歌手'),
-                leading: Text(
-                  item.getSuspensionTag(),
-                  style: const TextStyle(color: Colors.grey, fontSize: 12),
-                ), // Debug/Optional: show tag
+                leading: ClipRRect(
+                  borderRadius: BorderRadius.circular(6),
+                  child: CoverArtImage(
+                    coverArtId: shouldLoadCover ? song.coverArt : null,
+                    size: _tileLeadingSize,
+                  ),
+                ),
                 onTap: () {
                   final queue = _azSongs.map((e) => e.data).toList();
                   ref

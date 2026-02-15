@@ -16,6 +16,7 @@ class LibraryPage extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final playlistsAsync = ref.watch(playlistsProvider);
+    final playlistsLoadFailed = ref.watch(playlistsLoadFailedProvider);
     final starredAsync = ref.watch(starredProvider);
 
     return Scaffold(
@@ -60,9 +61,11 @@ class LibraryPage extends ConsumerWidget {
           playlistsAsync.when(
             data: (playlists) {
               if (playlists.isEmpty) {
-                return const Padding(
-                  padding: EdgeInsets.all(24),
-                  child: Center(child: Text('暂无歌单')),
+                return Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Center(
+                    child: Text(playlistsLoadFailed ? '网络异常，歌单加载失败' : '暂无歌单'),
+                  ),
                 );
               }
               return Column(

@@ -112,6 +112,7 @@ class RandomSongsSection extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final randomSongsAsync = ref.watch(randomSongsProvider);
+    final loadFailed = ref.watch(randomSongsLoadFailedProvider);
     final colorScheme = Theme.of(context).colorScheme;
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
     final titleColor = isDarkMode ? Colors.white : colorScheme.onSurface;
@@ -125,8 +126,11 @@ class RandomSongsSection extends ConsumerWidget {
     return randomSongsAsync.when(
       data: (songs) {
         if (songs.isEmpty) {
-          return const Center(
-            child: Padding(padding: EdgeInsets.all(24), child: Text('暂无歌曲')),
+          return Center(
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Text(loadFailed ? '网络异常，随机歌曲加载失败' : '暂无歌曲'),
+            ),
           );
         }
 
@@ -207,12 +211,16 @@ class RecentAlbumsSection extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final recentAlbumsAsync = ref.watch(recentAlbumsProvider);
+    final loadFailed = ref.watch(recentAlbumsLoadFailedProvider);
 
     return recentAlbumsAsync.when(
       data: (albums) {
         if (albums.isEmpty) {
-          return const Center(
-            child: Padding(padding: EdgeInsets.all(24), child: Text('暂无最近播放')),
+          return Center(
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Text(loadFailed ? '网络异常，最近专辑加载失败' : '暂无最近播放'),
+            ),
           );
         }
 
@@ -251,12 +259,16 @@ class FrequentAlbumsSection extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final frequentAlbumsAsync = ref.watch(frequentAlbumsProvider);
+    final loadFailed = ref.watch(frequentAlbumsLoadFailedProvider);
 
     return frequentAlbumsAsync.when(
       data: (albums) {
         if (albums.isEmpty) {
-          return const Center(
-            child: Padding(padding: EdgeInsets.all(24), child: Text('暂无常听专辑')),
+          return Center(
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Text(loadFailed ? '网络异常，常听专辑加载失败' : '暂无常听专辑'),
+            ),
           );
         }
 

@@ -206,23 +206,90 @@ class AuthRepository {
         return false;
       }
 
-      // If we stored a fingerprint, verify it.
-      final storedFingerprint = existingLibrary.extensions['serverFingerprint'];
-      if (storedFingerprint != null) {
-        final newFingerprint = await _computeServerFingerprint(
-          tempClient,
-          existingLibrary.username ?? '',
-        );
+      // 同一 URL（例如重复添加 Primary）直接视为同一服务器。
+      final normalizedNewUrl = _normalizeUrl(newAddress.url);
+      final hasSameExistingUrl = existingLibrary.addresses.any(
+        (a) => _normalizeUrl(a.url) == normalizedNewUrl,
+      );
+      if (hasSameExistingUrl) {
+        return true;
+      }
 
-        if (storedFingerprint != newFingerprint) {
+      final username = existingLibrary.username ?? '';
+      final newFingerprint = await _computeServerFingerprint(
+        tempClient,
+        username,
+      );
+
+      // 固定使用“首个线路（priority 最小）”作为旧 fingerprint 来源
+      final fingerprintSource = _getFingerprintSourceAddress(existingLibrary);
+      if (fingerprintSource != null) {
+        final oldDio = Dio(
+          BaseOptions(
+            baseUrl: fingerprintSource.url,
+            connectTimeout: const Duration(seconds: 10),
+            receiveTimeout: const Duration(seconds: 10),
+            responseType: ResponseType.json,
+          ),
+        );
+        final oldClient = SubsonicApiClient(dio: oldDio);
+        oldClient.setLibrary(existingLibrary);
+
+        final oldPing = await oldClient.ping();
+        if (oldPing.success) {
+          final oldFingerprint = await _computeServerFingerprint(
+            oldClient,
+            username,
+          );
+          if (oldFingerprint == newFingerprint) {
+            return true;
+          }
+
+          // 兼容历史指纹格式（仅 user，不含 folder 列表）
+          final compatibleLegacy =
+              (_isLegacyUserOnlyFingerprint(oldFingerprint) &&
+                  _extractFingerprintUser(oldFingerprint) ==
+                      _extractFingerprintUser(newFingerprint)) ||
+              (_isLegacyUserOnlyFingerprint(newFingerprint) &&
+                  _extractFingerprintUser(oldFingerprint) ==
+                      _extractFingerprintUser(newFingerprint));
+          if (compatibleLegacy) {
+            Logger.info(
+              'Verify identity: accepted legacy fingerprint compatibility',
+            );
+            return true;
+          }
+
           Logger.warn(
-            'Verify identity: Fingerprint mismatch. Expected $storedFingerprint, got $newFingerprint',
+            'Verify identity: Fingerprint mismatch. Expected $oldFingerprint, got $newFingerprint',
           );
           return false;
         }
       }
 
-      return true;
+      // 回退：首条线路不可达时，使用历史保存指纹校验
+      final storedFingerprint = existingLibrary.extensions['serverFingerprint'];
+      if (storedFingerprint != null) {
+        final storedFp = storedFingerprint.toString();
+        if (storedFp == newFingerprint) {
+          return true;
+        }
+        final compatibleLegacy =
+            (_isLegacyUserOnlyFingerprint(storedFp) &&
+                _extractFingerprintUser(storedFp) ==
+                    _extractFingerprintUser(newFingerprint)) ||
+            (_isLegacyUserOnlyFingerprint(newFingerprint) &&
+                _extractFingerprintUser(storedFp) ==
+                    _extractFingerprintUser(newFingerprint));
+        if (compatibleLegacy) {
+          return true;
+        }
+      }
+
+      Logger.warn(
+        'Verify identity: Unable to verify with primary fingerprint source',
+      );
+      return false;
     } catch (e) {
       Logger.error('Verify identity failed', e);
       return false;
@@ -252,6 +319,34 @@ class AuthRepository {
       Logger.warn('Failed to compute fingerprint, defaulting to user only', e);
       return 'user:$username';
     }
+  }
+
+  String _normalizeUrl(String url) {
+    var u = url.trim();
+    if (u.endsWith('/')) {
+      u = u.substring(0, u.length - 1);
+    }
+    return u.toLowerCase();
+  }
+
+  ServerAddress? _getFingerprintSourceAddress(MusicLibrary library) {
+    if (library.addresses.isEmpty) return null;
+    final sorted = List<ServerAddress>.from(library.addresses)
+      ..sort((a, b) => a.priority.compareTo(b.priority));
+    return sorted.first;
+  }
+
+  bool _isLegacyUserOnlyFingerprint(String fp) {
+    return fp.startsWith('user:') && !fp.contains('folder:');
+  }
+
+  String _extractFingerprintUser(String fp) {
+    final start = fp.indexOf('user:');
+    if (start == -1) return '';
+    final from = start + 5;
+    final end = fp.indexOf('|', from);
+    if (end == -1) return fp.substring(from);
+    return fp.substring(from, end);
   }
 
   // Legacy load/logout methods are removed as they are handled by LibraryRepository

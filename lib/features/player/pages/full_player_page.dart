@@ -469,39 +469,43 @@ class _FullPlayerPageState extends ConsumerState<FullPlayerPage>
 
   Widget _buildQualityIndicator(WidgetRef ref) {
     final playerState = ref.watch(playerProvider);
-    final quality = playerState.currentQuality;
-    final source = playerState.playbackSource;
+    final AudioQualityLevel quality =
+        playerState.currentQuality ?? ref.watch(effectiveQualityProvider);
+    final source = playerState.playbackSource ?? PlaybackSource.stream;
     final networkType = ref.watch(currentNetworkTypeProvider).valueOrNull;
-
-    if (quality == null) return const SizedBox.shrink();
 
     String text;
     IconData icon;
     Color? color;
 
-    switch (source) {
-      case PlaybackSource.downloaded:
-        text = '已下载 · ${quality.displayName}';
-        icon = Icons.offline_pin;
-        color = Colors.green;
-        break;
-      case PlaybackSource.cached:
-        text = '已缓存 · ${quality.displayName}';
-        icon = Icons.check_circle_outline;
-        color = Colors.blue;
-        break;
-      case PlaybackSource.stream:
-      default:
-        final netName = switch (networkType) {
-          NetworkType.wifi => 'Wi-Fi',
-          NetworkType.mobile => '移动数据',
-          NetworkType.none => '无网络',
-          null => '未知网络',
-        };
-        text = '$netName · ${quality.displayName}';
-        icon = Icons.cloud_queue;
-        color = null;
-        break;
+    if (networkType == NetworkType.none) {
+      text = '缓存-${quality.displayName}';
+      icon = Icons.offline_pin;
+      color = Colors.orange;
+    } else {
+      switch (source) {
+        case PlaybackSource.downloaded:
+          text = '已下载 · ${quality.displayName}';
+          icon = Icons.offline_pin;
+          color = Colors.green;
+          break;
+        case PlaybackSource.cached:
+          text = '已缓存 · ${quality.displayName}';
+          icon = Icons.check_circle_outline;
+          color = Colors.blue;
+          break;
+        case PlaybackSource.stream:
+          final netName = switch (networkType) {
+            NetworkType.wifi => 'Wi-Fi',
+            NetworkType.mobile => '移动数据',
+            NetworkType.none => '无网络',
+            null => '未知网络',
+          };
+          text = '$netName · ${quality.displayName}';
+          icon = Icons.cloud_queue;
+          color = null;
+          break;
+      }
     }
 
     return Row(

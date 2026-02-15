@@ -14,13 +14,14 @@ class PlaylistDetailPage extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final playlistAsync = ref.watch(playlistDetailProvider(playlistId));
+    final loadFailed = ref.watch(playlistDetailLoadFailedProvider(playlistId));
 
     return Scaffold(
       appBar: AppBar(title: const Text('歌单')),
       body: playlistAsync.when(
         data: (playlist) {
           if (playlist == null) {
-            return const Center(child: Text('歌单不存在'));
+            return Center(child: Text(loadFailed ? '网络异常，歌单加载失败' : '歌单不存在'));
           }
 
           final songs = playlist.songs ?? [];

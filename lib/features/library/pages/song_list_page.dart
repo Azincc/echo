@@ -105,13 +105,14 @@ class _SongListPageState extends ConsumerState<SongListPage> {
   @override
   Widget build(BuildContext context) {
     final songsAsync = ref.watch(allSongsProvider);
+    final loadFailed = ref.watch(allSongsLoadFailedProvider);
 
     return Scaffold(
       appBar: AppBar(title: const Text('所有歌曲')),
       body: songsAsync.when(
         data: (songs) {
           if (songs.isEmpty) {
-            return const Center(child: Text('暂无歌曲'));
+            return Center(child: Text(loadFailed ? '网络异常，歌曲加载失败' : '暂无歌曲'));
           }
 
           // Generate AZ list if not ready or if list changed (simple check)

@@ -72,13 +72,14 @@ class _AlbumListPageState extends ConsumerState<AlbumListPage> {
   @override
   Widget build(BuildContext context) {
     final albumsAsync = ref.watch(allAlbumsProvider);
+    final loadFailed = ref.watch(allAlbumsLoadFailedProvider);
 
     return Scaffold(
       appBar: AppBar(title: const Text('所有专辑')),
       body: albumsAsync.when(
         data: (albums) {
           if (albums.isEmpty) {
-            return const Center(child: Text('暂无专辑'));
+            return Center(child: Text(loadFailed ? '网络异常，专辑加载失败' : '暂无专辑'));
           }
 
           if (!_isLoaded) {

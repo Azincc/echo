@@ -1,6 +1,7 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../data/models/album.dart';
 import '../../../providers/music_provider.dart';
 import '../../../providers/player_provider.dart';
 import '../../../providers/download_provider.dart';
@@ -17,16 +18,21 @@ class AlbumDetailPage extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final albumDetailAsync = ref.watch(albumDetailProvider(albumId));
+    final loadFailed = ref.watch(albumDetailLoadFailedProvider(albumId));
 
     return Scaffold(
       body: albumDetailAsync.when(
         data: (albumDetail) {
-          if (albumDetail == null) {
-            return const Center(child: Text('专辑不存在'));
-          }
-
-          final album = albumDetail.album;
-          final songs = albumDetail.songs;
+          final hasAlbumData = albumDetail != null;
+          final album =
+              albumDetail?.album ??
+              Album(
+                id: albumId,
+                name: loadFailed ? '专辑加载失败' : '专辑不存在',
+                songCount: 0,
+                duration: 0,
+              );
+          final songs = albumDetail?.songs ?? const [];
 
           return CustomScrollView(
             slivers: [
@@ -204,45 +210,77 @@ class AlbumDetailPage extends ConsumerWidget {
                           color: Theme.of(context).colorScheme.onSurfaceVariant,
                         ),
                       ),
+                      if (loadFailed && !hasAlbumData) ...[
+                        const SizedBox(height: 12),
+                        Row(
+                          children: [
+                            Icon(
+                              Icons.wifi_off,
+                              size: 16,
+                              color: Theme.of(
+                                context,
+                              ).colorScheme.onSurfaceVariant,
+                            ),
+                            const SizedBox(width: 6),
+                            Text(
+                              '网络异常，专辑加载失败',
+                              style: Theme.of(context).textTheme.bodySmall
+                                  ?.copyWith(
+                                    color: Theme.of(
+                                      context,
+                                    ).colorScheme.onSurfaceVariant,
+                                  ),
+                            ),
+                          ],
+                        ),
+                      ],
                       const SizedBox(height: 16),
                       Row(
                         children: [
                           FilledButton.icon(
-                            onPressed: () {
-                              // 播放全部
-                              ref
-                                  .read(playerProvider.notifier)
-                                  .playQueue(songs);
-                            },
+                            onPressed: songs.isEmpty
+                                ? null
+                                : () {
+                                    // 播放全部
+                                    ref
+                                        .read(playerProvider.notifier)
+                                        .playQueue(songs);
+                                  },
                             icon: const Icon(Icons.play_arrow),
                             label: const Text('播放全部'),
                           ),
                           const SizedBox(width: 8),
                           IconButton(
-                            onPressed: () async {
-                              try {
-                                final musicRepository = ref.read(
-                                  musicRepositoryProvider,
-                                );
-                                if (musicRepository == null) return;
-                                await musicRepository.setAlbumStarred(
-                                  album.id,
-                                  !album.starred,
-                                );
-                                // 刷新专辑详情和收藏列表
-                                ref.invalidate(albumDetailProvider(albumId));
-                                ref.invalidate(starredProvider);
-                                ref.invalidate(recentAlbumsProvider);
-                                ref.invalidate(frequentAlbumsProvider);
-                              } catch (e) {
-                                // 显示错误提示
-                                if (context.mounted) {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    SnackBar(content: Text('操作失败: $e')),
-                                  );
-                                }
-                              }
-                            },
+                            onPressed: hasAlbumData
+                                ? () async {
+                                    try {
+                                      final musicRepository = ref.read(
+                                        musicRepositoryProvider,
+                                      );
+                                      if (musicRepository == null) return;
+                                      await musicRepository.setAlbumStarred(
+                                        album.id,
+                                        !album.starred,
+                                      );
+                                      // 刷新专辑详情和收藏列表
+                                      ref.invalidate(
+                                        albumDetailProvider(albumId),
+                                      );
+                                      ref.invalidate(starredProvider);
+                                      ref.invalidate(recentAlbumsProvider);
+                                      ref.invalidate(frequentAlbumsProvider);
+                                    } catch (e) {
+                                      // 显示错误提示
+                                      if (context.mounted) {
+                                        ScaffoldMessenger.of(
+                                          context,
+                                        ).showSnackBar(
+                                          SnackBar(content: Text('操作失败: $e')),
+                                        );
+                                      }
+                                    }
+                                  }
+                                : null,
                             icon: Icon(
                               album.starred
                                   ? Icons.favorite
@@ -252,20 +290,31 @@ class AlbumDetailPage extends ConsumerWidget {
                           ),
                           // 下载专辑按钮
                           IconButton(
-                            onPressed: () {
-                              final authState = ref.read(authStateProvider);
-                              final libraryId =
-                                  authState.currentLibrary?.id ?? '';
-                              if (libraryId.isEmpty) return;
+                            onPressed: songs.isEmpty
+                                ? null
+                                : () {
+                                    final authState = ref.read(
+                                      authStateProvider,
+                                    );
+                                    final libraryId =
+                                        authState.currentLibrary?.id ?? '';
+                                    if (libraryId.isEmpty) return;
 
-                              final service = ref.read(downloadServiceProvider);
-                              service.enqueueBatch(songs, libraryId: libraryId);
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text('已添加 ${songs.length} 首歌曲到下载队列'),
-                                ),
-                              );
-                            },
+                                    final service = ref.read(
+                                      downloadServiceProvider,
+                                    );
+                                    service.enqueueBatch(
+                                      songs,
+                                      libraryId: libraryId,
+                                    );
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(
+                                        content: Text(
+                                          '已添加 ${songs.length} 首歌曲到下载队列',
+                                        ),
+                                      ),
+                                    );
+                                  },
                             icon: const Icon(Icons.download_outlined),
                             tooltip: '下载专辑',
                           ),

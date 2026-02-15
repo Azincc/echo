@@ -52,70 +52,130 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
     MusicLibrary? activeLibrary,
     ServerAddress? activeAddress,
   ) {
-    return UserAccountsDrawerHeader(
+    final primary = Theme.of(context).colorScheme.primary;
+    final primaryContainer = Theme.of(context).colorScheme.primaryContainer;
+    final onPrimary = Theme.of(context).colorScheme.onPrimary;
+    final avatarUrl = _resolveAvatarUrl(activeLibrary);
+
+    return DrawerHeader(
+      margin: EdgeInsets.zero,
+      padding: const EdgeInsets.fromLTRB(16, 16, 8, 16),
       decoration: BoxDecoration(
+        color: primary,
         gradient: LinearGradient(
-          colors: [
-            Theme.of(context).colorScheme.primary,
-            Theme.of(context).colorScheme.primaryContainer,
-          ],
+          colors: [primary, primaryContainer],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
       ),
-      currentAccountPicture: CircleAvatar(
-        backgroundColor: Theme.of(context).colorScheme.onPrimary,
-        child: Icon(
-          Icons.person,
-          size: 40,
-          color: Theme.of(context).colorScheme.primary,
-        ),
-      ),
-      accountName: Text(
-        activeLibrary?.name ?? 'No Library',
-        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
-      ),
-      accountEmail: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisSize: MainAxisSize.min,
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          Text(activeLibrary?.username ?? 'Guest'),
-          if (activeAddress != null)
-            Row(
+          // 左侧：头像
+          CircleAvatar(
+            radius: 28,
+            backgroundColor: onPrimary,
+            foregroundImage: avatarUrl != null ? NetworkImage(avatarUrl) : null,
+            child: avatarUrl == null
+                ? Icon(Icons.person, size: 32, color: primary)
+                : null,
+          ),
+          const SizedBox(width: 16),
+          // 中间：信息
+          Expanded(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Container(
-                  width: 8,
-                  height: 8,
-                  decoration: BoxDecoration(
-                    color: activeAddress.status == ServerAddressStatus.ok
-                        ? Colors.green
-                        : Colors.red,
-                    shape: BoxShape.circle,
+                Text(
+                  activeLibrary?.username ?? 'Guest',
+                  style: TextStyle(
+                    color: onPrimary,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 18,
                   ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
-                const SizedBox(width: 4),
-                Expanded(
-                  child: Text(
-                    activeAddress.label,
-                    style: const TextStyle(fontSize: 12, color: Colors.white70),
-                    overflow: TextOverflow.ellipsis,
+                const SizedBox(height: 4),
+                Text(
+                  activeLibrary?.name ?? '未选择',
+                  style: TextStyle(
+                    color: onPrimary.withValues(alpha: 0.9),
+                    fontSize: 13,
                   ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 4),
+                Row(
+                  children: [
+                    Container(
+                      width: 8,
+                      height: 8,
+                      decoration: BoxDecoration(
+                        color: activeAddress == null
+                            ? Colors.grey.shade300
+                            : (activeAddress.status == ServerAddressStatus.ok
+                                ? Colors.greenAccent
+                                : Colors.redAccent),
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                          color: Colors.white.withOpacity(0.5),
+                          width: 1,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        activeAddress?.label ?? '未连接',
+                        style: TextStyle(
+                          color: onPrimary.withValues(alpha: 0.8),
+                          fontSize: 11,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
                 ),
               ],
-            )
-          else
-            const Text(
-              'Offline',
-              style: TextStyle(fontSize: 12, color: Colors.white70),
             ),
+          ),
+          // 右侧：箭头
+          IconButton(
+            icon: Icon(
+              _showLibraries
+                  ? Icons.keyboard_arrow_up
+                  : Icons.keyboard_arrow_down,
+              color: onPrimary,
+            ),
+            tooltip: '切换音乐库视图',
+            onPressed: () {
+              setState(() {
+                _showLibraries = !_showLibraries;
+              });
+            },
+          ),
         ],
       ),
-      onDetailsPressed: () {
-        setState(() {
-          _showLibraries = !_showLibraries;
-        });
-      },
-      arrowColor: Colors.white,
+    );
+  }
+
+  String? _resolveAvatarUrl(MusicLibrary? library) {
+    if (library == null) return null;
+    final raw = library.extensions['avatarUrl'];
+    if (raw is! String || raw.trim().isEmpty) return null;
+    final uri = Uri.tryParse(raw.trim());
+    if (uri == null || (!uri.hasScheme && !uri.hasAbsolutePath)) return null;
+    return raw.trim();
+  }
+
+  Widget _buildDefaultAvatar(Color bg, Color fg) {
+    return ColoredBox(
+      color: bg,
+      child: Icon(Icons.person, size: 40, color: fg),
     );
   }
 

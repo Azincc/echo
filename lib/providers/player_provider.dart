@@ -7,10 +7,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:just_audio/just_audio.dart';
 import '../data/models/song.dart';
 import '../data/models/audio_quality.dart';
+import '../data/models/server_address.dart';
 import '../data/sources/subsonic_api_client.dart';
 import '../data/repositories/music_repository.dart';
 import '../core/constants/api_constants.dart';
 import '../core/utils/logger.dart';
+import '../core/utils/network_error_notifier.dart';
 import '../core/services/audio_handler_service.dart';
 
 import 'music_provider.dart';
@@ -341,6 +343,12 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
     } catch (e) {
       Logger.error('Failed to play song', e);
 
+      final hasAvailableRoute = await _refreshRoutesAndCheckAvailability();
+      if (!hasAvailableRoute) {
+        NetworkErrorNotifier.show('网络异常，当前无可用线路');
+        return;
+      }
+
       // 如果播放失败且没有转码过，尝试转码播放
       if (_needsTranscoding(song.suffix) == null) {
         Logger.info('Original format failed, retrying with MP3 transcoding');
@@ -370,7 +378,10 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
       await _scrobble(song.id, submission: false);
     } catch (e) {
       Logger.error('Failed to play song even with transcoding', e);
-      // 可以在这里添加用户提示
+      final hasAvailableRoute = await _refreshRoutesAndCheckAvailability();
+      if (!hasAvailableRoute) {
+        NetworkErrorNotifier.show('网络异常，当前无可用线路');
+      }
     }
   }
 
@@ -541,6 +552,19 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
   /// 切换随机播放
   Future<void> toggleShuffle() async {
     await setShuffleEnabled(!state.shuffleEnabled);
+  }
+
+  /// 播放失败后刷新全部线路，确认是否存在可用线路
+  Future<bool> _refreshRoutesAndCheckAvailability() async {
+    try {
+      final pool = _ref.read(addressPoolProvider);
+      final active = await pool.probeAll();
+      if (active?.status == ServerAddressStatus.ok) return true;
+      return pool.addresses.any((a) => a.status == ServerAddressStatus.ok);
+    } catch (e) {
+      Logger.warn('Failed to refresh routes after playback error', e);
+      return false;
+    }
   }
 
   /// 当前播放模式（三态）

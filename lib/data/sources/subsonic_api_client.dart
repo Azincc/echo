@@ -141,7 +141,12 @@ class SubsonicApiClient {
   }
 
   /// Generate Stream URL
-  String getStreamUrl(String songId, {int? maxBitRate, String? format}) {
+  String getStreamUrl(
+    String songId, {
+    int? maxBitRate,
+    String? format,
+    int? timeOffset,
+  }) {
     if (_library == null) return '';
     final baseUrl = _dio.options.baseUrl;
     if (baseUrl.isEmpty) return '';
@@ -155,6 +160,9 @@ class SubsonicApiClient {
     }
     if (format != null) {
       params['format'] = format;
+    }
+    if (timeOffset != null && timeOffset > 0) {
+      params['timeOffset'] = timeOffset.toString();
     }
 
     // 流式播放始终使用 /rest/stream（包括转码）

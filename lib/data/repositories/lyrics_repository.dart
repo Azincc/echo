@@ -24,13 +24,28 @@ class LyricsRepository {
     String? album,
     Duration? duration,
   }) async {
+    final allowExternalLookup = _canUseExternalSources(
+      title: title,
+      artist: artist,
+    );
+
     // 先查缓存
-    final cached = await _getFromCache(songId);
+    var cached = await _getFromCache(songId);
+    if (!allowExternalLookup &&
+        cached != null &&
+        cached.sourceId != 'subsonic') {
+      await clearCacheForSong(songId);
+      cached = null;
+    }
+
     // 有同步歌词直接返回；非同步缓存尝试刷新一次（可升级为带时间轴版本）
     if (cached != null && cached.hasSynced) return cached;
 
     // 按优先级逐一查询提供商
     for (final source in _sources) {
+      if (!allowExternalLookup && source.id != 'subsonic') {
+        continue;
+      }
       try {
         final lyrics = await source.fetchLyrics(
           title: title,
@@ -49,7 +64,36 @@ class LyricsRepository {
     }
 
     // 所有源都失败时，回退到旧缓存（即便是非同步）
+    if (!allowExternalLookup &&
+        cached != null &&
+        cached.sourceId != 'subsonic') {
+      return null;
+    }
     return cached;
+  }
+
+  bool _canUseExternalSources({required String title, required String artist}) {
+    if (_isUnknownArtist(artist)) return false;
+    if (_looksLikePathTitle(title)) return false;
+    return true;
+  }
+
+  bool _isUnknownArtist(String artist) {
+    final normalized = artist.trim().toLowerCase();
+    if (normalized.isEmpty) return true;
+    return normalized == 'unknown artist' ||
+        normalized == '[unknown artist]' ||
+        normalized == '[unknown]';
+  }
+
+  bool _looksLikePathTitle(String title) {
+    final normalized = title.trim().toLowerCase();
+    if (normalized.isEmpty) return true;
+    final slashCount =
+        '/'.allMatches(normalized).length + '\\'.allMatches(normalized).length;
+    if (slashCount >= 2) return true;
+    if (normalized.contains('cdimage')) return true;
+    return false;
   }
 
   Future<Lyrics?> _getFromCache(String songId) async {

@@ -27,6 +27,15 @@ jobs:
       - name: Run code generation
         run: dart run build_runner build --delete-conflicting-outputs
 
+      - name: Get version name
+        id: version
+        shell: pwsh
+        run: |
+          $line = (Get-Content pubspec.yaml | Where-Object { $_ -match '^version:\s*' } | Select-Object -First 1)
+          if (-not $line) { throw "Cannot find version in pubspec.yaml" }
+          $version = ($line -replace '^version:\s*', '').Trim().Split('+')[0]
+          "name=v$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+
       - name: Build Windows
         run: flutter build windows --release
 
@@ -36,5 +45,5 @@ jobs:
       - name: Upload Windows Build
         uses: actions/upload-artifact@v4
         with:
-          name: windows-release
+          name: windows-release-${{ steps.version.outputs.name }}
           path: windows-release.zip

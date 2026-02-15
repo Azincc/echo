@@ -27,6 +27,12 @@ jobs:
       - name: Run code generation
         run: dart run build_runner build --delete-conflicting-outputs
 
+      - name: Get version name
+        id: version
+        run: |
+          version=$(grep '^version:' pubspec.yaml | head -n1 | awk '{print $2}' | cut -d'+' -f1)
+          echo "name=v${version}" >> $GITHUB_OUTPUT
+
       - name: Build Web
         run: flutter build web --release
 
@@ -36,5 +42,5 @@ jobs:
       - name: Upload Web Build
         uses: actions/upload-artifact@v4
         with:
-          name: web-release
+          name: web-release-${{ steps.version.outputs.name }}
           path: web-release.zip

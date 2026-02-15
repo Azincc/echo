@@ -81,7 +81,8 @@ jobs:
           if [[ "${{ github.ref_type }}" == "tag" ]]; then
             echo "name=${{ github.ref_name }}" >> $GITHUB_OUTPUT
           else
-            echo "name=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
+            version=$(grep '^version:' pubspec.yaml | head -n1 | awk '{print $2}' | cut -d'+' -f1)
+            echo "name=v${version}" >> $GITHUB_OUTPUT
           fi
 
       - name: Upload APK (arm64-v8a)

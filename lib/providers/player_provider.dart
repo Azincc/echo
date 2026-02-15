@@ -578,10 +578,12 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
   Future<void> setPlaybackMode(PlaybackMode mode) async {
     switch (mode) {
       case PlaybackMode.shuffle:
-        await _audioPlayer?.setLoopMode(LoopMode.all);
+        // 队列是手动切歌而非播放器内建列表。
+        // 在随机模式使用 LoopMode.off，避免底层播放器自动重放当前单曲。
+        await _audioPlayer?.setLoopMode(LoopMode.off);
         await _audioPlayer?.setShuffleModeEnabled(true);
         if (mounted) {
-          state = state.copyWith(loopMode: LoopMode.all, shuffleEnabled: true);
+          state = state.copyWith(loopMode: LoopMode.off, shuffleEnabled: true);
         }
         break;
       case PlaybackMode.repeatAll:
@@ -613,18 +615,29 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
   }
 
   int? _getRandomIndexExcludingCurrent() {
-    final queueLength = state.queue.length;
-    if (queueLength <= 1) return null;
+    final queue = state.queue;
+    if (queue.length <= 1) return null;
 
-    var index = state.currentIndex;
-    var tries = 0;
-    while (index == state.currentIndex && tries < 10) {
-      index = _random.nextInt(queueLength);
-      tries++;
+    final currentIndex = state.currentIndex;
+    final currentSongId = state.currentSong?.id;
+
+    final nonDuplicateCandidates = <int>[];
+    final fallbackCandidates = <int>[];
+
+    for (var i = 0; i < queue.length; i++) {
+      if (i == currentIndex) continue;
+      fallbackCandidates.add(i);
+      if (currentSongId == null || queue[i].id != currentSongId) {
+        nonDuplicateCandidates.add(i);
+      }
     }
 
-    if (index == state.currentIndex) return null;
-    return index;
+    final candidates = nonDuplicateCandidates.isNotEmpty
+        ? nonDuplicateCandidates
+        : fallbackCandidates;
+    if (candidates.isEmpty) return null;
+
+    return candidates[_random.nextInt(candidates.length)];
   }
 
   /// 添加到队列末尾
@@ -636,6 +649,19 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
   /// 添加多首到队列
   void addAllToQueue(List<Song> songs) {
     final newQueue = [...state.queue, ...songs];
+    state = state.copyWith(queue: newQueue);
+  }
+
+  /// 添加到下一曲位置
+  Future<void> playNext(Song song) async {
+    if (state.queue.isEmpty || state.currentSong == null) {
+      await playSong(song, queue: [song], index: 0);
+      return;
+    }
+
+    final newQueue = [...state.queue];
+    final insertIndex = (state.currentIndex + 1).clamp(0, newQueue.length);
+    newQueue.insert(insertIndex, song);
     state = state.copyWith(queue: newQueue);
   }
 
@@ -680,6 +706,14 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
       await _scrobble(currentSong.id, submission: true);
     }
 
+    // 随机模式优先：从队列中随机到下一首，不走 loopMode 分支。
+    if (state.shuffleEnabled) {
+      if (state.queue.length > 1) {
+        await next();
+      }
+      return;
+    }
+
     // 根据循环模式决定下一步
     if (state.loopMode == LoopMode.one) {
       // 单曲循环
@@ -715,41 +749,82 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
   Future<void> toggleFavorite() async {
     final currentSong = state.currentSong;
     if (currentSong == null) return;
+    await toggleSongFavorite(currentSong);
+  }
 
+  /// 切换指定歌曲的收藏状态
+  Future<bool?> toggleSongFavorite(Song song) async {
     try {
-      final newStarred = !currentSong.starred;
-      await _musicRepository.setSongStarred(currentSong.id, newStarred);
-
-      // 更新当前歌曲的 starred 状态
-      final updatedSong = Song(
-        id: currentSong.id,
-        title: currentSong.title,
-        artist: currentSong.artist,
-        album: currentSong.album,
-        coverArt: currentSong.coverArt,
-        duration: currentSong.duration,
-        starred: newStarred,
-        artistId: currentSong.artistId,
-        albumId: currentSong.albumId,
-      );
-
-      // 更新队列中的歌曲
-      final updatedQueue = state.queue.map((song) {
-        if (song.id == currentSong.id) {
-          return updatedSong;
+      Song? queueSong;
+      for (final queued in state.queue) {
+        if (queued.id == song.id) {
+          queueSong = queued;
+          break;
         }
-        return song;
+      }
+      final currentSong = state.currentSong;
+      final currentStarred =
+          queueSong?.starred ??
+          (currentSong?.id == song.id ? currentSong!.starred : song.starred);
+      final newStarred = !currentStarred;
+      await _musicRepository.setSongStarred(song.id, newStarred);
+
+      final updatedQueue = state.queue.map((queuedSong) {
+        if (queuedSong.id != song.id) return queuedSong;
+        return _copySongWithStarred(queuedSong, newStarred);
       }).toList();
 
-      state = state.copyWith(currentSong: updatedSong, queue: updatedQueue);
+      final updatedCurrentSong =
+          currentSong != null && currentSong.id == song.id
+          ? _copySongWithStarred(currentSong, newStarred)
+          : state.currentSong;
+
+      state = state.copyWith(
+        currentSong: updatedCurrentSong,
+        queue: updatedQueue,
+      );
 
       // 刷新相关数据
       _ref.invalidate(starredProvider);
+      _ref.invalidate(randomSongsProvider);
+      _ref.invalidate(allSongsProvider);
+      if (song.albumId != null && song.albumId!.isNotEmpty) {
+        _ref.invalidate(albumDetailProvider(song.albumId!));
+      }
 
-      Logger.info('Toggled favorite for ${currentSong.title}: $newStarred');
+      Logger.info('Toggled favorite for ${song.title}: $newStarred');
+      return newStarred;
     } catch (e) {
       Logger.error('Failed to toggle favorite', e);
+      return null;
     }
+  }
+
+  Song _copySongWithStarred(Song source, bool starred) {
+    return Song(
+      id: source.id,
+      title: source.title,
+      album: source.album,
+      albumId: source.albumId,
+      artist: source.artist,
+      artistId: source.artistId,
+      track: source.track,
+      year: source.year,
+      genre: source.genre,
+      coverArt: source.coverArt,
+      size: source.size,
+      contentType: source.contentType,
+      suffix: source.suffix,
+      duration: source.duration,
+      bitRate: source.bitRate,
+      path: source.path,
+      isVideo: source.isVideo,
+      playCount: source.playCount,
+      created: source.created,
+      starred: starred,
+      discNumber: source.discNumber,
+      type: source.type,
+    );
   }
 
   /// 缓存完成后注册缓存元数据
@@ -797,6 +872,11 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
   void _preCacheNextSong() async {
     if (!state.hasNext) return;
     if (kIsWeb) return; // Web 平台不预缓存
+    if (state.shuffleEnabled) return; // 随机模式下一首不确定，跳过顺序预缓存
+    if (state.currentIndex < 0 ||
+        state.currentIndex >= state.queue.length - 1) {
+      return;
+    }
 
     final nextSong = state.queue[state.currentIndex + 1];
     final authState = _ref.read(authStateProvider);

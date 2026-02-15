@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../providers/player_provider.dart';
+import 'song_options_sheet.dart';
 
 /// 播放队列底部弹窗
 class PlayQueueSheet extends ConsumerWidget {
@@ -100,26 +101,25 @@ class PlayQueueSheet extends ConsumerWidget {
                             subtitle: song.artist != null
                                 ? Text(song.artist!)
                                 : null,
-                            trailing: PopupMenuButton(
+                            trailing: IconButton(
                               icon: const Icon(Icons.more_vert),
-                              itemBuilder: (context) => [
-                                const PopupMenuItem(
-                                  value: 'remove',
-                                  child: Row(
-                                    children: [
-                                      Icon(Icons.remove_circle_outline),
-                                      SizedBox(width: 8),
-                                      Text('从队列移除'),
-                                    ],
-                                  ),
-                                ),
-                              ],
-                              onSelected: (value) {
-                                if (value == 'remove') {
-                                  ref
-                                      .read(playerProvider.notifier)
-                                      .removeFromQueue(index);
-                                }
+                              onPressed: () {
+                                showSongOptionsSheet(
+                                  context: context,
+                                  song: song,
+                                  extraActions: [
+                                    SongOptionsExtraAction(
+                                      icon: Icons.remove_circle_outline,
+                                      title: '从队列移除',
+                                      isDestructive: true,
+                                      onPressed: () {
+                                        ref
+                                            .read(playerProvider.notifier)
+                                            .removeFromQueue(index);
+                                      },
+                                    ),
+                                  ],
+                                );
                               },
                             ),
                             onTap: () {

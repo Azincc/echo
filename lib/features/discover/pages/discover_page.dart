@@ -5,6 +5,7 @@ import '../../../providers/player_provider.dart';
 import '../../../widgets/cover_art_image.dart';
 import '../../../widgets/main_scaffold.dart';
 import '../../library/pages/album_detail_page.dart';
+import '../../player/widgets/song_options_sheet.dart';
 import 'search_page.dart';
 
 /// 音乐流首页 - Tab 1
@@ -175,7 +176,7 @@ class RandomSongsSection extends ConsumerWidget {
               trailing: IconButton(
                 icon: Icon(Icons.more_vert, color: trailingIconColor),
                 onPressed: () {
-                  // TODO: 显示更多操作菜单
+                  showSongOptionsSheet(context: context, song: song);
                 },
               ),
             );

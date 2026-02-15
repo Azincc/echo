@@ -14,6 +14,7 @@ import '../../../data/models/song.dart';
 import '../../../core/network/connectivity_monitor.dart';
 import '../../../widgets/cover_art_image.dart';
 import '../widgets/play_queue_sheet.dart';
+import '../widgets/song_options_sheet.dart';
 import '../widgets/synced_lyrics_view.dart';
 
 /// 全屏播放器
@@ -199,7 +200,10 @@ class _FullPlayerPageState extends ConsumerState<FullPlayerPage>
                             IconButton(
                               icon: const Icon(Icons.more_vert),
                               onPressed: () {
-                                // TODO: 更多选项菜单
+                                showSongOptionsSheet(
+                                  context: context,
+                                  song: currentSong,
+                                );
                               },
                             ),
                           ],

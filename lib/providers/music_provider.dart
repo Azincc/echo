@@ -4,10 +4,13 @@ import '../data/models/artist.dart';
 import '../data/models/song.dart';
 import '../data/repositories/music_repository.dart';
 import '../core/utils/network_error_notifier.dart';
+import '../core/utils/logger.dart';
 import 'package:echoes/providers/library_provider.dart';
 
 import 'api_provider.dart';
 import 'metadata_cache_provider.dart';
+
+const _musicLogTag = 'MUSIC';
 
 /// 音乐仓库 Provider
 final musicRepositoryProvider = Provider<MusicRepository?>((ref) {
@@ -31,22 +34,44 @@ final randomSongsProvider = FutureProvider<List<Song>>((ref) async {
   final repository = ref.watch(musicRepositoryProvider);
   final cache = ref.watch(metadataCacheRepositoryProvider);
   final libraryId = ref.watch(activeLibraryProvider)?.id;
-  if (repository == null || libraryId == null || libraryId.isEmpty) return [];
+  if (repository == null || libraryId == null || libraryId.isEmpty) {
+    Logger.warnWithTag(
+      _musicLogTag,
+      'randomSongs skipped: repository or library unavailable',
+    );
+    return [];
+  }
 
   try {
     await ref.watch(ensureActiveAddressProvider.future);
     final songs = await repository.getRandomSongs(size: 20);
     await cache.cacheRandomSongs(libraryId, songs);
     ref.read(randomSongsLoadFailedProvider.notifier).state = false;
+    Logger.infoWithTag(
+      _musicLogTag,
+      'randomSongs loaded from remote, count=${songs.length}',
+    );
     return songs;
-  } catch (_) {
+  } catch (e, stackTrace) {
+    Logger.warnWithTag(_musicLogTag, 'randomSongs remote load failed', e);
+    Logger.debugWithTag(
+      _musicLogTag,
+      'randomSongs fallback stackTrace',
+      null,
+      stackTrace,
+    );
     NetworkErrorNotifier.show('网络异常');
     final cached = await cache.getRandomSongs(libraryId);
     if (cached != null) {
       ref.read(randomSongsLoadFailedProvider.notifier).state = false;
+      Logger.infoWithTag(
+        _musicLogTag,
+        'randomSongs fallback to cache, count=${cached.length}',
+      );
       return cached;
     }
     ref.read(randomSongsLoadFailedProvider.notifier).state = true;
+    Logger.warnWithTag(_musicLogTag, 'randomSongs cache miss');
     return [];
   }
 });
@@ -56,22 +81,44 @@ final recentAlbumsProvider = FutureProvider<List<Album>>((ref) async {
   final repository = ref.watch(musicRepositoryProvider);
   final cache = ref.watch(metadataCacheRepositoryProvider);
   final libraryId = ref.watch(activeLibraryProvider)?.id;
-  if (repository == null || libraryId == null || libraryId.isEmpty) return [];
+  if (repository == null || libraryId == null || libraryId.isEmpty) {
+    Logger.warnWithTag(
+      _musicLogTag,
+      'recentAlbums skipped: repository or library unavailable',
+    );
+    return [];
+  }
 
   try {
     await ref.watch(ensureActiveAddressProvider.future);
     final albums = await repository.getAlbumList(type: 'recent', size: 10);
     await cache.cacheRecentAlbums(libraryId, albums);
     ref.read(recentAlbumsLoadFailedProvider.notifier).state = false;
+    Logger.infoWithTag(
+      _musicLogTag,
+      'recentAlbums loaded from remote, count=${albums.length}',
+    );
     return albums;
-  } catch (_) {
+  } catch (e, stackTrace) {
+    Logger.warnWithTag(_musicLogTag, 'recentAlbums remote load failed', e);
+    Logger.debugWithTag(
+      _musicLogTag,
+      'recentAlbums fallback stackTrace',
+      null,
+      stackTrace,
+    );
     NetworkErrorNotifier.show('网络异常');
     final cached = await cache.getRecentAlbums(libraryId);
     if (cached != null) {
       ref.read(recentAlbumsLoadFailedProvider.notifier).state = false;
+      Logger.infoWithTag(
+        _musicLogTag,
+        'recentAlbums fallback to cache, count=${cached.length}',
+      );
       return cached;
     }
     ref.read(recentAlbumsLoadFailedProvider.notifier).state = true;
+    Logger.warnWithTag(_musicLogTag, 'recentAlbums cache miss');
     return [];
   }
 });
@@ -81,22 +128,44 @@ final frequentAlbumsProvider = FutureProvider<List<Album>>((ref) async {
   final repository = ref.watch(musicRepositoryProvider);
   final cache = ref.watch(metadataCacheRepositoryProvider);
   final libraryId = ref.watch(activeLibraryProvider)?.id;
-  if (repository == null || libraryId == null || libraryId.isEmpty) return [];
+  if (repository == null || libraryId == null || libraryId.isEmpty) {
+    Logger.warnWithTag(
+      _musicLogTag,
+      'frequentAlbums skipped: repository or library unavailable',
+    );
+    return [];
+  }
 
   try {
     await ref.watch(ensureActiveAddressProvider.future);
     final albums = await repository.getAlbumList(type: 'frequent', size: 10);
     await cache.cacheFrequentAlbums(libraryId, albums);
     ref.read(frequentAlbumsLoadFailedProvider.notifier).state = false;
+    Logger.infoWithTag(
+      _musicLogTag,
+      'frequentAlbums loaded from remote, count=${albums.length}',
+    );
     return albums;
-  } catch (_) {
+  } catch (e, stackTrace) {
+    Logger.warnWithTag(_musicLogTag, 'frequentAlbums remote load failed', e);
+    Logger.debugWithTag(
+      _musicLogTag,
+      'frequentAlbums fallback stackTrace',
+      null,
+      stackTrace,
+    );
     NetworkErrorNotifier.show('网络异常');
     final cached = await cache.getFrequentAlbums(libraryId);
     if (cached != null) {
       ref.read(frequentAlbumsLoadFailedProvider.notifier).state = false;
+      Logger.infoWithTag(
+        _musicLogTag,
+        'frequentAlbums fallback to cache, count=${cached.length}',
+      );
       return cached;
     }
     ref.read(frequentAlbumsLoadFailedProvider.notifier).state = true;
+    Logger.warnWithTag(_musicLogTag, 'frequentAlbums cache miss');
     return [];
   }
 });
@@ -115,7 +184,13 @@ final allAlbumsProvider = FutureProvider.autoDispose<List<Album>>((ref) async {
   final repository = ref.watch(musicRepositoryProvider);
   final cache = ref.watch(metadataCacheRepositoryProvider);
   final libraryId = ref.watch(activeLibraryProvider)?.id;
-  if (repository == null || libraryId == null || libraryId.isEmpty) return [];
+  if (repository == null || libraryId == null || libraryId.isEmpty) {
+    Logger.warnWithTag(
+      _musicLogTag,
+      'allAlbums skipped: repository or library unavailable',
+    );
+    return [];
+  }
 
   try {
     await ref.watch(ensureActiveAddressProvider.future);
@@ -125,15 +200,31 @@ final allAlbumsProvider = FutureProvider.autoDispose<List<Album>>((ref) async {
     );
     await cache.cacheAllAlbums(libraryId, albums);
     ref.read(allAlbumsLoadFailedProvider.notifier).state = false;
+    Logger.infoWithTag(
+      _musicLogTag,
+      'allAlbums loaded from remote, count=${albums.length}',
+    );
     return albums;
-  } catch (_) {
+  } catch (e, stackTrace) {
+    Logger.warnWithTag(_musicLogTag, 'allAlbums remote load failed', e);
+    Logger.debugWithTag(
+      _musicLogTag,
+      'allAlbums fallback stackTrace',
+      null,
+      stackTrace,
+    );
     NetworkErrorNotifier.show('网络异常，专辑加载失败');
     final cached = await cache.getAllAlbums(libraryId);
     if (cached != null) {
       ref.read(allAlbumsLoadFailedProvider.notifier).state = false;
+      Logger.infoWithTag(
+        _musicLogTag,
+        'allAlbums fallback to cache, count=${cached.length}',
+      );
       return cached;
     }
     ref.read(allAlbumsLoadFailedProvider.notifier).state = true;
+    Logger.warnWithTag(_musicLogTag, 'allAlbums cache miss');
     return [];
   }
 });
@@ -145,6 +236,10 @@ final albumDetailProvider = FutureProvider.autoDispose
       final cache = ref.watch(metadataCacheRepositoryProvider);
       final libraryId = ref.watch(activeLibraryProvider)?.id;
       if (repository == null || libraryId == null || libraryId.isEmpty) {
+        Logger.warnWithTag(
+          _musicLogTag,
+          'albumDetail skipped: repository or library unavailable',
+        );
         return null;
       }
       try {
@@ -154,17 +249,45 @@ final albumDetailProvider = FutureProvider.autoDispose
           await cache.cacheAlbumDetail(libraryId, detail);
           ref.read(albumDetailLoadFailedProvider(albumId).notifier).state =
               false;
+          Logger.infoWithTag(
+            _musicLogTag,
+            'albumDetail loaded from remote: albumId=$albumId songs=${detail.songs.length}',
+          );
+        } else {
+          Logger.warnWithTag(
+            _musicLogTag,
+            'albumDetail remote returned null: albumId=$albumId',
+          );
         }
         return detail;
-      } catch (_) {
+      } catch (e, stackTrace) {
+        Logger.warnWithTag(
+          _musicLogTag,
+          'albumDetail remote load failed: albumId=$albumId',
+          e,
+        );
+        Logger.debugWithTag(
+          _musicLogTag,
+          'albumDetail fallback stackTrace: albumId=$albumId',
+          null,
+          stackTrace,
+        );
         NetworkErrorNotifier.show('网络异常，专辑加载失败');
         final cached = await cache.getAlbumDetail(libraryId, albumId);
         if (cached != null) {
           ref.read(albumDetailLoadFailedProvider(albumId).notifier).state =
               false;
+          Logger.infoWithTag(
+            _musicLogTag,
+            'albumDetail fallback to cache: albumId=$albumId songs=${cached.songs.length}',
+          );
           return cached;
         }
         ref.read(albumDetailLoadFailedProvider(albumId).notifier).state = true;
+        Logger.warnWithTag(
+          _musicLogTag,
+          'albumDetail cache miss: albumId=$albumId',
+        );
         return null;
       }
     });
@@ -174,22 +297,44 @@ final allSongsProvider = FutureProvider.autoDispose<List<Song>>((ref) async {
   final repository = ref.watch(musicRepositoryProvider);
   final cache = ref.watch(metadataCacheRepositoryProvider);
   final libraryId = ref.watch(activeLibraryProvider)?.id;
-  if (repository == null || libraryId == null || libraryId.isEmpty) return [];
+  if (repository == null || libraryId == null || libraryId.isEmpty) {
+    Logger.warnWithTag(
+      _musicLogTag,
+      'allSongs skipped: repository or library unavailable',
+    );
+    return [];
+  }
 
   try {
     await ref.watch(ensureActiveAddressProvider.future);
     final songs = await repository.getAllSongs();
     await cache.cacheAllSongs(libraryId, songs);
     ref.read(allSongsLoadFailedProvider.notifier).state = false;
+    Logger.infoWithTag(
+      _musicLogTag,
+      'allSongs loaded from remote, count=${songs.length}',
+    );
     return songs;
-  } catch (_) {
+  } catch (e, stackTrace) {
+    Logger.warnWithTag(_musicLogTag, 'allSongs remote load failed', e);
+    Logger.debugWithTag(
+      _musicLogTag,
+      'allSongs fallback stackTrace',
+      null,
+      stackTrace,
+    );
     NetworkErrorNotifier.show('网络异常，歌曲加载失败');
     final cached = await cache.getAllSongs(libraryId);
     if (cached != null) {
       ref.read(allSongsLoadFailedProvider.notifier).state = false;
+      Logger.infoWithTag(
+        _musicLogTag,
+        'allSongs fallback to cache, count=${cached.length}',
+      );
       return cached;
     }
     ref.read(allSongsLoadFailedProvider.notifier).state = true;
+    Logger.warnWithTag(_musicLogTag, 'allSongs cache miss');
     return [];
   }
 });

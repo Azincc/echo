@@ -4,6 +4,7 @@
 // import 'package:echoes/core/constants/api_constants.dart'; // unused
 
 import 'package:echoes/data/models/music_library.dart'; // New model
+import 'package:echoes/core/utils/logger.dart';
 import 'package:echoes/data/repositories/auth_repository.dart';
 import 'package:echoes/data/repositories/library_repository.dart';
 
@@ -69,6 +70,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
 
   /// 初始化：加载活跃的 Library
   Future<void> _init() async {
+    Logger.infoWithTag('AUTH', 'auth state init start');
     state = state.copyWith(isLoading: true);
 
     // We need to wait for library provider to load?
@@ -89,11 +91,17 @@ class AuthNotifier extends StateNotifier<AuthState> {
           isLoading: false,
           currentLibrary: active,
         );
+        Logger.infoWithTag(
+          'AUTH',
+          'auth state init success, active library=${active.name}',
+        );
       } catch (_) {
         state = state.copyWith(isLoading: false, isAuthenticated: false);
+        Logger.warnWithTag('AUTH', 'auth state init: no active library');
       }
-    } catch (e) {
+    } catch (e, stackTrace) {
       state = state.copyWith(isLoading: false, isAuthenticated: false);
+      Logger.errorWithTag('AUTH', 'auth state init failed', e, stackTrace);
     }
   }
 
@@ -103,6 +111,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
     required String username,
     required String password,
   }) async {
+    Logger.infoWithTag('AUTH', 'loginWithPassword start: $serverUrl/$username');
     state = state.copyWith(isLoading: true, errorMessage: null);
 
     final result = await _repository.loginWithPassword(
@@ -120,6 +129,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
     required String username,
     required String apiKey,
   }) async {
+    Logger.infoWithTag('AUTH', 'loginWithApiKey start: $serverUrl/$username');
     state = state.copyWith(isLoading: true, errorMessage: null);
 
     final result = await _repository.loginWithApiKey(
@@ -145,6 +155,10 @@ class AuthNotifier extends StateNotifier<AuthState> {
         isLoading: false,
         currentLibrary: result.library!,
       );
+      Logger.infoWithTag(
+        'AUTH',
+        'login success: library=${result.library!.name} id=${result.library!.id}',
+      );
 
       return true;
     } else {
@@ -152,12 +166,17 @@ class AuthNotifier extends StateNotifier<AuthState> {
         isLoading: false,
         errorMessage: result.errorMessage,
       );
+      Logger.warnWithTag(
+        'AUTH',
+        'login failed: ${result.errorMessage ?? 'unknown error'}',
+      );
       return false;
     }
   }
 
   /// 登出
   Future<void> logout() async {
+    Logger.infoWithTag('AUTH', 'logout start');
     // Just deactivate current library? Or delete?
     // Usually logout means "switching users" or "clearing session".
     // For Multi-account, logout might just mean "Go to Library selection" or "Deactivate current".
@@ -172,16 +191,22 @@ class AuthNotifier extends StateNotifier<AuthState> {
       // For simple "Logout" behavior:
       // Just set isAuthenticated = false.
       // We might want to clear active library in DB too?
-      await _libraryRepository.setActiveLibrary(
-        '',
-      ); // Empty ID? Or implement "clearActive"
+      try {
+        await _libraryRepository.setActiveLibrary(
+          '',
+        ); // Empty ID? Or implement "clearActive"
+      } catch (e, stackTrace) {
+        Logger.errorWithTag('AUTH', 'failed to clear active library', e, stackTrace);
+      }
     }
 
     state = AuthState(isAuthenticated: false);
+    Logger.infoWithTag('AUTH', 'logout completed');
   }
 
   /// 切换当前 Library
   void switchLibrary(MusicLibrary library) {
+    Logger.infoWithTag('AUTH', 'switchLibrary: ${library.name}');
     state = state.copyWith(currentLibrary: library, isAuthenticated: true);
   }
 

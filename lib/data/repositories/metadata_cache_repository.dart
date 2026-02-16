@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:echoes/core/utils/logger.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/album.dart';
@@ -9,6 +10,7 @@ import 'music_repository.dart';
 
 /// 元数据缓存仓库（基于 SharedPreferences）
 class MetadataCacheRepository {
+  static const _tag = 'META_CACHE';
   static const String _prefix = 'metadata_cache_v1';
 
   String _key(String libraryId, String scope) =>
@@ -21,15 +23,34 @@ class MetadataCacheRepository {
   ) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_key(libraryId, scope), jsonEncode(value));
+    Logger.debugWithTag(
+      _tag,
+      'cache saved libraryId=$libraryId scope=$scope',
+    );
   }
 
   Future<Map<String, dynamic>?> _readMap(String libraryId, String scope) async {
     final prefs = await SharedPreferences.getInstance();
     final raw = prefs.getString(_key(libraryId, scope));
-    if (raw == null || raw.isEmpty) return null;
+    if (raw == null || raw.isEmpty) {
+      Logger.debugWithTag(
+        _tag,
+        'cache miss libraryId=$libraryId scope=$scope',
+      );
+      return null;
+    }
     try {
+      Logger.debugWithTag(
+        _tag,
+        'cache hit libraryId=$libraryId scope=$scope',
+      );
       return jsonDecode(raw) as Map<String, dynamic>;
-    } catch (_) {
+    } catch (e) {
+      Logger.warnWithTag(
+        _tag,
+        'cache parse failed libraryId=$libraryId scope=$scope',
+        e,
+      );
       return null;
     }
   }

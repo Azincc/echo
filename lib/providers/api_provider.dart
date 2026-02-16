@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:dio/dio.dart';
 import 'package:echoes/core/constants/api_constants.dart';
 import 'package:echoes/core/network/address_pool.dart';
@@ -43,6 +45,7 @@ final ensureActiveAddressProvider = FutureProvider<ServerAddress>((ref) async {
   final active = ref.watch(activeAddressProvider);
   if (active != null) return active;
 
+  Logger.warnWithTag('API', 'no active address, probing before request');
   final pool = ref.watch(addressPoolProvider);
   final firstProbe = await pool.probeAll();
   if (firstProbe != null) return firstProbe;
@@ -57,6 +60,7 @@ final ensureActiveAddressProvider = FutureProvider<ServerAddress>((ref) async {
     if (probed != null) return probed;
   }
 
+  Logger.errorWithTag('API', 'failed to acquire active server address');
   throw StateError('No active server address available');
 });
 
@@ -69,6 +73,7 @@ final autoFallbackInitProvider = FutureProvider<bool>((ref) async {
   ref.read(autoFallbackProvider.notifier).state = value;
   // 同步到 AddressPool
   ref.read(addressPoolProvider).autoFallback = value;
+  Logger.infoWithTag('API', 'autoFallback initialized: $value');
   return value;
 });
 
@@ -91,7 +96,15 @@ final addressPoolProvider = Provider<AddressPool>((ref) {
   final pool = AddressPool(
     probeDio,
     onAddressUpdated: (addr) {
-      ref.read(libraryRepositoryProvider).updateAddress(addr);
+      unawaited(
+        ref.read(libraryRepositoryProvider).updateAddress(addr).catchError((e) {
+          Logger.warnWithTag(
+            'API',
+            'failed to persist address update: ${addr.label}',
+            e,
+          );
+        }),
+      );
     },
     onActiveAddressChanged: (addr) {
       // Update UI state
@@ -107,7 +120,7 @@ final addressPoolProvider = Provider<AddressPool>((ref) {
         final mainDio = ref.read(dioProvider);
         if (mainDio.options.baseUrl != addr.url) {
           mainDio.options.baseUrl = addr.url;
-          Logger.info("Switched API Base URL to: ${addr.url}");
+          Logger.infoWithTag('API', 'switched base URL to: ${addr.url}');
         }
       }
     },
@@ -129,6 +142,7 @@ final configuredDioProvider = Provider<Dio>((ref) {
   // Avoid adding interceptor multiple times
   if (!dio.interceptors.any((i) => i is FallbackInterceptor)) {
     dio.interceptors.add(FallbackInterceptor(addressPool, dio));
+    Logger.infoWithTag('API', 'fallback interceptor attached');
   }
 
   return dio;
@@ -156,9 +170,11 @@ final networkManagerProvider = Provider<void>((ref) {
   final pool = ref.watch(addressPoolProvider);
   final healthChecker = HealthChecker(pool);
   healthChecker.start();
+  Logger.infoWithTag('API', 'network manager started');
 
   ref.onDispose(() {
     healthChecker.stop();
+    Logger.infoWithTag('API', 'network manager disposed');
   });
 });
 
@@ -169,8 +185,13 @@ final activeLibrarySynchronizerProvider = Provider<void>((ref) {
   final pool = ref.watch(addressPoolProvider);
 
   if (activeLib != null) {
+    Logger.infoWithTag(
+      'API',
+      'sync active library: ${activeLib.name} addresses=${activeLib.addresses.length}',
+    );
     pool.setAddresses(activeLib.addresses);
   } else {
+    Logger.warnWithTag('API', 'no active library, clear address pool');
     pool.setAddresses([]);
   }
 });
@@ -188,6 +209,7 @@ final subsonicApiClientProvider = Provider<SubsonicApiClient>((ref) {
   // Set config from active library
   final activeLib = ref.watch(activeLibraryProvider);
   client.setLibrary(activeLib);
+  Logger.debugWithTag('API', 'client bound to library=${activeLib?.id ?? 'none'}');
 
   return client;
 });

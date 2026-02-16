@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'core/utils/logger.dart';
 import 'core/theme/app_theme.dart';
 import 'features/auth/pages/login_page.dart';
 import 'providers/auth_provider.dart';
@@ -40,6 +41,10 @@ final routerProvider = Provider<GoRouter>((ref) {
   ref.listen<AuthState>(authStateProvider, (previous, next) {
     // 当认证状态变化时，刷新路由
     if (previous?.isAuthenticated != next.isAuthenticated) {
+      Logger.infoWithTag(
+        'ROUTER',
+        'auth changed: ${previous?.isAuthenticated ?? false} -> ${next.isAuthenticated}',
+      );
       rootNavigatorKey.currentState?.context.go(
         next.isAuthenticated ? '/home' : '/login',
       );
@@ -127,6 +132,7 @@ class _SplashPageState extends ConsumerState<SplashPage> {
   }
 
   Future<void> _checkAuthAndNavigate() async {
+    Logger.infoWithTag('SPLASH', 'startup auth check begin');
     // 请求通知权限 (Android 13+)
     if (!kIsWeb && Platform.isAndroid) {
       await Permission.notification.request();
@@ -143,8 +149,10 @@ class _SplashPageState extends ConsumerState<SplashPage> {
 
     if (authState.isAuthenticated) {
       if (mounted) context.go('/home');
+      Logger.infoWithTag('SPLASH', 'startup auth check result: go /home');
     } else {
       if (mounted) context.go('/login');
+      Logger.infoWithTag('SPLASH', 'startup auth check result: go /login');
     }
   }
 

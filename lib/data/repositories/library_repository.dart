@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:drift/drift.dart';
+import 'package:echoes/core/utils/logger.dart';
 import 'package:echoes/data/models/music_library.dart';
 import 'package:echoes/data/models/server_address.dart';
 import 'package:echoes/data/sources/database/app_database.dart';
@@ -13,6 +14,7 @@ import 'package:echoes/data/sources/database/app_database.dart';
 // Let's rely on AppDatabase's types.
 
 class LibraryRepository {
+  static const _tag = 'LIB_REPO';
   final AppDatabase _db;
 
   LibraryRepository(this._db);
@@ -23,6 +25,7 @@ class LibraryRepository {
         ]))
         .watch()
         .asyncMap((rows) async {
+          Logger.debugWithTag(_tag, 'watchLibraries emission count=${rows.length}');
           final libraries = <MusicLibrary>[];
           for (final row in rows) {
             final addresses =
@@ -43,6 +46,7 @@ class LibraryRepository {
   }
 
   Future<void> addLibrary(MusicLibrary library) async {
+    Logger.infoWithTag(_tag, 'addLibrary id=${library.id} name=${library.name}');
     await _db.transaction(() async {
       await _db
           .into(_db.musicLibraries)
@@ -84,6 +88,10 @@ class LibraryRepository {
   }
 
   Future<void> updateLibrary(MusicLibrary library) async {
+    Logger.infoWithTag(
+      _tag,
+      'updateLibrary id=${library.id} name=${library.name}',
+    );
     await _db.transaction(() async {
       await (_db.update(
         _db.musicLibraries,
@@ -114,6 +122,10 @@ class LibraryRepository {
   }
 
   Future<void> updateAddress(ServerAddress addr) async {
+    Logger.debugWithTag(
+      _tag,
+      'updateAddress id=${addr.id} label=${addr.label} status=${addr.status.name}',
+    );
     await (_db.update(
       _db.serverAddresses,
     )..where((t) => t.id.equals(addr.id))).write(
@@ -129,10 +141,15 @@ class LibraryRepository {
   }
 
   Future<void> deleteLibrary(String id) async {
+    Logger.infoWithTag(_tag, 'deleteLibrary id=$id');
     await (_db.delete(_db.musicLibraries)..where((t) => t.id.equals(id))).go();
   }
 
   Future<void> addAddress(ServerAddress addr) async {
+    Logger.infoWithTag(
+      _tag,
+      'addAddress id=${addr.id} libraryId=${addr.libraryId} label=${addr.label}',
+    );
     await _db
         .into(_db.serverAddresses)
         .insert(
@@ -149,10 +166,16 @@ class LibraryRepository {
   }
 
   Future<void> deleteAddress(String id) async {
+    Logger.infoWithTag(_tag, 'deleteAddress id=$id');
     await (_db.delete(_db.serverAddresses)..where((t) => t.id.equals(id))).go();
   }
 
   Future<void> setActiveLibrary(String id) async {
+    if (id.isEmpty) {
+      Logger.warnWithTag(_tag, 'setActiveLibrary called with empty id');
+    } else {
+      Logger.infoWithTag(_tag, 'setActiveLibrary id=$id');
+    }
     await _db.transaction(() async {
       await (_db.update(_db.musicLibraries)
             ..where((t) => t.isActive.equals(true)))

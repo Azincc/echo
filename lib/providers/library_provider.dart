@@ -2,6 +2,7 @@ import 'package:echoes/data/models/music_library.dart';
 import 'package:echoes/data/models/server_address.dart';
 import 'package:echoes/data/repositories/library_repository.dart';
 import 'package:echoes/data/sources/database/database_provider.dart';
+import 'package:echoes/core/utils/logger.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 final libraryRepositoryProvider = Provider<LibraryRepository>((ref) {
@@ -51,6 +52,9 @@ final activeLibraryProvider = Provider<MusicLibrary?>((ref) {
   return asyncLibraries.when(
     data: (libs) {
       if (libs.isEmpty) {
+        if (_lastActiveLibrary != null) {
+          Logger.infoWithTag('LIBRARY', 'no libraries available');
+        }
         _lastActiveLibrary = null;
         return null;
       }
@@ -58,6 +62,10 @@ final activeLibraryProvider = Provider<MusicLibrary?>((ref) {
       try {
         current = libs.firstWhere((l) => l.isActive);
       } catch (_) {
+        Logger.warnWithTag(
+          'LIBRARY',
+          'no active library flag found, fallback to first library',
+        );
         current = libs.isNotEmpty ? libs.first : null;
       }
 
@@ -72,10 +80,21 @@ final activeLibraryProvider = Provider<MusicLibrary?>((ref) {
         return _lastActiveLibrary;
       }
 
+      if (_lastActiveLibrary?.id != current.id) {
+        Logger.infoWithTag('LIBRARY', 'active library -> ${current.name}');
+      }
       _lastActiveLibrary = current;
       return current;
     },
-    error: (error, stackTrace) => null,
+    error: (error, stackTrace) {
+      Logger.errorWithTag(
+        'LIBRARY',
+        'watch libraries failed',
+        error,
+        stackTrace,
+      );
+      return null;
+    },
     loading: () => null,
   );
 });

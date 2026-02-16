@@ -1,8 +1,10 @@
 import 'package:dio/dio.dart';
 import 'package:echoes/core/network/address_pool.dart';
+import 'package:echoes/core/utils/logger.dart';
 import 'package:fluttertoast/fluttertoast.dart';
 
 class FallbackInterceptor extends Interceptor {
+  static const _tag = 'FALLBACK';
   final AddressPool _addressPool;
   final Dio _dio; // The customized Dio instance (with this interceptor)
 
@@ -16,6 +18,11 @@ class FallbackInterceptor extends Interceptor {
     if (active != null) {
       options.baseUrl = active.url;
     }
+    Logger.debugWithTag(
+      _tag,
+      'request ${options.method} ${options.path} via '
+      '${active?.label ?? 'no-active-address'}',
+    );
     super.onRequest(options, handler);
   }
 
@@ -23,9 +30,19 @@ class FallbackInterceptor extends Interceptor {
   void onError(DioException err, ErrorInterceptorHandler handler) async {
     if (_isConnectionError(err)) {
       _consecutiveFailures++;
+      Logger.warnWithTag(
+        _tag,
+        'connection error, consecutiveFailures=$_consecutiveFailures '
+        'path=${err.requestOptions.path}',
+        err,
+      );
 
       // 手动模式 + 自动回退关闭时，不自动切换线路
       if (_addressPool.isManualMode && !_addressPool.autoFallback) {
+        Logger.warnWithTag(
+          _tag,
+          'manual mode with autoFallback disabled, skip switch',
+        );
         super.onError(err, handler);
         return;
       }
@@ -38,6 +55,10 @@ class FallbackInterceptor extends Interceptor {
           final next = _addressPool.getNextAvailable();
           if (next != null && next.id != currentAddress.id) {
             // Try probing/switching to next
+            Logger.infoWithTag(
+              _tag,
+              'trying switch: ${currentAddress.label} -> ${next.label}',
+            );
             final success = await _addressPool.switchTo(next, manual: false);
             if (success) {
               _consecutiveFailures = 0;
@@ -51,19 +72,38 @@ class FallbackInterceptor extends Interceptor {
 
               try {
                 final response = await _dio.fetch(opts);
+                Logger.infoWithTag(
+                  _tag,
+                  'retry succeeded on ${next.label} path=${opts.path}',
+                );
                 return handler.resolve(response);
               } catch (e) {
                 // If retry fails, it might trigger onError again via the interceptor chain
                 // So we just return here, letting the next error propagate if it wasn't resolved
+                Logger.warnWithTag(
+                  _tag,
+                  'retry failed on ${next.label} path=${opts.path}',
+                  e,
+                );
                 if (e is DioException) {
                   return handler.next(e);
                 }
               }
+            } else {
+              Logger.warnWithTag(
+                _tag,
+                'switch rejected by address pool: ${next.label}',
+              );
             }
+          } else {
+            Logger.warnWithTag(_tag, 'no next address available for fallback');
           }
         }
       }
     } else {
+      if (_consecutiveFailures != 0) {
+        Logger.debugWithTag(_tag, 'reset consecutive failure counter');
+      }
       _consecutiveFailures = 0;
     }
 

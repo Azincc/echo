@@ -2,12 +2,14 @@ import 'dart:async';
 
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:echoes/core/network/address_pool.dart';
+import 'package:echoes/core/utils/logger.dart';
 import 'package:flutter/foundation.dart';
 
 /// 网络类型枚举
 enum NetworkType { wifi, mobile, none }
 
 class ConnectivityMonitor {
+  static const _tag = 'CONNECTIVITY';
   final AddressPool _addressPool;
   List<ConnectivityResult> _lastResults = [ConnectivityResult.none];
 
@@ -29,25 +31,32 @@ class ConnectivityMonitor {
 
   void start() {
     _subscription?.cancel();
+    Logger.infoWithTag(_tag, 'connectivity monitor started');
 
     // 初始检测
     Connectivity().checkConnectivity().then((results) {
       _updateNetworkType(results);
+    }).catchError((e) {
+      Logger.warnWithTag(_tag, 'initial connectivity check failed', e);
     });
 
     _subscription = Connectivity().onConnectivityChanged.listen((results) {
       if (!listEquals(results, _lastResults)) {
         _lastResults = results;
+        Logger.infoWithTag(_tag, 'connectivity changed: $results');
         _updateNetworkType(results);
 
         final hasConnection = results.any((r) => r != ConnectivityResult.none);
         if (hasConnection) {
-          debugPrint(
-            "Network connection changed: $results. Probing addresses...",
+          Logger.infoWithTag(
+            _tag,
+            'connection available, probing address pool',
           );
           _addressPool.probeAll();
         }
       }
+    }, onError: (e) {
+      Logger.warnWithTag(_tag, 'connectivity stream error', e);
     });
   }
 
@@ -56,7 +65,7 @@ class ConnectivityMonitor {
     if (newType != _currentNetworkType) {
       _currentNetworkType = newType;
       _networkTypeController.add(newType);
-      debugPrint('Network type changed: $newType');
+      Logger.infoWithTag(_tag, 'network type changed: $newType');
     }
   }
 
@@ -79,6 +88,7 @@ class ConnectivityMonitor {
 
   void stop() {
     _subscription?.cancel();
+    Logger.infoWithTag(_tag, 'connectivity monitor stopped');
     _networkTypeController.close();
   }
 }

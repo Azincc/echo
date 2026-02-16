@@ -173,6 +173,9 @@ class RandomSongsSection extends ConsumerWidget {
                     .read(playerProvider.notifier)
                     .playQueue(songs, startIndex: index);
               },
+              onLongPress: () {
+                showSongOptionsSheet(context: context, song: song);
+              },
               trailing: IconButton(
                 icon: Icon(Icons.more_vert, color: trailingIconColor),
                 onPressed: () {

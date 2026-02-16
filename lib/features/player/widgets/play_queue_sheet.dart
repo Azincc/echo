@@ -76,6 +76,24 @@ class PlayQueueSheet extends ConsumerWidget {
                         itemBuilder: (context, index) {
                           final song = queue[index];
                           final isPlaying = index == currentIndex;
+                          void openSongMenu() {
+                            showSongOptionsSheet(
+                              context: context,
+                              song: song,
+                              extraActions: [
+                                SongOptionsExtraAction(
+                                  icon: Icons.remove_circle_outline,
+                                  title: '从队列移除',
+                                  isDestructive: true,
+                                  onPressed: () {
+                                    ref
+                                        .read(playerProvider.notifier)
+                                        .removeFromQueue(index);
+                                  },
+                                ),
+                              ],
+                            );
+                          }
 
                           return ListTile(
                             leading: isPlaying
@@ -103,24 +121,7 @@ class PlayQueueSheet extends ConsumerWidget {
                                 : null,
                             trailing: IconButton(
                               icon: const Icon(Icons.more_vert),
-                              onPressed: () {
-                                showSongOptionsSheet(
-                                  context: context,
-                                  song: song,
-                                  extraActions: [
-                                    SongOptionsExtraAction(
-                                      icon: Icons.remove_circle_outline,
-                                      title: '从队列移除',
-                                      isDestructive: true,
-                                      onPressed: () {
-                                        ref
-                                            .read(playerProvider.notifier)
-                                            .removeFromQueue(index);
-                                      },
-                                    ),
-                                  ],
-                                );
-                              },
+                              onPressed: openSongMenu,
                             ),
                             onTap: () {
                               ref
@@ -128,6 +129,7 @@ class PlayQueueSheet extends ConsumerWidget {
                                   .skipToQueueItem(index);
                               Navigator.pop(context);
                             },
+                            onLongPress: openSongMenu,
                           );
                         },
                       ),

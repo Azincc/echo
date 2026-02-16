@@ -5,6 +5,7 @@ import '../../../providers/player_provider.dart';
 import '../../../widgets/cover_art_image.dart';
 import '../../library/pages/album_detail_page.dart';
 import '../../library/pages/artist_detail_page.dart';
+import '../../player/widgets/song_options_sheet.dart';
 
 /// 搜索页面
 class SearchPage extends ConsumerStatefulWidget {
@@ -139,6 +140,9 @@ class _SearchPageState extends ConsumerState<SearchPage> {
                                   result.songs,
                                   startIndex: result.songs.indexOf(song),
                                 );
+                          },
+                          onLongPress: () {
+                            showSongOptionsSheet(context: context, song: song);
                           },
                         );
                       }),

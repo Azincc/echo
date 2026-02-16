@@ -3,62 +3,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../providers/player_provider.dart';
 import '../../../widgets/cover_art_image.dart';
 import '../pages/full_player_page.dart';
+import 'player_hero_helpers.dart';
 
 /// 迷你播放器 - 底部固定条
 class MiniPlayer extends ConsumerWidget {
   const MiniPlayer({super.key});
-
-  static RectTween _linearRectTween(Rect? begin, Rect? end) {
-    return RectTween(begin: begin ?? Rect.zero, end: end ?? Rect.zero);
-  }
-
-  static Widget _textFlightShuttleBuilder(
-    BuildContext flightContext,
-    Animation<double> animation,
-    HeroFlightDirection flightDirection,
-    BuildContext fromHeroContext,
-    BuildContext toHeroContext,
-  ) {
-    final fromHero = fromHeroContext.widget as Hero;
-    final toHero = toHeroContext.widget as Hero;
-    final fromChild = fromHero.child;
-    final toChild = toHero.child;
-
-    return AnimatedBuilder(
-      animation: animation,
-      builder: (context, _) {
-        final t = Curves.easeInOut.transform(animation.value);
-        final first = flightDirection == HeroFlightDirection.push
-            ? fromChild
-            : toChild;
-        final second = flightDirection == HeroFlightDirection.push
-            ? toChild
-            : fromChild;
-
-        Widget fitted(Widget child) {
-          return FittedBox(
-            fit: BoxFit.contain,
-            alignment: Alignment.center,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 2),
-              child: child,
-            ),
-          );
-        }
-
-        return Material(
-          type: MaterialType.transparency,
-          child: Stack(
-            fit: StackFit.expand,
-            children: [
-              Opacity(opacity: 1 - t, child: fitted(first)),
-              Opacity(opacity: t, child: fitted(second)),
-            ],
-          ),
-        );
-      },
-    );
-  }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -70,6 +19,9 @@ class MiniPlayer extends ConsumerWidget {
     }
 
     final song = playerState.currentSong!;
+    final theme = Theme.of(context);
+    final titleColor = theme.colorScheme.onSurface;
+    final artistColor = theme.colorScheme.onSurfaceVariant;
     final progress = playerState.duration.inMilliseconds > 0
         ? playerState.position.inMilliseconds /
               playerState.duration.inMilliseconds
@@ -137,7 +89,7 @@ class MiniPlayer extends ConsumerWidget {
                         // 封面
                         Hero(
                           tag: 'player-cover',
-                          createRectTween: _linearRectTween,
+                          createRectTween: playerLinearRectTween,
                           child: Container(
                             width: 48,
                             height: 48,
@@ -167,8 +119,9 @@ class MiniPlayer extends ConsumerWidget {
                             children: [
                               Hero(
                                 tag: 'player-title',
-                                createRectTween: _linearRectTween,
-                                flightShuttleBuilder: _textFlightShuttleBuilder,
+                                createRectTween: playerLinearRectTween,
+                                flightShuttleBuilder:
+                                    playerTextFlightShuttleBuilder,
                                 child: Material(
                                   type: MaterialType.transparency,
                                   child: Padding(
@@ -179,10 +132,12 @@ class MiniPlayer extends ConsumerWidget {
                                       song.title,
                                       maxLines: 1,
                                       overflow: TextOverflow.ellipsis,
-                                      style: const TextStyle(
-                                        fontWeight: FontWeight.w500,
-                                        fontSize: 16,
-                                      ),
+                                      style: theme.textTheme.titleMedium
+                                          ?.copyWith(
+                                            fontWeight: FontWeight.w500,
+                                            fontSize: 16,
+                                            color: titleColor,
+                                          ),
                                     ),
                                   ),
                                 ),
@@ -190,9 +145,9 @@ class MiniPlayer extends ConsumerWidget {
                               if (song.artist != null)
                                 Hero(
                                   tag: 'player-artist',
-                                  createRectTween: _linearRectTween,
+                                  createRectTween: playerLinearRectTween,
                                   flightShuttleBuilder:
-                                      _textFlightShuttleBuilder,
+                                      playerTextFlightShuttleBuilder,
                                   child: Material(
                                     type: MaterialType.transparency,
                                     child: Padding(
@@ -203,9 +158,8 @@ class MiniPlayer extends ConsumerWidget {
                                         song.artist!,
                                         maxLines: 1,
                                         overflow: TextOverflow.ellipsis,
-                                        style: Theme.of(
-                                          context,
-                                        ).textTheme.bodySmall,
+                                        style: theme.textTheme.bodySmall
+                                            ?.copyWith(color: artistColor),
                                       ),
                                     ),
                                   ),

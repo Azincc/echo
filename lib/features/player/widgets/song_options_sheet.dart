@@ -6,6 +6,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/utils/network_error_notifier.dart';
 import '../../../data/models/song.dart';
 import '../../../providers/api_provider.dart';
+import '../../../providers/auth_provider.dart';
+import '../../../providers/download_provider.dart';
 import '../../../providers/player_provider.dart';
 import '../../../providers/playlist_provider.dart';
 import '../../library/pages/album_detail_page.dart';
@@ -74,6 +76,10 @@ class _SongOptionsSheet extends ConsumerWidget {
         song.artistId != null && song.artistId!.trim().isNotEmpty;
     final canOpenAlbum =
         song.albumId != null && song.albumId!.trim().isNotEmpty;
+    final libraryId = ref.watch(
+      authStateProvider.select((s) => s.currentLibrary?.id ?? ''),
+    );
+    final canDownload = libraryId.isNotEmpty;
 
     return SafeArea(
       top: false,
@@ -154,6 +160,23 @@ class _SongOptionsSheet extends ConsumerWidget {
                     );
                   });
                 },
+              ),
+              _buildActionTile(
+                context: context,
+                icon: Icons.download_outlined,
+                title: '下载',
+                enabled: canDownload,
+                onTap: !canDownload
+                    ? null
+                    : () async {
+                        await _closeAndRun(context, () async {
+                          await ref.read(downloadServiceProvider).enqueue(
+                            song,
+                            libraryId: libraryId,
+                          );
+                          _showSnackBar('已添加「${song.title}」到下载队列');
+                        });
+                      },
               ),
               if (!isCurrentSong)
                 _buildActionTile(

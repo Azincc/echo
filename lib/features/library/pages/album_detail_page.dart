@@ -2,11 +2,13 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../data/models/album.dart';
+import '../../../data/models/song.dart';
 import '../../../providers/music_provider.dart';
 import '../../../providers/player_provider.dart';
 import '../../../providers/download_provider.dart';
 import '../../../providers/auth_provider.dart';
 import '../../../widgets/cover_art_image.dart';
+import '../../player/widgets/song_options_sheet.dart';
 import 'package:marquee/marquee.dart';
 
 /// 专辑详情页
@@ -364,33 +366,10 @@ class AlbumDetailPage extends ConsumerWidget {
     );
   }
 
-  void _showSongContextMenu(BuildContext context, WidgetRef ref, dynamic song) {
-    showModalBottomSheet(
+  void _showSongContextMenu(BuildContext context, WidgetRef ref, Song song) {
+    showSongOptionsSheet(
       context: context,
-      builder: (context) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            ListTile(
-              leading: const Icon(Icons.download),
-              title: const Text('下载'),
-              onTap: () {
-                Navigator.pop(context);
-                final authState = ref.read(authStateProvider);
-                final libraryId = authState.currentLibrary?.id ?? '';
-                if (libraryId.isEmpty) return;
-
-                ref
-                    .read(downloadServiceProvider)
-                    .enqueue(song, libraryId: libraryId);
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text('已添加「${song.title}」到下载队列')),
-                );
-              },
-            ),
-          ],
-        ),
-      ),
+      song: song,
     );
   }
 }

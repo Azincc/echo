@@ -13,6 +13,7 @@ import '../../../data/models/audio_quality.dart';
 import '../../../data/models/song.dart';
 import '../../../core/network/connectivity_monitor.dart';
 import '../../../widgets/cover_art_image.dart';
+import '../widgets/player_hero_helpers.dart';
 import '../widgets/play_queue_sheet.dart';
 import '../widgets/song_options_sheet.dart';
 import '../widgets/synced_lyrics_view.dart';
@@ -146,6 +147,10 @@ class _FullPlayerPageState extends ConsumerState<FullPlayerPage>
     const lyricsActiveSecondaryColor = Colors.white;
     final lyricsInactivePrimaryColor = Colors.white.withValues(alpha: 0.64);
     final lyricsInactiveSecondaryColor = Colors.white.withValues(alpha: 0.5);
+    final artistName = currentSong.artist?.trim();
+    final hasArtist = artistName != null && artistName.isNotEmpty;
+    final albumName = currentSong.album?.trim();
+    final hasAlbum = albumName != null && albumName.isNotEmpty;
 
     return Scaffold(
       backgroundColor: Colors.transparent,
@@ -240,21 +245,41 @@ class _FullPlayerPageState extends ConsumerState<FullPlayerPage>
                                       overflow: TextOverflow.ellipsis,
                                     ),
                                     const SizedBox(height: 4),
-                                    Text(
-                                      [
-                                        if (currentSong.artist != null)
-                                          currentSong.artist!,
-                                        if (currentSong.album != null)
-                                          currentSong.album!,
-                                      ].join(' · '),
-                                      style: Theme.of(context)
-                                          .textTheme
-                                          .bodySmall
-                                          ?.copyWith(color: secondaryTextColor),
-                                      textAlign: TextAlign.center,
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
+                                    if (hasArtist || hasAlbum)
+                                      FadeTransition(
+                                        opacity: _controlsAnimation,
+                                        child: AnimatedSwitcher(
+                                          duration: const Duration(
+                                            milliseconds: 240,
+                                          ),
+                                          switchInCurve: Curves.easeOut,
+                                          switchOutCurve: Curves.easeIn,
+                                          transitionBuilder:
+                                              (child, animation) =>
+                                                  FadeTransition(
+                                                    opacity: animation,
+                                                    child: child,
+                                                  ),
+                                          child: Text(
+                                            [
+                                              if (hasArtist) artistName,
+                                              if (hasAlbum) albumName,
+                                            ].join(' · '),
+                                            key: ValueKey<String>(
+                                              'lyrics-meta-${currentSong.id}-${artistName ?? ''}-${albumName ?? ''}',
+                                            ),
+                                            style: Theme.of(context)
+                                                .textTheme
+                                                .bodySmall
+                                                ?.copyWith(
+                                                  color: secondaryTextColor,
+                                                ),
+                                            textAlign: TextAlign.center,
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                        ),
+                                      ),
                                     const SizedBox(height: 8),
                                   ],
                                 ),
@@ -308,12 +333,7 @@ class _FullPlayerPageState extends ConsumerState<FullPlayerPage>
                                     Center(
                                       child: Hero(
                                         tag: 'player-cover',
-                                        createRectTween: (begin, end) {
-                                          return RectTween(
-                                            begin: begin ?? Rect.zero,
-                                            end: end ?? Rect.zero,
-                                          );
-                                        },
+                                        createRectTween: playerLinearRectTween,
                                         child: Container(
                                           width: coverSize,
                                           height: coverSize,
@@ -354,6 +374,9 @@ class _FullPlayerPageState extends ConsumerState<FullPlayerPage>
                                     // 歌曲信息
                                     Hero(
                                       tag: 'player-title',
+                                      createRectTween: playerLinearRectTween,
+                                      flightShuttleBuilder:
+                                          playerTextFlightShuttleBuilder,
                                       child: Material(
                                         type: MaterialType.transparency,
                                         child: Padding(
@@ -379,22 +402,16 @@ class _FullPlayerPageState extends ConsumerState<FullPlayerPage>
 
                                     const SizedBox(height: 8),
 
-                                    if ((currentSong.artist != null &&
-                                            currentSong.artist!
-                                                .trim()
-                                                .isNotEmpty) ||
-                                        (currentSong.album != null &&
-                                            currentSong.album!
-                                                .trim()
-                                                .isNotEmpty))
+                                    if (hasArtist || hasAlbum)
                                       Column(
                                         children: [
-                                          if (currentSong.artist != null &&
-                                              currentSong.artist!
-                                                  .trim()
-                                                  .isNotEmpty)
+                                          if (hasArtist)
                                             Hero(
                                               tag: 'player-artist',
+                                              createRectTween:
+                                                  playerLinearRectTween,
+                                              flightShuttleBuilder:
+                                                  playerTextFlightShuttleBuilder,
                                               child: Material(
                                                 type: MaterialType.transparency,
                                                 child: Padding(
@@ -403,7 +420,7 @@ class _FullPlayerPageState extends ConsumerState<FullPlayerPage>
                                                         vertical: 2,
                                                       ),
                                                   child: Text(
-                                                    currentSong.artist!,
+                                                    artistName,
                                                     style: Theme.of(context)
                                                         .textTheme
                                                         .bodyLarge
@@ -419,27 +436,69 @@ class _FullPlayerPageState extends ConsumerState<FullPlayerPage>
                                                 ),
                                               ),
                                             ),
-                                          if (currentSong.album != null &&
-                                              currentSong.album!
-                                                  .trim()
-                                                  .isNotEmpty)
-                                            Padding(
-                                              padding: const EdgeInsets.only(
-                                                top: 2,
+                                          FadeTransition(
+                                            opacity: _controlsAnimation,
+                                            child: AnimatedSwitcher(
+                                              duration: const Duration(
+                                                milliseconds: 240,
                                               ),
-                                              child: Text(
-                                                currentSong.album!,
-                                                style: Theme.of(context)
-                                                    .textTheme
-                                                    .bodyMedium
-                                                    ?.copyWith(
-                                                      color: secondaryTextColor,
+                                              switchInCurve: Curves.easeOut,
+                                              switchOutCurve: Curves.easeIn,
+                                              transitionBuilder:
+                                                  (child, animation) =>
+                                                      FadeTransition(
+                                                        opacity: animation,
+                                                        child: child,
+                                                      ),
+                                              layoutBuilder:
+                                                  (
+                                                    Widget? currentChild,
+                                                    List<Widget>
+                                                    previousChildren,
+                                                  ) {
+                                                    return Stack(
+                                                      alignment:
+                                                          Alignment.topCenter,
+                                                      children: <Widget>[
+                                                        ...previousChildren,
+                                                        if (currentChild != null)
+                                                          currentChild,
+                                                      ],
+                                                    );
+                                                  },
+                                              child: hasAlbum
+                                                  ? Padding(
+                                                      key: ValueKey<String>(
+                                                        'album-${currentSong.id}-$albumName',
+                                                      ),
+                                                      padding:
+                                                          const EdgeInsets.only(
+                                                            top: 2,
+                                                          ),
+                                                      child: Text(
+                                                        albumName,
+                                                        style: Theme.of(context)
+                                                            .textTheme
+                                                            .bodyMedium
+                                                            ?.copyWith(
+                                                              color:
+                                                                  secondaryTextColor,
+                                                            ),
+                                                        textAlign:
+                                                            TextAlign.center,
+                                                        maxLines: 1,
+                                                        overflow:
+                                                            TextOverflow
+                                                                .ellipsis,
+                                                      ),
+                                                    )
+                                                  : const SizedBox.shrink(
+                                                      key: ValueKey<String>(
+                                                        'album-empty',
+                                                      ),
                                                     ),
-                                                textAlign: TextAlign.center,
-                                                maxLines: 1,
-                                                overflow: TextOverflow.ellipsis,
-                                              ),
                                             ),
+                                          ),
                                         ],
                                       ),
 

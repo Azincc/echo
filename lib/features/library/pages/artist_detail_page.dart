@@ -83,12 +83,13 @@ class ArtistDetailPage extends ConsumerWidget {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Expanded(
+                            AspectRatio(
+                              aspectRatio: 1.0,
                               child: ClipRRect(
                                 borderRadius: BorderRadius.circular(8),
                                 child: CoverArtImage(
                                   coverArtId: album.coverArt,
-                                  size: double.infinity,
+                                  fit: BoxFit.cover,
                                 ),
                               ),
                             ),

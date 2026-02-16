@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../providers/music_provider.dart';
 import '../../../providers/player_provider.dart';
 import '../../../widgets/cover_art_image.dart';
+import '../../player/widgets/song_options_sheet.dart';
 import 'album_detail_page.dart';
 import 'artist_detail_page.dart';
 
@@ -81,6 +82,9 @@ class StarredPage extends ConsumerWidget {
                               starred.songs,
                               startIndex: starred.songs.indexOf(song),
                             );
+                      },
+                      onLongPress: () {
+                        showSongOptionsSheet(context: context, song: song);
                       },
                     );
                   }),

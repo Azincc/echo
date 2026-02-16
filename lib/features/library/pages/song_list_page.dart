@@ -11,6 +11,7 @@ import '../../../providers/player_provider.dart';
 import '../../../utils/az_item.dart';
 import '../../../utils/pinyin_helper.dart';
 import '../../../widgets/cover_art_image.dart';
+import '../../player/widgets/song_options_sheet.dart';
 
 class SongListPage extends ConsumerStatefulWidget {
   const SongListPage({super.key});
@@ -150,6 +151,9 @@ class _SongListPageState extends ConsumerState<SongListPage> {
                   ref
                       .read(playerProvider.notifier)
                       .playQueue(queue, startIndex: index);
+                },
+                onLongPress: () {
+                  showSongOptionsSheet(context: context, song: song);
                 },
               );
             },

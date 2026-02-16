@@ -9,6 +9,7 @@ import '../data/models/song.dart';
 import '../data/models/audio_quality.dart';
 import '../data/models/server_address.dart';
 import '../data/sources/subsonic_api_client.dart';
+import '../data/sources/local_storage.dart';
 import '../data/repositories/music_repository.dart';
 import '../core/constants/api_constants.dart';
 import '../core/utils/logger.dart';
@@ -31,6 +32,8 @@ enum PlaybackSource {
 
 /// 播放模式（用于播放器控制区三态切换）
 enum PlaybackMode { shuffle, repeatAll, repeatOne }
+
+const _playerLogTag = 'PLAYER';
 
 /// 播放器状态
 class PlayerState {
@@ -224,6 +227,8 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
     player.shuffleModeEnabledStream.listen((enabled) {
       if (mounted) state = state.copyWith(shuffleEnabled: enabled);
     });
+
+    await _restorePlaybackMode();
   }
 
   /// 播放单曲
@@ -732,6 +737,15 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
   /// 设置循环模式
   Future<void> setLoopMode(LoopMode mode) async {
     await _audioPlayer?.setLoopMode(mode);
+    if (mounted) {
+      state = state.copyWith(loopMode: mode);
+    }
+    final modeToPersist = state.shuffleEnabled
+        ? PlaybackMode.shuffle
+        : (mode == LoopMode.one
+              ? PlaybackMode.repeatOne
+              : PlaybackMode.repeatAll);
+    await _persistPlaybackMode(modeToPersist);
   }
 
   /// 切换循环模式
@@ -750,6 +764,12 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
     if (mounted) {
       state = state.copyWith(shuffleEnabled: enabled);
     }
+    final modeToPersist = enabled
+        ? PlaybackMode.shuffle
+        : (state.loopMode == LoopMode.one
+              ? PlaybackMode.repeatOne
+              : PlaybackMode.repeatAll);
+    await _persistPlaybackMode(modeToPersist);
   }
 
   /// 切换随机播放
@@ -778,7 +798,7 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
   }
 
   /// 设置三态播放模式
-  Future<void> setPlaybackMode(PlaybackMode mode) async {
+  Future<void> setPlaybackMode(PlaybackMode mode, {bool persist = true}) async {
     switch (mode) {
       case PlaybackMode.shuffle:
         // 队列是手动切歌而非播放器内建列表。
@@ -806,6 +826,10 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
         }
         break;
     }
+
+    if (persist) {
+      await _persistPlaybackMode(mode);
+    }
   }
 
   /// 循环切换三态播放模式：
@@ -817,6 +841,32 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
       PlaybackMode.repeatOne => PlaybackMode.shuffle,
     };
     await setPlaybackMode(nextMode);
+  }
+
+  Future<void> _restorePlaybackMode() async {
+    try {
+      final storedMode = await LocalStorage.getPlaybackMode();
+      final mode = PlaybackMode.values.firstWhere(
+        (item) => item.name == storedMode,
+        orElse: () => PlaybackMode.repeatAll,
+      );
+      await setPlaybackMode(mode, persist: false);
+      Logger.infoWithTag(_playerLogTag, 'playback mode restored: ${mode.name}');
+    } catch (e) {
+      Logger.warnWithTag(_playerLogTag, 'failed to restore playback mode', e);
+    }
+  }
+
+  Future<void> _persistPlaybackMode(PlaybackMode mode) async {
+    try {
+      await LocalStorage.setPlaybackMode(mode.name);
+    } catch (e) {
+      Logger.warnWithTag(
+        _playerLogTag,
+        'failed to persist playback mode: ${mode.name}',
+        e,
+      );
+    }
   }
 
   int? _getRandomIndexExcludingCurrent() {

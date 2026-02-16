@@ -9,6 +9,7 @@ import '../../../providers/download_provider.dart';
 import '../../../providers/auth_provider.dart';
 import '../../../widgets/cover_art_image.dart';
 import '../../player/widgets/song_options_sheet.dart';
+import '../widgets/album_options_sheet.dart';
 import 'package:marquee/marquee.dart';
 
 /// 专辑详情页
@@ -41,6 +42,21 @@ class AlbumDetailPage extends ConsumerWidget {
               SliverAppBar(
                 expandedHeight: 300,
                 pinned: true,
+                actions: [
+                  IconButton(
+                    onPressed: hasAlbumData
+                        ? () {
+                            showAlbumOptionsSheet(
+                              context: context,
+                              ref: ref,
+                              album: album,
+                            );
+                          }
+                        : null,
+                    icon: const Icon(Icons.more_horiz),
+                    tooltip: '专辑操作',
+                  ),
+                ],
                 flexibleSpace: Stack(
                   children: [
                     // Layer 1: Parallax Image
@@ -367,9 +383,6 @@ class AlbumDetailPage extends ConsumerWidget {
   }
 
   void _showSongContextMenu(BuildContext context, WidgetRef ref, Song song) {
-    showSongOptionsSheet(
-      context: context,
-      song: song,
-    );
+    showSongOptionsSheet(context: context, song: song);
   }
 }

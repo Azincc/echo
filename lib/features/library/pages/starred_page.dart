@@ -4,6 +4,7 @@ import '../../../providers/music_provider.dart';
 import '../../../providers/player_provider.dart';
 import '../../../widgets/cover_art_image.dart';
 import '../../player/widgets/song_options_sheet.dart';
+import '../widgets/album_options_sheet.dart';
 import 'album_detail_page.dart';
 import 'artist_detail_page.dart';
 
@@ -16,9 +17,7 @@ class StarredPage extends ConsumerWidget {
     final starredAsync = ref.watch(starredProvider);
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('收藏夹'),
-      ),
+      appBar: AppBar(title: const Text('收藏夹')),
       body: starredAsync.when(
         data: (starred) {
           if (starred.isEmpty) {
@@ -50,14 +49,15 @@ class StarredPage extends ConsumerWidget {
                         const SizedBox(width: 8),
                         Text(
                           '歌曲 (${starred.songs.length})',
-                          style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                                fontWeight: FontWeight.bold,
-                              ),
+                          style: Theme.of(context).textTheme.titleMedium
+                              ?.copyWith(fontWeight: FontWeight.bold),
                         ),
                         const Spacer(),
                         TextButton.icon(
                           onPressed: () {
-                            ref.read(playerProvider.notifier).playQueue(starred.songs);
+                            ref
+                                .read(playerProvider.notifier)
+                                .playQueue(starred.songs);
                           },
                           icon: const Icon(Icons.play_arrow),
                           label: const Text('播放全部'),
@@ -78,7 +78,9 @@ class StarredPage extends ConsumerWidget {
                       subtitle: song.artist != null ? Text(song.artist!) : null,
                       trailing: Text(song.durationString),
                       onTap: () {
-                        ref.read(playerProvider.notifier).playQueue(
+                        ref
+                            .read(playerProvider.notifier)
+                            .playQueue(
                               starred.songs,
                               startIndex: starred.songs.indexOf(song),
                             );
@@ -101,9 +103,8 @@ class StarredPage extends ConsumerWidget {
                         const SizedBox(width: 8),
                         Text(
                           '专辑 (${starred.albums.length})',
-                          style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                                fontWeight: FontWeight.bold,
-                              ),
+                          style: Theme.of(context).textTheme.titleMedium
+                              ?.copyWith(fontWeight: FontWeight.bold),
                         ),
                       ],
                     ),
@@ -112,12 +113,13 @@ class StarredPage extends ConsumerWidget {
                     shrinkWrap: true,
                     physics: const NeverScrollableScrollPhysics(),
                     padding: const EdgeInsets.symmetric(horizontal: 16),
-                    gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                      crossAxisCount: 2,
-                      childAspectRatio: 0.75,
-                      crossAxisSpacing: 12,
-                      mainAxisSpacing: 12,
-                    ),
+                    gridDelegate:
+                        const SliverGridDelegateWithFixedCrossAxisCount(
+                          crossAxisCount: 2,
+                          childAspectRatio: 0.75,
+                          crossAxisSpacing: 12,
+                          mainAxisSpacing: 12,
+                        ),
                     itemCount: starred.albums.length,
                     itemBuilder: (context, index) {
                       final album = starred.albums[index];
@@ -126,8 +128,16 @@ class StarredPage extends ConsumerWidget {
                           Navigator.push(
                             context,
                             MaterialPageRoute(
-                              builder: (context) => AlbumDetailPage(albumId: album.id),
+                              builder: (context) =>
+                                  AlbumDetailPage(albumId: album.id),
                             ),
+                          );
+                        },
+                        onLongPress: () {
+                          showAlbumOptionsSheet(
+                            context: context,
+                            ref: ref,
+                            album: album,
                           );
                         },
                         child: Column(
@@ -135,12 +145,39 @@ class StarredPage extends ConsumerWidget {
                           children: [
                             AspectRatio(
                               aspectRatio: 1.0,
-                              child: ClipRRect(
-                                borderRadius: BorderRadius.circular(8),
-                                child: CoverArtImage(
-                                  coverArtId: album.coverArt,
-                                  fit: BoxFit.cover,
-                                ),
+                              child: Stack(
+                                children: [
+                                  Positioned.fill(
+                                    child: ClipRRect(
+                                      borderRadius: BorderRadius.circular(8),
+                                      child: CoverArtImage(
+                                        coverArtId: album.coverArt,
+                                        fit: BoxFit.cover,
+                                      ),
+                                    ),
+                                  ),
+                                  if (album.starred)
+                                    Positioned(
+                                      left: 6,
+                                      bottom: 6,
+                                      child: Container(
+                                        padding: const EdgeInsets.all(4),
+                                        decoration: BoxDecoration(
+                                          color: Colors.black.withValues(
+                                            alpha: 0.35,
+                                          ),
+                                          borderRadius: BorderRadius.circular(
+                                            10,
+                                          ),
+                                        ),
+                                        child: const Icon(
+                                          Icons.favorite,
+                                          size: 14,
+                                          color: Colors.red,
+                                        ),
+                                      ),
+                                    ),
+                                ],
                               ),
                             ),
                             const SizedBox(height: 8),
@@ -148,7 +185,9 @@ class StarredPage extends ConsumerWidget {
                               album.name,
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(fontWeight: FontWeight.w500),
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w500,
+                              ),
                             ),
                             if (album.artist != null)
                               Text(
@@ -176,9 +215,8 @@ class StarredPage extends ConsumerWidget {
                         const SizedBox(width: 8),
                         Text(
                           '歌手 (${starred.artists.length})',
-                          style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                                fontWeight: FontWeight.bold,
-                              ),
+                          style: Theme.of(context).textTheme.titleMedium
+                              ?.copyWith(fontWeight: FontWeight.bold),
                         ),
                       ],
                     ),
@@ -201,7 +239,8 @@ class StarredPage extends ConsumerWidget {
                         Navigator.push(
                           context,
                           MaterialPageRoute(
-                            builder: (context) => ArtistDetailPage(artistId: artist.id),
+                            builder: (context) =>
+                                ArtistDetailPage(artistId: artist.id),
                           ),
                         );
                       },

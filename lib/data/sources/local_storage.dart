@@ -10,6 +10,7 @@ class LocalStorage {
   static const String _keyServerConfig = 'server_config';
   static const String _keyAutoFallback = 'auto_fallback';
   static const String _keyAudioQualitySettings = 'audio_quality_settings';
+  static const String _keyPlaybackMode = 'playback_mode';
 
   /// 保存服务器配置
   static Future<void> saveServerConfig(ServerConfig config) async {
@@ -73,7 +74,10 @@ class LocalStorage {
     final prefs = await SharedPreferences.getInstance();
     final json = prefs.getString(_keyAudioQualitySettings);
     if (json == null) {
-      Logger.debugWithTag(_logTag, 'audio quality settings not found, use default');
+      Logger.debugWithTag(
+        _logTag,
+        'audio quality settings not found, use default',
+      );
       return const AudioQualitySettings();
     }
 
@@ -93,5 +97,33 @@ class LocalStorage {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_keyAudioQualitySettings, settings.toJsonString());
     Logger.infoWithTag(_logTag, 'audio quality settings saved');
+  }
+
+  /// 读取播放模式（shuffle / repeatAll / repeatOne）
+  static Future<String> getPlaybackMode() async {
+    final prefs = await SharedPreferences.getInstance();
+    final mode = prefs.getString(_keyPlaybackMode);
+    if (mode == null) {
+      Logger.debugWithTag(_logTag, 'playback mode not found, use default');
+      return 'repeatAll';
+    }
+
+    switch (mode) {
+      case 'shuffle':
+      case 'repeatAll':
+      case 'repeatOne':
+        Logger.debugWithTag(_logTag, 'playback mode loaded: $mode');
+        return mode;
+      default:
+        Logger.warnWithTag(_logTag, 'invalid playback mode in storage: $mode');
+        return 'repeatAll';
+    }
+  }
+
+  /// 保存播放模式（shuffle / repeatAll / repeatOne）
+  static Future<void> setPlaybackMode(String mode) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_keyPlaybackMode, mode);
+    Logger.infoWithTag(_logTag, 'playback mode saved: $mode');
   }
 }

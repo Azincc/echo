@@ -7,24 +7,15 @@ import '../../../providers/music_provider.dart';
 import '../../../utils/az_item.dart';
 import '../../../utils/pinyin_helper.dart';
 import '../../../widgets/cover_art_image.dart';
+import '../widgets/album_options_sheet.dart';
 import 'album_detail_page.dart';
 
 /// 专辑列表页 - A-Z 分组 Grid (通过 List 模拟)
-class AlbumListPage extends ConsumerStatefulWidget {
+class AlbumListPage extends ConsumerWidget {
   const AlbumListPage({super.key});
 
-  @override
-  ConsumerState<AlbumListPage> createState() => _AlbumListPageState();
-}
-
-class _AlbumListPageState extends ConsumerState<AlbumListPage> {
-  // Use generic object or custom class for row data
-  final List<AzItem<List<Album>>> _azAlbumRows = [];
-  bool _isLoaded = false;
-
-  void _processAlbums(List<Album> albums) {
-    if (_isLoaded) return;
-
+  List<AzItem<List<Album>>> _buildAlbumRows(List<Album> albums) {
+    final azAlbumRows = <AzItem<List<Album>>>[];
     // 1. Convert to AzItems temporarily to sort and extract tags
     List<AzItem<Album>> tempItems = albums.map((album) {
       String tag = PinyinUtils.getFirstChar(album.name);
@@ -41,7 +32,6 @@ class _AlbumListPageState extends ConsumerState<AlbumListPage> {
     }
 
     // 3. Chunk into rows (2 items per row)
-    _azAlbumRows.clear();
     grouped.forEach((tag, groupAlbums) {
       for (int i = 0; i < groupAlbums.length; i += 2) {
         // Take 2 items
@@ -54,23 +44,19 @@ class _AlbumListPageState extends ConsumerState<AlbumListPage> {
         // Use the tag from the group
         // Name pinyin can be the pinyin of the first item
         String pinyin = PinyinUtils.getPinyin(chunk.first.name);
-        _azAlbumRows.add(AzItem(data: chunk, tag: tag, namePinyin: pinyin));
+        azAlbumRows.add(AzItem(data: chunk, tag: tag, namePinyin: pinyin));
       }
     });
 
     // Sort rows? They are already added in tag order and then list order.
     // But AzListView expects them sorted?
     // Yes, they are in tag order.
-
-    SuspensionUtil.setShowSuspensionStatus(_azAlbumRows);
-
-    setState(() {
-      _isLoaded = true;
-    });
+    SuspensionUtil.setShowSuspensionStatus(azAlbumRows);
+    return azAlbumRows;
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final albumsAsync = ref.watch(allAlbumsProvider);
     final loadFailed = ref.watch(allAlbumsLoadFailedProvider);
 
@@ -82,15 +68,13 @@ class _AlbumListPageState extends ConsumerState<AlbumListPage> {
             return Center(child: Text(loadFailed ? '网络异常，专辑加载失败' : '暂无专辑'));
           }
 
-          if (!_isLoaded) {
-            _processAlbums(albums);
-          }
+          final azAlbumRows = _buildAlbumRows(albums);
 
           return AzListView(
-            data: _azAlbumRows,
-            itemCount: _azAlbumRows.length,
+            data: azAlbumRows,
+            itemCount: azAlbumRows.length,
             itemBuilder: (context, index) {
-              final item = _azAlbumRows[index];
+              final item = azAlbumRows[index];
               final rowAlbums = item.data;
 
               // Build row
@@ -122,7 +106,7 @@ class _AlbumListPageState extends ConsumerState<AlbumListPage> {
                       children: [
                         for (int i = 0; i < rowAlbums.length; i++) ...[
                           Expanded(
-                            child: _buildAlbumItem(context, rowAlbums[i]),
+                            child: _buildAlbumItem(context, ref, rowAlbums[i]),
                           ),
                           if (i < rowAlbums.length - 1 || rowAlbums.length == 1)
                             const SizedBox(width: 12),
@@ -136,7 +120,7 @@ class _AlbumListPageState extends ConsumerState<AlbumListPage> {
                 ],
               );
             },
-            indexBarData: SuspensionUtil.getTagIndexList(_azAlbumRows),
+            indexBarData: SuspensionUtil.getTagIndexList(azAlbumRows),
             indexBarOptions: const IndexBarOptions(
               needRebuild: true,
               ignoreDragCancel: true,
@@ -156,7 +140,7 @@ class _AlbumListPageState extends ConsumerState<AlbumListPage> {
     );
   }
 
-  Widget _buildAlbumItem(BuildContext context, Album album) {
+  Widget _buildAlbumItem(BuildContext context, WidgetRef ref, Album album) {
     return InkWell(
       onTap: () {
         Navigator.push(
@@ -166,17 +150,43 @@ class _AlbumListPageState extends ConsumerState<AlbumListPage> {
           ),
         );
       },
+      onLongPress: () {
+        showAlbumOptionsSheet(context: context, ref: ref, album: album);
+      },
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           AspectRatio(
             aspectRatio: 1.0,
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(8),
-              child: CoverArtImage(
-                coverArtId: album.coverArt,
-                fit: BoxFit.cover,
-              ),
+            child: Stack(
+              children: [
+                Positioned.fill(
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(8),
+                    child: CoverArtImage(
+                      coverArtId: album.coverArt,
+                      fit: BoxFit.cover,
+                    ),
+                  ),
+                ),
+                if (album.starred)
+                  Positioned(
+                    left: 6,
+                    bottom: 6,
+                    child: Container(
+                      padding: const EdgeInsets.all(4),
+                      decoration: BoxDecoration(
+                        color: Colors.black.withValues(alpha: 0.35),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: const Icon(
+                        Icons.favorite,
+                        size: 14,
+                        color: Colors.red,
+                      ),
+                    ),
+                  ),
+              ],
             ),
           ),
           const SizedBox(height: 8),

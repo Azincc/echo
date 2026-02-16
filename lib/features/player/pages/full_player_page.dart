@@ -308,6 +308,12 @@ class _FullPlayerPageState extends ConsumerState<FullPlayerPage>
                                     Center(
                                       child: Hero(
                                         tag: 'player-cover',
+                                        createRectTween: (begin, end) {
+                                          return RectTween(
+                                            begin: begin ?? Rect.zero,
+                                            end: end ?? Rect.zero,
+                                          );
+                                        },
                                         child: Container(
                                           width: coverSize,
                                           height: coverSize,
@@ -335,6 +341,7 @@ class _FullPlayerPageState extends ConsumerState<FullPlayerPage>
                                             child: CoverArtImage(
                                               coverArtId: currentSong.coverArt,
                                               size: coverSize,
+                                              requestSize: 640,
                                               fit: BoxFit.contain,
                                             ),
                                           ),
@@ -349,48 +356,91 @@ class _FullPlayerPageState extends ConsumerState<FullPlayerPage>
                                       tag: 'player-title',
                                       child: Material(
                                         type: MaterialType.transparency,
-                                        child: Text(
-                                          currentSong.title,
-                                          style: Theme.of(context)
-                                              .textTheme
-                                              .headlineSmall
-                                              ?.copyWith(
-                                                fontWeight: FontWeight.bold,
-                                                color: primaryTextColor,
-                                              ),
-                                          textAlign: TextAlign.center,
-                                          maxLines: 1,
-                                          overflow: TextOverflow.ellipsis,
-                                        ),
-                                      ),
-                                    ),
-
-                                    const SizedBox(height: 8),
-
-                                    if (currentSong.artist != null ||
-                                        currentSong.album != null)
-                                      Hero(
-                                        tag: 'player-artist',
-                                        child: Material(
-                                          type: MaterialType.transparency,
+                                        child: Padding(
+                                          padding: const EdgeInsets.symmetric(
+                                            vertical: 2,
+                                          ),
                                           child: Text(
-                                            [
-                                              if (currentSong.artist != null)
-                                                currentSong.artist!,
-                                              if (currentSong.album != null)
-                                                currentSong.album!,
-                                            ].join(' · '),
+                                            currentSong.title,
                                             style: Theme.of(context)
                                                 .textTheme
-                                                .bodyLarge
+                                                .headlineSmall
                                                 ?.copyWith(
-                                                  color: secondaryTextColor,
+                                                  fontWeight: FontWeight.bold,
+                                                  color: primaryTextColor,
                                                 ),
                                             textAlign: TextAlign.center,
                                             maxLines: 1,
                                             overflow: TextOverflow.ellipsis,
                                           ),
                                         ),
+                                      ),
+                                    ),
+
+                                    const SizedBox(height: 8),
+
+                                    if ((currentSong.artist != null &&
+                                            currentSong.artist!
+                                                .trim()
+                                                .isNotEmpty) ||
+                                        (currentSong.album != null &&
+                                            currentSong.album!
+                                                .trim()
+                                                .isNotEmpty))
+                                      Column(
+                                        children: [
+                                          if (currentSong.artist != null &&
+                                              currentSong.artist!
+                                                  .trim()
+                                                  .isNotEmpty)
+                                            Hero(
+                                              tag: 'player-artist',
+                                              child: Material(
+                                                type: MaterialType.transparency,
+                                                child: Padding(
+                                                  padding:
+                                                      const EdgeInsets.symmetric(
+                                                        vertical: 2,
+                                                      ),
+                                                  child: Text(
+                                                    currentSong.artist!,
+                                                    style: Theme.of(context)
+                                                        .textTheme
+                                                        .bodyLarge
+                                                        ?.copyWith(
+                                                          color:
+                                                              secondaryTextColor,
+                                                        ),
+                                                    textAlign: TextAlign.center,
+                                                    maxLines: 1,
+                                                    overflow:
+                                                        TextOverflow.ellipsis,
+                                                  ),
+                                                ),
+                                              ),
+                                            ),
+                                          if (currentSong.album != null &&
+                                              currentSong.album!
+                                                  .trim()
+                                                  .isNotEmpty)
+                                            Padding(
+                                              padding: const EdgeInsets.only(
+                                                top: 2,
+                                              ),
+                                              child: Text(
+                                                currentSong.album!,
+                                                style: Theme.of(context)
+                                                    .textTheme
+                                                    .bodyMedium
+                                                    ?.copyWith(
+                                                      color: secondaryTextColor,
+                                                    ),
+                                                textAlign: TextAlign.center,
+                                                maxLines: 1,
+                                                overflow: TextOverflow.ellipsis,
+                                              ),
+                                            ),
+                                        ],
                                       ),
 
                                     const Spacer(),

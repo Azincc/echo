@@ -7,12 +7,14 @@ import '../providers/api_provider.dart';
 class CoverArtImage extends ConsumerWidget {
   final String? coverArtId;
   final double? size;
+  final int? requestSize;
   final BoxFit fit;
 
   const CoverArtImage({
     super.key,
     required this.coverArtId,
     this.size,
+    this.requestSize,
     this.fit = BoxFit.cover,
   });
 
@@ -27,15 +29,21 @@ class CoverArtImage extends ConsumerWidget {
 
     // 处理 size 参数，避免 Infinity
     // 根据设备像素比请求更高分辨率的图片，提升清晰度
-    final devicePixelRatio = MediaQuery.devicePixelRatioOf(context);
-    int? coverSize;
-    if (size != null && !size!.isInfinite) {
-      coverSize = (size! * devicePixelRatio).ceil();
+    final int resolvedCoverSize;
+    if (requestSize != null && requestSize! > 0) {
+      resolvedCoverSize = requestSize!;
+    } else {
+      final devicePixelRatio = MediaQuery.devicePixelRatioOf(context);
+      int? coverSize;
+      if (size != null && !size!.isInfinite) {
+        coverSize = (size! * devicePixelRatio).ceil();
+      }
+      resolvedCoverSize = coverSize ?? 500;
     }
 
     final coverUrl = apiClient.getCoverArtUrl(
       coverArtId!,
-      size: coverSize ?? 500,
+      size: resolvedCoverSize,
     );
 
     if (coverUrl.isEmpty) {
@@ -45,7 +53,7 @@ class CoverArtImage extends ConsumerWidget {
     return CachedNetworkImage(
       imageUrl: coverUrl,
       // 使用 coverArtId 作为缓存键，避免因认证参数变化导致重复下载
-      cacheKey: '${coverArtId!}_${coverSize ?? 500}',
+      cacheKey: '${coverArtId!}_$resolvedCoverSize',
       width: size,
       height: size,
       fit: fit,

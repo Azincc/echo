@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:echoes/data/models/music_library.dart';
 import 'package:echoes/data/models/server_address.dart';
 import 'package:echoes/providers/api_provider.dart';
 import 'package:echoes/providers/library_provider.dart';
-import 'package:echoes/data/sources/local_storage.dart';
 import '../providers/auth_provider.dart';
 import '../providers/player_provider.dart';
 import '../providers/playlist_provider.dart';
@@ -13,8 +14,8 @@ import '../providers/music_provider.dart';
 import '../features/settings/pages/lyrics_providers_page.dart';
 import '../features/settings/pages/cover_providers_page.dart';
 import '../features/settings/pages/audio_quality_page.dart';
+import '../features/settings/pages/app_settings_page.dart';
 import '../features/download/pages/download_manager_page.dart';
-import '../providers/audio_cache_provider.dart';
 
 /// 应用侧栏
 class AppDrawer extends ConsumerStatefulWidget {
@@ -117,11 +118,11 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
                         color: activeAddress == null
                             ? Colors.grey.shade300
                             : (activeAddress.status == ServerAddressStatus.ok
-                                ? Colors.greenAccent
-                                : Colors.redAccent),
+                                  ? Colors.greenAccent
+                                  : Colors.redAccent),
                         shape: BoxShape.circle,
                         border: Border.all(
-                          color: Colors.white.withOpacity(0.5),
+                          color: Colors.white.withValues(alpha: 0.5),
                           width: 1,
                         ),
                       ),
@@ -170,13 +171,6 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
     final uri = Uri.tryParse(raw.trim());
     if (uri == null || (!uri.hasScheme && !uri.hasAbsolutePath)) return null;
     return raw.trim();
-  }
-
-  Widget _buildDefaultAvatar(Color bg, Color fg) {
-    return ColoredBox(
-      color: bg,
-      child: Icon(Icons.person, size: 40, color: fg),
-    );
   }
 
   Widget _buildLibraryList(BuildContext context, MusicLibrary? activeLibrary) {
@@ -337,7 +331,10 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
           title: const Text('设置'),
           onTap: () {
             Navigator.pop(context);
-            _showSettingsDialog(context);
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (context) => const AppSettingsPage()),
+            );
           },
         ),
 
@@ -386,164 +383,11 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
     );
   }
 
-  /// 显示设置对话框
-  void _showSettingsDialog(BuildContext context) {
-    final authState = ref.read(authStateProvider);
-    final library = authState.currentLibrary;
-    final activeAddress = ref.read(activeAddressProvider);
-
-    showDialog(
-      context: context,
-      builder: (context) => Consumer(
-        builder: (context, ref, _) {
-          final autoFallback = ref.watch(autoFallbackProvider);
-
-          return AlertDialog(
-            title: const Text('设置'),
-            content: SingleChildScrollView(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  // 服务器信息
-                  Text(
-                    '服务器信息',
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  _buildInfoRow('当前连接', activeAddress?.label ?? '未连接'),
-                  _buildInfoRow('服务器地址', activeAddress?.url ?? '未设置'),
-                  _buildInfoRow('用户名', library?.username ?? '未设置'),
-                  _buildInfoRow(
-                    '认证方式',
-                    library?.authType == MusicLibraryAuthType.apiKey
-                        ? 'API Key'
-                        : '密码',
-                  ),
-                  const Divider(height: 24),
-
-                  // 应用设置
-                  Text(
-                    '应用设置',
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  SwitchListTile(
-                    contentPadding: EdgeInsets.zero,
-                    title: const Text('线路自动回退'),
-                    subtitle: const Text(
-                      '手动选择线路后，若该线路不可用，自动切换到其他可用线路',
-                      style: TextStyle(fontSize: 12),
-                    ),
-                    value: autoFallback,
-                    onChanged: (value) async {
-                      ref.read(autoFallbackProvider.notifier).state = value;
-                      ref.read(addressPoolProvider).autoFallback = value;
-                      await LocalStorage.setAutoFallback(value);
-                    },
-                  ),
-                  const Divider(height: 24),
-
-                  // 缓存管理
-                  Text(
-                    '缓存管理',
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Consumer(
-                    builder: (context, ref, _) {
-                      final sizeAsync = ref.watch(cacheSizeProvider);
-                      return sizeAsync.when(
-                        data: (size) {
-                          final mb = size / (1024 * 1024);
-                          final gb = mb / 1024;
-                          String sizeStr;
-                          if (gb >= 1) {
-                            sizeStr = '${gb.toStringAsFixed(2)} GB';
-                          } else {
-                            sizeStr = '${mb.toStringAsFixed(1)} MB';
-                          }
-
-                          return Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              _buildInfoRow('当前占用', sizeStr),
-                              const SizedBox(height: 8),
-                              SizedBox(
-                                width: double.infinity,
-                                child: OutlinedButton.icon(
-                                  onPressed: () async {
-                                    final confirmed = await showDialog<bool>(
-                                      context: context,
-                                      builder: (context) => AlertDialog(
-                                        title: const Text('清除缓存'),
-                                        content: const Text('确定要清除所有音频缓存吗？'),
-                                        actions: [
-                                          TextButton(
-                                            onPressed: () =>
-                                                Navigator.pop(context, false),
-                                            child: const Text('取消'),
-                                          ),
-                                          TextButton(
-                                            onPressed: () =>
-                                                Navigator.pop(context, true),
-                                            child: const Text('清除'),
-                                          ),
-                                        ],
-                                      ),
-                                    );
-
-                                    if (confirmed == true) {
-                                      await ref
-                                          .read(audioCacheServiceProvider)
-                                          .clearAll();
-                                      ref.invalidate(cacheSizeProvider);
-                                      if (context.mounted) {
-                                        ScaffoldMessenger.of(
-                                          context,
-                                        ).showSnackBar(
-                                          const SnackBar(
-                                            content: Text('缓存已清除'),
-                                          ),
-                                        );
-                                      }
-                                    }
-                                  },
-                                  icon: const Icon(Icons.delete_outline),
-                                  label: const Text('清除缓存'),
-                                ),
-                              ),
-                            ],
-                          );
-                        },
-                        loading: () => const Text('正在计算缓存大小...'),
-                        error: (error, stackTrace) => const Text('无法获取缓存大小'),
-                      );
-                    },
-                  ),
-                ],
-              ),
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text('关闭'),
-              ),
-            ],
-          );
-        },
-      ),
-    );
-  }
-
   /// 显示关于对话框
   void _showAboutDialog(BuildContext context) {
+    const githubHome = 'https://github.com/Azincc/echo';
+    const githubIssues = 'https://github.com/Azincc/echo/issues';
+
     showAboutDialog(
       context: context,
       applicationName: 'Echo',
@@ -563,28 +407,82 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
         const Text('• 后台播放和通知栏控制'),
         const Text('• 收藏和播放列表管理'),
         const Text('• 多服务器地址自动切换 (v0.2.0)'),
+        const SizedBox(height: 16),
+        const Text('项目地址：'),
+        _buildLinkRow(context, 'GitHub 首页', githubHome),
+        const SizedBox(height: 8),
+        const Text('反馈问题：'),
+        _buildLinkRow(context, 'GitHub Issues', githubIssues),
       ],
     );
   }
 
-  /// 构建信息行
-  Widget _buildInfoRow(String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(
-            width: 80,
-            child: Text(
-              label,
-              style: const TextStyle(color: Colors.grey, fontSize: 12),
-            ),
+  Widget _buildLinkRow(BuildContext context, String label, String url) {
+    return Row(
+      children: [
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(label, style: const TextStyle(fontWeight: FontWeight.w600)),
+              const SizedBox(height: 2),
+              SelectableText(
+                url,
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: Theme.of(context).colorScheme.primary,
+                ),
+              ),
+            ],
           ),
-          Expanded(child: Text(value, style: const TextStyle(fontSize: 12))),
-        ],
-      ),
+        ),
+        IconButton(
+          tooltip: '打开链接',
+          onPressed: () async {
+            await _openExternalUrl(context, url);
+          },
+          icon: const Icon(Icons.arrow_outward, size: 18),
+        ),
+      ],
     );
+  }
+
+  Future<void> _openExternalUrl(BuildContext context, String url) async {
+    final uri = Uri.tryParse(url);
+    if (uri == null) {
+      if (context.mounted) {
+        ScaffoldMessenger.maybeOf(
+          context,
+        )?.showSnackBar(const SnackBar(content: Text('链接格式无效')));
+      }
+      return;
+    }
+
+    try {
+      final opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
+      if (!opened && context.mounted) {
+        ScaffoldMessenger.maybeOf(
+          context,
+        )?.showSnackBar(const SnackBar(content: Text('无法打开链接')));
+      }
+    } on MissingPluginException {
+      if (context.mounted) {
+        ScaffoldMessenger.maybeOf(
+          context,
+        )?.showSnackBar(const SnackBar(content: Text('请完整重启应用后再试')));
+      }
+    } on PlatformException {
+      if (context.mounted) {
+        ScaffoldMessenger.maybeOf(
+          context,
+        )?.showSnackBar(const SnackBar(content: Text('无法打开浏览器，请稍后重试')));
+      }
+    } catch (_) {
+      if (context.mounted) {
+        ScaffoldMessenger.maybeOf(
+          context,
+        )?.showSnackBar(const SnackBar(content: Text('打开链接失败')));
+      }
+    }
   }
 
   Future<void> _showRouteSelectionDialog(BuildContext context) async {

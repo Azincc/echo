@@ -1,0 +1,50 @@
+name: 使用问题
+description: 提交使用上的疑问或配置咨询
+title: "[Question]: "
+labels:
+  - question
+body:
+  - type: markdown
+    attributes:
+      value: |
+        如果你不确定是 bug 还是配置问题，可以先用这个模板。
+  - type: input
+    id: app_version
+    attributes:
+      label: 应用版本
+      placeholder: v0.3.0
+  - type: dropdown
+    id: platform
+    attributes:
+      label: 平台
+      options:
+        - Android
+        - iOS
+        - macOS
+        - Windows
+        - Linux
+        - Web
+  - type: input
+    id: backend
+    attributes:
+      label: 后端服务
+      description: 例如 Navidrome 版本、是否反向代理、是否 HTTPS
+      placeholder: Navidrome 0.54.5 + Nginx + HTTPS
+  - type: textarea
+    id: question
+    attributes:
+      label: 你的问题
+      description: 描述你想实现什么，以及当前卡在哪里
+      placeholder: 我希望在移动网络下自动切换低码率，该如何配置？
+    validations:
+      required: true
+  - type: textarea
+    id: tried
+    attributes:
+      label: 已尝试的方法
+      description: 说明你已经试过的步骤，避免重复建议
+  - type: textarea
+    id: context
+    attributes:
+      label: 补充信息
+      description: 可粘贴日志、截图链接、配置片段等

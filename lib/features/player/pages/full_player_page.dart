@@ -274,95 +274,89 @@ class _FullPlayerPageState extends ConsumerState<FullPlayerPage>
                               ),
                             ],
                           )
-                        : // 封面模式：保持原有 SingleChildScrollView 布局
-                          SingleChildScrollView(
-                            child: Padding(
-                              padding: const EdgeInsets.all(24),
-                              child: Column(
-                                children: [
-                                  const SizedBox(height: 32),
+                        : // 封面模式：固定封面区域，不使用滚动容器
+                          LayoutBuilder(
+                            builder: (context, constraints) {
+                              const horizontalPadding = 24.0;
+                              // 预留歌曲名/歌手信息与间距，剩余高度用于封面
+                              const reservedHeight = 112.0;
 
-                                  // 专辑封面
-                                  Center(
-                                    child: Hero(
-                                      tag: 'player-cover',
-                                      child: Container(
-                                        width: 320,
-                                        height: 320,
-                                        decoration: BoxDecoration(
-                                          borderRadius: BorderRadius.circular(
-                                            16,
-                                          ),
-                                          color: Theme.of(
-                                            context,
-                                          ).colorScheme.surfaceContainerHighest,
-                                          boxShadow: [
-                                            BoxShadow(
-                                              color: Colors.black.withValues(
-                                                alpha: 0.2,
+                              var coverSize =
+                                  constraints.maxWidth - horizontalPadding * 2;
+                              if (coverSize > 320) {
+                                coverSize = 320;
+                              }
+
+                              final maxCoverByHeight =
+                                  constraints.maxHeight - reservedHeight;
+                              if (coverSize > maxCoverByHeight) {
+                                coverSize = maxCoverByHeight;
+                              }
+                              if (coverSize < 0) {
+                                coverSize = 0;
+                              }
+
+                              return Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: horizontalPadding,
+                                ),
+                                child: Column(
+                                  children: [
+                                    const Spacer(),
+
+                                    // 专辑封面（固定尺寸）
+                                    Center(
+                                      child: Hero(
+                                        tag: 'player-cover',
+                                        child: Container(
+                                          width: coverSize,
+                                          height: coverSize,
+                                          decoration: BoxDecoration(
+                                            borderRadius: BorderRadius.circular(
+                                              16,
+                                            ),
+                                            color: Theme.of(context)
+                                                .colorScheme
+                                                .surfaceContainerHighest,
+                                            boxShadow: [
+                                              BoxShadow(
+                                                color: Colors.black.withValues(
+                                                  alpha: 0.2,
+                                                ),
+                                                blurRadius: 20,
+                                                offset: const Offset(0, 10),
                                               ),
-                                              blurRadius: 20,
-                                              offset: const Offset(0, 10),
-                                            ),
-                                          ],
-                                        ),
-                                        child: ClipRRect(
-                                          borderRadius: BorderRadius.circular(
-                                            16,
+                                            ],
                                           ),
-                                          child: CoverArtImage(
-                                            coverArtId: currentSong.coverArt,
-                                            size: 320,
-                                            fit: BoxFit.contain,
+                                          child: ClipRRect(
+                                            borderRadius: BorderRadius.circular(
+                                              16,
+                                            ),
+                                            child: CoverArtImage(
+                                              coverArtId: currentSong.coverArt,
+                                              size: coverSize,
+                                              fit: BoxFit.contain,
+                                            ),
                                           ),
                                         ),
                                       ),
                                     ),
-                                  ),
 
-                                  const SizedBox(height: 32),
+                                    const SizedBox(height: 24),
 
-                                  // 歌曲信息
-                                  Hero(
-                                    tag: 'player-title',
-                                    child: Material(
-                                      type: MaterialType.transparency,
-                                      child: Text(
-                                        currentSong.title,
-                                        style: Theme.of(context)
-                                            .textTheme
-                                            .headlineSmall
-                                            ?.copyWith(
-                                              fontWeight: FontWeight.bold,
-                                              color: primaryTextColor,
-                                            ),
-                                        textAlign: TextAlign.center,
-                                        maxLines: 2,
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
-                                    ),
-                                  ),
-
-                                  const SizedBox(height: 8),
-
-                                  if (currentSong.artist != null ||
-                                      currentSong.album != null)
+                                    // 歌曲信息
                                     Hero(
-                                      tag: 'player-artist',
+                                      tag: 'player-title',
                                       child: Material(
                                         type: MaterialType.transparency,
                                         child: Text(
-                                          [
-                                            if (currentSong.artist != null)
-                                              currentSong.artist!,
-                                            if (currentSong.album != null)
-                                              currentSong.album!,
-                                          ].join(' · '),
+                                          currentSong.title,
                                           style: Theme.of(context)
                                               .textTheme
-                                              .bodyLarge
+                                              .headlineSmall
                                               ?.copyWith(
-                                                color: secondaryTextColor,
+                                                fontWeight: FontWeight.bold,
+                                                color: primaryTextColor,
                                               ),
                                           textAlign: TextAlign.center,
                                           maxLines: 1,
@@ -371,10 +365,39 @@ class _FullPlayerPageState extends ConsumerState<FullPlayerPage>
                                       ),
                                     ),
 
-                                  const SizedBox(height: 32),
-                                ],
-                              ),
-                            ),
+                                    const SizedBox(height: 8),
+
+                                    if (currentSong.artist != null ||
+                                        currentSong.album != null)
+                                      Hero(
+                                        tag: 'player-artist',
+                                        child: Material(
+                                          type: MaterialType.transparency,
+                                          child: Text(
+                                            [
+                                              if (currentSong.artist != null)
+                                                currentSong.artist!,
+                                              if (currentSong.album != null)
+                                                currentSong.album!,
+                                            ].join(' · '),
+                                            style: Theme.of(context)
+                                                .textTheme
+                                                .bodyLarge
+                                                ?.copyWith(
+                                                  color: secondaryTextColor,
+                                                ),
+                                            textAlign: TextAlign.center,
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                        ),
+                                      ),
+
+                                    const Spacer(),
+                                  ],
+                                ),
+                              );
+                            },
                           ),
                   ),
 

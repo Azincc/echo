@@ -68,9 +68,7 @@ _TextSnapshot? _extractTextSnapshot(Widget widget, BuildContext context) {
   final textWidget = found;
   if (textWidget == null || textWidget.data == null) return null;
 
-  final style = DefaultTextStyle.of(context).style.merge(
-    textWidget.style,
-  );
+  final style = DefaultTextStyle.of(context).style.merge(textWidget.style);
 
   return _TextSnapshot(
     data: textWidget.data!,
@@ -84,6 +82,14 @@ _TextSnapshot? _extractTextSnapshot(Widget widget, BuildContext context) {
     strutStyle: textWidget.strutStyle,
     locale: textWidget.locale,
   );
+}
+
+bool _isPrefixTextPair(String from, String to) {
+  final fromText = from.trim();
+  final toText = to.trim();
+  if (fromText.isEmpty || toText.isEmpty) return false;
+  if (fromText == toText) return true;
+  return fromText.startsWith(toText) || toText.startsWith(fromText);
 }
 
 Widget playerTextFlightShuttleBuilder(
@@ -102,13 +108,15 @@ Widget playerTextFlightShuttleBuilder(
   final toText = _extractTextSnapshot(toChild, toHeroContext);
 
   // 文本英雄使用“单文本样式插值”，避免双层叠加导致的颜色重影。
-  if (fromText != null && toText != null && fromText.data == toText.data) {
+  if (fromText != null &&
+      toText != null &&
+      _isPrefixTextPair(fromText.data, toText.data)) {
     return AnimatedBuilder(
       animation: animation,
       builder: (context, _) {
         final t = Curves.easeInOut.transform(animation.value);
         final style = TextStyle.lerp(fromText.style, toText.style, t);
-        final switched = t < 0.5 ? fromText : toText;
+        final switched = t < 0.52 ? fromText : toText;
         return Material(
           type: MaterialType.transparency,
           child: Align(
@@ -117,7 +125,7 @@ Widget playerTextFlightShuttleBuilder(
               fit: BoxFit.scaleDown,
               alignment: Alignment.center,
               child: Text(
-                fromText.data,
+                switched.data,
                 style: style,
                 textAlign: switched.textAlign,
                 maxLines: switched.maxLines,

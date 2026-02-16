@@ -22,6 +22,8 @@ class MiniPlayer extends ConsumerWidget {
     final theme = Theme.of(context);
     final titleColor = theme.colorScheme.onSurface;
     final artistColor = theme.colorScheme.onSurfaceVariant;
+    final artistName = song.artist?.trim();
+    final hasArtist = artistName != null && artistName.isNotEmpty;
     final progress = playerState.duration.inMilliseconds > 0
         ? playerState.position.inMilliseconds /
               playerState.duration.inMilliseconds
@@ -142,9 +144,9 @@ class MiniPlayer extends ConsumerWidget {
                                   ),
                                 ),
                               ),
-                              if (song.artist != null)
+                              if (hasArtist)
                                 Hero(
-                                  tag: 'player-artist',
+                                  tag: 'player-subtitle',
                                   createRectTween: playerLinearRectTween,
                                   flightShuttleBuilder:
                                       playerTextFlightShuttleBuilder,
@@ -155,7 +157,7 @@ class MiniPlayer extends ConsumerWidget {
                                         vertical: 2,
                                       ),
                                       child: Text(
-                                        song.artist!,
+                                        artistName,
                                         maxLines: 1,
                                         overflow: TextOverflow.ellipsis,
                                         style: theme.textTheme.bodySmall

@@ -27,13 +27,16 @@ class FullPlayerPage extends ConsumerStatefulWidget {
 }
 
 class _FullPlayerPageState extends ConsumerState<FullPlayerPage>
-    with SingleTickerProviderStateMixin {
+    with TickerProviderStateMixin {
   bool _showLyrics = false;
+  bool _isClosingRoute = false;
   PaletteGenerator? _paletteGenerator;
   late AnimationController _controller;
+  late AnimationController _lyricsController;
   late Animation<double> _topBarAnimation;
   late Animation<double> _controlsAnimation;
   late Animation<double> _bottomBarAnimation;
+  late Animation<double> _lyricsProgress;
 
   @override
   void initState() {
@@ -41,6 +44,11 @@ class _FullPlayerPageState extends ConsumerState<FullPlayerPage>
     _controller = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 800),
+    );
+    _lyricsController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 320),
+      value: _showLyrics ? 1 : 0,
     );
 
     _topBarAnimation = CurvedAnimation(
@@ -58,6 +66,10 @@ class _FullPlayerPageState extends ConsumerState<FullPlayerPage>
       parent: _controller,
       curve: const Interval(0.5, 1.0, curve: Curves.easeOut),
     );
+    _lyricsProgress = CurvedAnimation(
+      parent: _lyricsController,
+      curve: Curves.easeInOutCubic,
+    );
 
     _controller.forward();
 
@@ -71,6 +83,7 @@ class _FullPlayerPageState extends ConsumerState<FullPlayerPage>
 
   @override
   void dispose() {
+    _lyricsController.dispose();
     _controller.dispose();
     super.dispose();
   }
@@ -107,6 +120,43 @@ class _FullPlayerPageState extends ConsumerState<FullPlayerPage>
       0.82,
     );
     return Color.lerp(color, Colors.black, blendFactor) ?? color;
+  }
+
+  String _buildSubtitle({
+    required String? artistName,
+    required String? albumName,
+    bool includeAlbum = true,
+  }) {
+    final artist = artistName?.trim() ?? '';
+    final album = albumName?.trim() ?? '';
+
+    if (!includeAlbum) {
+      return artist;
+    }
+    if (artist.isNotEmpty && album.isNotEmpty) {
+      return '$artist · $album';
+    }
+    if (artist.isNotEmpty) return artist;
+    if (album.isNotEmpty) return album;
+    return '';
+  }
+
+  Future<void> _closeToMini() async {
+    if (_isClosingRoute || !mounted) return;
+    _isClosingRoute = true;
+
+    if (!_showLyrics) {
+      Navigator.of(context).pop();
+      return;
+    }
+
+    await _lyricsController.animateBack(
+      0.0,
+      duration: const Duration(milliseconds: 180),
+      curve: Curves.easeInOutCubic,
+    );
+    if (!mounted) return;
+    Navigator.of(context).pop();
   }
 
   @override
@@ -148,458 +198,386 @@ class _FullPlayerPageState extends ConsumerState<FullPlayerPage>
     final lyricsInactivePrimaryColor = Colors.white.withValues(alpha: 0.64);
     final lyricsInactiveSecondaryColor = Colors.white.withValues(alpha: 0.5);
     final artistName = currentSong.artist?.trim();
-    final hasArtist = artistName != null && artistName.isNotEmpty;
     final albumName = currentSong.album?.trim();
-    final hasAlbum = albumName != null && albumName.isNotEmpty;
+    final subtitle = _buildSubtitle(
+      artistName: artistName,
+      albumName: albumName,
+      includeAlbum: true,
+    );
+    final hasSubtitle = subtitle.isNotEmpty;
 
-    return Scaffold(
-      backgroundColor: Colors.transparent,
-      body: Stack(
-        children: [
-          // 背景 Hero
-          Positioned.fill(
-            child: Hero(
-              tag: 'player-background',
-              child: Container(
-                decoration: BoxDecoration(
-                  color: scaffoldBackgroundColor,
-                  gradient: LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    colors: [
-                      backgroundColor.withValues(alpha: 0.85),
-                      scaffoldBackgroundColor,
-                    ],
+    return PopScope<void>(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) async {
+        if (didPop) return;
+        await _closeToMini();
+      },
+      child: Scaffold(
+        backgroundColor: Colors.transparent,
+        body: Stack(
+          children: [
+            // 背景 Hero
+            Positioned.fill(
+              child: Hero(
+                tag: 'player-background',
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: scaffoldBackgroundColor,
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [
+                        backgroundColor.withValues(alpha: 0.85),
+                        scaffoldBackgroundColor,
+                      ],
+                    ),
                   ),
                 ),
               ),
             ),
-          ),
-          // 内容
-          SafeArea(
-            child: FadeTransition(
-              opacity: ModalRoute.of(context)!.animation!,
-              child: Column(
-                children: [
-                  // 顶部操作栏
-                  FadeTransition(
-                    opacity: _topBarAnimation,
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 8),
-                      child: IconTheme(
-                        data: Theme.of(
-                          context,
-                        ).iconTheme.copyWith(color: primaryTextColor),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            IconButton(
-                              icon: const Icon(Icons.keyboard_arrow_down),
-                              onPressed: () => Navigator.pop(context),
-                            ),
-                            Text(
-                              '正在播放',
-                              style: Theme.of(context).textTheme.titleMedium
-                                  ?.copyWith(color: primaryTextColor),
-                            ),
-                            IconButton(
-                              icon: const Icon(Icons.more_vert),
-                              onPressed: () {
-                                showSongOptionsSheet(
-                                  context: context,
-                                  song: currentSong,
-                                );
-                              },
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-
-                  // 中间内容区域
-                  Expanded(
-                    child: _showLyrics
-                        ? // 歌词模式：歌词直接占满 Expanded，无外层 SingleChildScrollView
-                          Column(
+            // 内容
+            SafeArea(
+              child: FadeTransition(
+                opacity: ModalRoute.of(context)!.animation!,
+                child: Column(
+                  children: [
+                    // 顶部操作栏
+                    FadeTransition(
+                      opacity: _topBarAnimation,
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 8),
+                        child: IconTheme(
+                          data: Theme.of(
+                            context,
+                          ).iconTheme.copyWith(color: primaryTextColor),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
-                              // 歌曲信息（紧凑）
-                              Padding(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 24,
-                                ),
-                                child: Column(
-                                  children: [
-                                    const SizedBox(height: 8),
-                                    Text(
-                                      currentSong.title,
-                                      style: Theme.of(context)
-                                          .textTheme
-                                          .titleMedium
-                                          ?.copyWith(
-                                            fontWeight: FontWeight.bold,
-                                            color: primaryTextColor,
-                                          ),
-                                      textAlign: TextAlign.center,
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                    const SizedBox(height: 4),
-                                    if (hasArtist || hasAlbum)
-                                      FadeTransition(
-                                        opacity: _controlsAnimation,
-                                        child: AnimatedSwitcher(
-                                          duration: const Duration(
-                                            milliseconds: 240,
-                                          ),
-                                          switchInCurve: Curves.easeOut,
-                                          switchOutCurve: Curves.easeIn,
-                                          transitionBuilder:
-                                              (child, animation) =>
-                                                  FadeTransition(
-                                                    opacity: animation,
-                                                    child: child,
-                                                  ),
-                                          child: Text(
-                                            [
-                                              if (hasArtist) artistName,
-                                              if (hasAlbum) albumName,
-                                            ].join(' · '),
-                                            key: ValueKey<String>(
-                                              'lyrics-meta-${currentSong.id}-${artistName ?? ''}-${albumName ?? ''}',
-                                            ),
-                                            style: Theme.of(context)
-                                                .textTheme
-                                                .bodySmall
-                                                ?.copyWith(
-                                                  color: secondaryTextColor,
-                                                ),
-                                            textAlign: TextAlign.center,
-                                            maxLines: 1,
-                                            overflow: TextOverflow.ellipsis,
-                                          ),
-                                        ),
-                                      ),
-                                    const SizedBox(height: 8),
-                                  ],
-                                ),
+                              IconButton(
+                                icon: const Icon(Icons.keyboard_arrow_down),
+                                onPressed: _closeToMini,
                               ),
-                              // 歌词视图占满剩余空间
-                              Expanded(
-                                child: _buildLyricsView(
-                                  lyricsAsync,
-                                  activePrimaryColor: lyricsActivePrimaryColor,
-                                  activeSecondaryColor:
-                                      lyricsActiveSecondaryColor,
-                                  inactivePrimaryColor:
-                                      lyricsInactivePrimaryColor,
-                                  inactiveSecondaryColor:
-                                      lyricsInactiveSecondaryColor,
-                                ),
+                              Text(
+                                '正在播放',
+                                style: Theme.of(context).textTheme.titleMedium
+                                    ?.copyWith(color: primaryTextColor),
+                              ),
+                              IconButton(
+                                icon: const Icon(Icons.more_vert),
+                                onPressed: () {
+                                  showSongOptionsSheet(
+                                    context: context,
+                                    song: currentSong,
+                                  );
+                                },
                               ),
                             ],
-                          )
-                        : // 封面模式：固定封面区域，不使用滚动容器
-                          LayoutBuilder(
-                            builder: (context, constraints) {
-                              const horizontalPadding = 24.0;
-                              // 预留歌曲名/歌手信息与间距，剩余高度用于封面
-                              const reservedHeight = 112.0;
-
-                              var coverSize =
-                                  constraints.maxWidth - horizontalPadding * 2;
-                              if (coverSize > 320) {
-                                coverSize = 320;
-                              }
-
-                              final maxCoverByHeight =
-                                  constraints.maxHeight - reservedHeight;
-                              if (coverSize > maxCoverByHeight) {
-                                coverSize = maxCoverByHeight;
-                              }
-                              if (coverSize < 0) {
-                                coverSize = 0;
-                              }
-
-                              return Padding(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: horizontalPadding,
-                                ),
-                                child: Column(
-                                  children: [
-                                    const Spacer(),
-
-                                    // 专辑封面（固定尺寸）
-                                    Center(
-                                      child: Hero(
-                                        tag: 'player-cover',
-                                        createRectTween: playerLinearRectTween,
-                                        child: Container(
-                                          width: coverSize,
-                                          height: coverSize,
-                                          decoration: BoxDecoration(
-                                            borderRadius: BorderRadius.circular(
-                                              16,
-                                            ),
-                                            color: Theme.of(context)
-                                                .colorScheme
-                                                .surfaceContainerHighest,
-                                            boxShadow: [
-                                              BoxShadow(
-                                                color: Colors.black.withValues(
-                                                  alpha: 0.2,
-                                                ),
-                                                blurRadius: 20,
-                                                offset: const Offset(0, 10),
-                                              ),
-                                            ],
-                                          ),
-                                          child: ClipRRect(
-                                            borderRadius: BorderRadius.circular(
-                                              16,
-                                            ),
-                                            child: CoverArtImage(
-                                              coverArtId: currentSong.coverArt,
-                                              size: coverSize,
-                                              requestSize: 640,
-                                              fit: BoxFit.contain,
-                                            ),
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-
-                                    const SizedBox(height: 24),
-
-                                    // 歌曲信息
-                                    Hero(
-                                      tag: 'player-title',
-                                      createRectTween: playerLinearRectTween,
-                                      flightShuttleBuilder:
-                                          playerTextFlightShuttleBuilder,
-                                      child: Material(
-                                        type: MaterialType.transparency,
-                                        child: Padding(
-                                          padding: const EdgeInsets.symmetric(
-                                            vertical: 2,
-                                          ),
-                                          child: Text(
-                                            currentSong.title,
-                                            style: Theme.of(context)
-                                                .textTheme
-                                                .headlineSmall
-                                                ?.copyWith(
-                                                  fontWeight: FontWeight.bold,
-                                                  color: primaryTextColor,
-                                                ),
-                                            textAlign: TextAlign.center,
-                                            maxLines: 1,
-                                            overflow: TextOverflow.ellipsis,
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-
-                                    const SizedBox(height: 8),
-
-                                    if (hasArtist || hasAlbum)
-                                      Column(
-                                        children: [
-                                          if (hasArtist)
-                                            Hero(
-                                              tag: 'player-artist',
-                                              createRectTween:
-                                                  playerLinearRectTween,
-                                              flightShuttleBuilder:
-                                                  playerTextFlightShuttleBuilder,
-                                              child: Material(
-                                                type: MaterialType.transparency,
-                                                child: Padding(
-                                                  padding:
-                                                      const EdgeInsets.symmetric(
-                                                        vertical: 2,
-                                                      ),
-                                                  child: Text(
-                                                    artistName,
-                                                    style: Theme.of(context)
-                                                        .textTheme
-                                                        .bodyLarge
-                                                        ?.copyWith(
-                                                          color:
-                                                              secondaryTextColor,
-                                                        ),
-                                                    textAlign: TextAlign.center,
-                                                    maxLines: 1,
-                                                    overflow:
-                                                        TextOverflow.ellipsis,
-                                                  ),
-                                                ),
-                                              ),
-                                            ),
-                                          FadeTransition(
-                                            opacity: _controlsAnimation,
-                                            child: AnimatedSwitcher(
-                                              duration: const Duration(
-                                                milliseconds: 240,
-                                              ),
-                                              switchInCurve: Curves.easeOut,
-                                              switchOutCurve: Curves.easeIn,
-                                              transitionBuilder:
-                                                  (child, animation) =>
-                                                      FadeTransition(
-                                                        opacity: animation,
-                                                        child: child,
-                                                      ),
-                                              layoutBuilder:
-                                                  (
-                                                    Widget? currentChild,
-                                                    List<Widget>
-                                                    previousChildren,
-                                                  ) {
-                                                    return Stack(
-                                                      alignment:
-                                                          Alignment.topCenter,
-                                                      children: <Widget>[
-                                                        ...previousChildren,
-                                                        if (currentChild != null)
-                                                          currentChild,
-                                                      ],
-                                                    );
-                                                  },
-                                              child: hasAlbum
-                                                  ? Padding(
-                                                      key: ValueKey<String>(
-                                                        'album-${currentSong.id}-$albumName',
-                                                      ),
-                                                      padding:
-                                                          const EdgeInsets.only(
-                                                            top: 2,
-                                                          ),
-                                                      child: Text(
-                                                        albumName,
-                                                        style: Theme.of(context)
-                                                            .textTheme
-                                                            .bodyMedium
-                                                            ?.copyWith(
-                                                              color:
-                                                                  secondaryTextColor,
-                                                            ),
-                                                        textAlign:
-                                                            TextAlign.center,
-                                                        maxLines: 1,
-                                                        overflow:
-                                                            TextOverflow
-                                                                .ellipsis,
-                                                      ),
-                                                    )
-                                                  : const SizedBox.shrink(
-                                                      key: ValueKey<String>(
-                                                        'album-empty',
-                                                      ),
-                                                    ),
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-
-                                    const Spacer(),
-                                  ],
-                                ),
-                              );
-                            },
                           ),
-                  ),
-
-                  // 底部固定控制栏
-                  FadeTransition(
-                    opacity: _controlsAnimation,
-                    child: SlideTransition(
-                      position: _controlsAnimation.drive(
-                        Tween<Offset>(
-                          begin: const Offset(0, 0.2),
-                          end: Offset.zero,
-                        ),
-                      ),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 24,
-                          vertical: 16,
-                        ),
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            // 进度条
-                            const ProgressBar(),
-
-                            const SizedBox(height: 24),
-
-                            // 播放控制按钮
-                            PlaybackControls(currentSong: currentSong),
-
-                            const SizedBox(height: 8),
-
-                            // 底部操作按钮
-                            FadeTransition(
-                              opacity: _bottomBarAnimation,
-                              child: SizedBox(
-                                width: 160,
-                                child: Row(
-                                  mainAxisAlignment:
-                                      MainAxisAlignment.spaceBetween,
-                                  children: [
-                                    // 歌词按钮
-                                    IconButton(
-                                      icon: Icon(
-                                        Icons.lyrics,
-                                        color: _showLyrics
-                                            ? Colors.white
-                                            : Colors.white.withValues(
-                                                alpha: 0.72,
-                                              ),
-                                      ),
-                                      onPressed: () {
-                                        setState(() {
-                                          _showLyrics = !_showLyrics;
-                                        });
-                                      },
-                                    ),
-
-                                    // 播放队列按钮
-                                    IconButton(
-                                      icon: Icon(
-                                        Icons.queue_music,
-                                        color: Colors.white.withValues(
-                                          alpha: 0.78,
-                                        ),
-                                      ),
-                                      onPressed: () {
-                                        showModalBottomSheet(
-                                          context: context,
-                                          builder: (context) =>
-                                              const PlayQueueSheet(),
-                                          isScrollControlled: true,
-                                        );
-                                      },
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ),
-
-                            // 音质指示
-                            const SizedBox(height: 4),
-                            _buildQualityIndicator(ref),
-                          ],
                         ),
                       ),
                     ),
-                  ),
-                ],
+
+                    // 中间内容区域
+                    Expanded(
+                      child: _buildMiddleContent(
+                        currentSong: currentSong,
+                        lyricsAsync: lyricsAsync,
+                        hasSubtitle: hasSubtitle,
+                        subtitle: subtitle,
+                        primaryTextColor: primaryTextColor,
+                        secondaryTextColor: secondaryTextColor,
+                        lyricsActivePrimaryColor: lyricsActivePrimaryColor,
+                        lyricsActiveSecondaryColor: lyricsActiveSecondaryColor,
+                        lyricsInactivePrimaryColor: lyricsInactivePrimaryColor,
+                        lyricsInactiveSecondaryColor:
+                            lyricsInactiveSecondaryColor,
+                      ),
+                    ),
+
+                    // 底部固定控制栏
+                    FadeTransition(
+                      opacity: _controlsAnimation,
+                      child: SlideTransition(
+                        position: _controlsAnimation.drive(
+                          Tween<Offset>(
+                            begin: const Offset(0, 0.2),
+                            end: Offset.zero,
+                          ),
+                        ),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 24,
+                            vertical: 16,
+                          ),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              // 进度条
+                              const ProgressBar(),
+
+                              const SizedBox(height: 24),
+
+                              // 播放控制按钮
+                              PlaybackControls(currentSong: currentSong),
+
+                              const SizedBox(height: 8),
+
+                              // 底部操作按钮
+                              FadeTransition(
+                                opacity: _bottomBarAnimation,
+                                child: SizedBox(
+                                  width: 160,
+                                  child: Row(
+                                    mainAxisAlignment:
+                                        MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      // 歌词按钮
+                                      IconButton(
+                                        icon: Icon(
+                                          Icons.lyrics,
+                                          color: _showLyrics
+                                              ? Colors.white
+                                              : Colors.white.withValues(
+                                                  alpha: 0.72,
+                                                ),
+                                        ),
+                                        onPressed: () {
+                                          final nextShowLyrics = !_showLyrics;
+                                          setState(() {
+                                            _showLyrics = nextShowLyrics;
+                                          });
+                                          if (nextShowLyrics) {
+                                            _lyricsController.forward();
+                                          } else {
+                                            _lyricsController.reverse();
+                                          }
+                                        },
+                                      ),
+
+                                      // 播放队列按钮
+                                      IconButton(
+                                        icon: Icon(
+                                          Icons.queue_music,
+                                          color: Colors.white.withValues(
+                                            alpha: 0.78,
+                                          ),
+                                        ),
+                                        onPressed: () {
+                                          showModalBottomSheet(
+                                            context: context,
+                                            builder: (context) =>
+                                                const PlayQueueSheet(),
+                                            isScrollControlled: true,
+                                          );
+                                        },
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+
+                              // 音质指示
+                              const SizedBox(height: 4),
+                              _buildQualityIndicator(ref),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
+    );
+  }
+
+  Widget _buildMiddleContent({
+    required Song currentSong,
+    required AsyncValue<Lyrics?> lyricsAsync,
+    required bool hasSubtitle,
+    required String subtitle,
+    required Color primaryTextColor,
+    required Color secondaryTextColor,
+    required Color lyricsActivePrimaryColor,
+    required Color lyricsActiveSecondaryColor,
+    required Color lyricsInactivePrimaryColor,
+    required Color lyricsInactiveSecondaryColor,
+  }) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        const horizontalPadding = 24.0;
+        final maxCoverByWidth = (constraints.maxWidth - horizontalPadding * 2)
+            .clamp(0.0, 320.0);
+        final maxCoverByHeight = (constraints.maxHeight * 0.62).clamp(
+          0.0,
+          360.0,
+        );
+        final baseCoverSize = maxCoverByWidth < maxCoverByHeight
+            ? maxCoverByWidth
+            : maxCoverByHeight;
+        final bTopSpace = (constraints.maxHeight - baseCoverSize - 140).clamp(
+          18.0,
+          96.0,
+        );
+        const cTopSpace = 8.0;
+        const bCoverGap = 24.0;
+        const cCoverGap = 8.0;
+
+        final titleStyleFrom =
+            Theme.of(context).textTheme.headlineSmall?.copyWith(
+              fontWeight: FontWeight.bold,
+              color: primaryTextColor,
+            ) ??
+            TextStyle(
+              fontSize: 24,
+              fontWeight: FontWeight.bold,
+              color: primaryTextColor,
+            );
+        final titleStyleTo =
+            Theme.of(context).textTheme.titleMedium?.copyWith(
+              fontWeight: FontWeight.bold,
+              color: primaryTextColor,
+            ) ??
+            TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
+              color: primaryTextColor,
+            );
+        final subtitleStyleFrom =
+            Theme.of(
+              context,
+            ).textTheme.bodyLarge?.copyWith(color: secondaryTextColor) ??
+            TextStyle(fontSize: 16, color: secondaryTextColor);
+        final subtitleStyleTo =
+            Theme.of(
+              context,
+            ).textTheme.bodySmall?.copyWith(color: secondaryTextColor) ??
+            TextStyle(fontSize: 12, color: secondaryTextColor);
+
+        return AnimatedBuilder(
+          animation: _lyricsProgress,
+          builder: (context, _) {
+            final t = _lyricsProgress.value;
+            final topSpace = bTopSpace + (cTopSpace - bTopSpace) * t;
+            final coverSize = baseCoverSize * (1 - t);
+            final coverGap = bCoverGap + (cCoverGap - bCoverGap) * t;
+            final titleStyle =
+                TextStyle.lerp(titleStyleFrom, titleStyleTo, t) ?? titleStyleTo;
+            final subtitleStyle =
+                TextStyle.lerp(subtitleStyleFrom, subtitleStyleTo, t) ??
+                subtitleStyleTo;
+            final shouldBuildLyrics = _showLyrics || t > 0.001;
+
+            return Stack(
+              children: [
+                Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: horizontalPadding,
+                  ),
+                  child: Column(
+                    children: [
+                      SizedBox(height: topSpace),
+                      if (coverSize > 0.1)
+                        Opacity(
+                          opacity: 1 - t,
+                          child: Hero(
+                            tag: 'player-cover',
+                            createRectTween: playerLinearRectTween,
+                            child: Container(
+                              width: coverSize,
+                              height: coverSize,
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(16),
+                                color: Theme.of(
+                                  context,
+                                ).colorScheme.surfaceContainerHighest,
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black.withValues(alpha: 0.2),
+                                    blurRadius: 20,
+                                    offset: const Offset(0, 10),
+                                  ),
+                                ],
+                              ),
+                              child: ClipRRect(
+                                borderRadius: BorderRadius.circular(16),
+                                child: CoverArtImage(
+                                  coverArtId: currentSong.coverArt,
+                                  size: coverSize,
+                                  requestSize: 640,
+                                  fit: BoxFit.contain,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      SizedBox(height: coverGap),
+                      Hero(
+                        tag: 'player-title',
+                        createRectTween: playerLinearRectTween,
+                        flightShuttleBuilder: playerTextFlightShuttleBuilder,
+                        child: Material(
+                          type: MaterialType.transparency,
+                          child: Text(
+                            currentSong.title,
+                            style: titleStyle,
+                            textAlign: TextAlign.center,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ),
+                      if (hasSubtitle) ...[
+                        const SizedBox(height: 4),
+                        Hero(
+                          tag: 'player-subtitle',
+                          createRectTween: playerLinearRectTween,
+                          flightShuttleBuilder: playerTextFlightShuttleBuilder,
+                          child: Material(
+                            type: MaterialType.transparency,
+                            child: Text(
+                              subtitle,
+                              style: subtitleStyle,
+                              textAlign: TextAlign.center,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ),
+                      ],
+                      const SizedBox(height: 8),
+                      Expanded(
+                        child: ClipRect(
+                          child: Align(
+                            alignment: Alignment.topCenter,
+                            heightFactor: t,
+                            child: shouldBuildLyrics
+                                ? _buildLyricsView(
+                                    lyricsAsync,
+                                    activePrimaryColor:
+                                        lyricsActivePrimaryColor,
+                                    activeSecondaryColor:
+                                        lyricsActiveSecondaryColor,
+                                    inactivePrimaryColor:
+                                        lyricsInactivePrimaryColor,
+                                    inactiveSecondaryColor:
+                                        lyricsInactiveSecondaryColor,
+                                  )
+                                : const SizedBox.shrink(),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            );
+          },
+        );
+      },
     );
   }
 

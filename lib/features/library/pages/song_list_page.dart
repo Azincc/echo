@@ -22,7 +22,7 @@ class SongListPage extends ConsumerStatefulWidget {
 class _SongListPageState extends ConsumerState<SongListPage> {
   static const double _tileLeadingSize = 48;
   List<AzItem<Song>> _azSongs = [];
-  bool _isLoaded = false;
+  int _songsSignature = 0;
   late final ItemPositionsListener _itemPositionsListener;
   int _coverLoadStart = 0;
   int _coverLoadEnd = -1;
@@ -77,14 +77,22 @@ class _SongListPageState extends ConsumerState<SongListPage> {
     });
   }
 
-  void _processSongs(List<Song> songs) {
-    if (_isLoaded) return;
+  int _buildSongsSignature(List<Song> songs) {
+    return Object.hashAll(
+      songs.map(
+        (song) => Object.hash(
+          song.id,
+          song.title,
+          song.artist,
+          song.album,
+          song.duration,
+          song.starred,
+        ),
+      ),
+    );
+  }
 
-    // Run in isolate or just standard if list is small?
-    // For thousands of songs, this might block UI.
-    // For now, let's do it synchronously but maybe delay it slightly or just do it.
-    // Ideally put in compute().
-
+  void _processSongs(List<Song> songs, int signature) {
     _azSongs = songs.map((song) {
       String tag = PinyinUtils.getFirstChar(song.title);
       String pinyin = PinyinUtils.getPinyin(song.title);
@@ -96,10 +104,7 @@ class _SongListPageState extends ConsumerState<SongListPage> {
 
     // Show suspension tag logic
     SuspensionUtil.setShowSuspensionStatus(_azSongs);
-
-    setState(() {
-      _isLoaded = true;
-    });
+    _songsSignature = signature;
   }
 
   @override
@@ -115,11 +120,9 @@ class _SongListPageState extends ConsumerState<SongListPage> {
             return Center(child: Text(loadFailed ? '网络异常，歌曲加载失败' : '暂无歌曲'));
           }
 
-          // Generate AZ list if not ready or if list changed (simple check)
-          // Ideally we accept the list passed in or use a provider that does this processing.
-          // For now, let's process it here.
-          if (!_isLoaded || _azSongs.length != songs.length) {
-            _processSongs(songs);
+          final signature = _buildSongsSignature(songs);
+          if (signature != _songsSignature || _azSongs.length != songs.length) {
+            _processSongs(songs, signature);
           }
 
           return AzListView(

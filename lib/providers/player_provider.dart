@@ -84,9 +84,25 @@ class PlayerState {
     );
   }
 
-  bool get hasNext =>
-      shuffleEnabled ? queue.length > 1 : currentIndex < queue.length - 1;
-  bool get hasPrevious => shuffleEnabled ? queue.length > 1 : currentIndex > 0;
+  bool get _hasValidCurrent =>
+      currentSong != null && currentIndex >= 0 && currentIndex < queue.length;
+
+  bool get hasNext {
+    if (!_hasValidCurrent) return false;
+    if (shuffleEnabled) return queue.length > 1;
+    // 单曲循环只影响播放完成时自动重播；手动下一曲按顺序推进，不回绕。
+    if (loopMode == LoopMode.one) return currentIndex < queue.length - 1;
+    // 列表循环（Repeat All）下，末尾仍允许“下一曲”回到第一首。
+    return queue.isNotEmpty;
+  }
+
+  bool get hasPrevious {
+    if (!_hasValidCurrent) return false;
+    if (shuffleEnabled) return queue.length > 1;
+    if (loopMode == LoopMode.one) return currentIndex > 0;
+    // 列表循环（Repeat All）下，首项仍允许“上一曲”回到最后一首。
+    return queue.isNotEmpty;
+  }
 }
 
 /// 播放器 Provider
@@ -117,6 +133,8 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
   bool _seekByReloadStream = false;
   // 默认关闭：当前服务端对 timeOffset 支持不稳定，首跳可能先失败再回退，导致明显卡顿。
   bool _transcodeTimeOffsetSupported = false;
+  String? _forcedNextSongId;
+  int? _forcedNextIndex;
   ProcessingState? _lastProcessingStateForDebug;
 
   /// 动态获取最新的 API client
@@ -222,6 +240,7 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
       _usingLockCachingSource = false;
       _currentStreamUrl = null;
       _clearStreamContext();
+      _clearForcedNext();
 
       final playQueue = queue ?? [song];
       final playIndex = index ?? 0;
@@ -612,6 +631,8 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
   Future<void> previous() async {
     if (!state.hasPrevious) return;
 
+    _clearForcedNext();
+
     if (state.shuffleEnabled) {
       final previousIndex = _getRandomIndexExcludingCurrent();
       if (previousIndex == null) return;
@@ -621,9 +642,17 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
     }
 
     final previousIndex = state.currentIndex - 1;
-    final previousSong = state.queue[previousIndex];
+    if (previousIndex >= 0) {
+      final previousSong = state.queue[previousIndex];
+      await playSong(previousSong, queue: state.queue, index: previousIndex);
+      return;
+    }
 
-    await playSong(previousSong, queue: state.queue, index: previousIndex);
+    if (state.loopMode != LoopMode.one && state.queue.isNotEmpty) {
+      final wrapIndex = state.queue.length - 1;
+      final wrapSong = state.queue[wrapIndex];
+      await playSong(wrapSong, queue: state.queue, index: wrapIndex);
+    }
   }
 
   /// 下一首
@@ -631,6 +660,14 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
     if (!state.hasNext) return;
 
     if (state.shuffleEnabled) {
+      final forcedIndex = _resolveForcedNextIndex();
+      if (forcedIndex != null) {
+        final forcedSong = state.queue[forcedIndex];
+        _clearForcedNext();
+        await playSong(forcedSong, queue: state.queue, index: forcedIndex);
+        return;
+      }
+      _clearForcedNext();
       final nextIndex = _getRandomIndexExcludingCurrent();
       if (nextIndex == null) return;
       final nextSong = state.queue[nextIndex];
@@ -639,9 +676,16 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
     }
 
     final nextIndex = state.currentIndex + 1;
-    final nextSong = state.queue[nextIndex];
+    if (nextIndex < state.queue.length) {
+      final nextSong = state.queue[nextIndex];
+      await playSong(nextSong, queue: state.queue, index: nextIndex);
+      return;
+    }
 
-    await playSong(nextSong, queue: state.queue, index: nextIndex);
+    // 列表循环（Repeat All）回绕到首曲。
+    if (state.loopMode != LoopMode.one && state.queue.isNotEmpty) {
+      await skipToQueueItem(0);
+    }
   }
 
   /// 跳转到指定位置
@@ -746,10 +790,12 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
         }
         break;
       case PlaybackMode.repeatAll:
+        // 队列切歌由外层状态机驱动，Repeat All 用 LoopMode.off
+        // 避免底层播放器在单音源下自动回放当前曲目。
         await _audioPlayer?.setShuffleModeEnabled(false);
-        await _audioPlayer?.setLoopMode(LoopMode.all);
+        await _audioPlayer?.setLoopMode(LoopMode.off);
         if (mounted) {
-          state = state.copyWith(loopMode: LoopMode.all, shuffleEnabled: false);
+          state = state.copyWith(loopMode: LoopMode.off, shuffleEnabled: false);
         }
         break;
       case PlaybackMode.repeatOne:
@@ -799,6 +845,40 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
     return candidates[_random.nextInt(candidates.length)];
   }
 
+  int? _resolveForcedNextIndex() {
+    final forcedSongId = _forcedNextSongId;
+    if (forcedSongId == null) return null;
+
+    final queue = state.queue;
+    final currentIndex = state.currentIndex;
+
+    bool isMatch(int index) {
+      return index >= 0 &&
+          index < queue.length &&
+          index != currentIndex &&
+          queue[index].id == forcedSongId;
+    }
+
+    final preferredIndex = _forcedNextIndex;
+    if (preferredIndex != null && isMatch(preferredIndex)) {
+      return preferredIndex;
+    }
+
+    for (var i = currentIndex + 1; i < queue.length; i++) {
+      if (isMatch(i)) return i;
+    }
+
+    for (var i = 0; i < queue.length; i++) {
+      if (isMatch(i)) return i;
+    }
+    return null;
+  }
+
+  void _clearForcedNext() {
+    _forcedNextSongId = null;
+    _forcedNextIndex = null;
+  }
+
   /// 添加到队列末尾
   void addToQueue(Song song) {
     final newQueue = [...state.queue, song];
@@ -822,18 +902,23 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
     final insertIndex = (state.currentIndex + 1).clamp(0, newQueue.length);
     newQueue.insert(insertIndex, song);
     state = state.copyWith(queue: newQueue);
+    _forcedNextSongId = song.id;
+    _forcedNextIndex = insertIndex;
   }
 
   /// 清空队列
   Future<void> clearQueue() async {
     await _audioPlayer?.stop();
     await _audioHandler?.stop();
+    _clearForcedNext();
     state = PlayerState();
   }
 
   /// 从队列移除
   void removeFromQueue(int index) {
     if (index < 0 || index >= state.queue.length) return;
+
+    _clearForcedNext();
 
     final newQueue = [...state.queue];
     newQueue.removeAt(index);
@@ -881,9 +966,6 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
     } else if (state.hasNext) {
       // 播放下一首
       await next();
-    } else if (state.loopMode == LoopMode.all) {
-      // 列表循环，回到第一首
-      await skipToQueueItem(0);
     }
   }
 

@@ -1,11 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../core/utils/network_error_notifier.dart';
+import '../../../data/models/playlist.dart';
 import '../../../data/models/song.dart';
+import '../../../providers/api_provider.dart';
 import '../../../providers/playlist_provider.dart';
 import '../../../providers/player_provider.dart';
 import '../../../providers/download_provider.dart';
 import '../../../providers/auth_provider.dart';
 import '../../player/widgets/song_options_sheet.dart';
+import '../widgets/playlist_manage_dialogs.dart';
+import '../widgets/playlist_options_sheet.dart';
 
 /// 歌单详情页
 class PlaylistDetailPage extends ConsumerWidget {
@@ -13,13 +18,193 @@ class PlaylistDetailPage extends ConsumerWidget {
 
   const PlaylistDetailPage({super.key, required this.playlistId});
 
+  Future<void> _onMoreActionSelected(
+    BuildContext context,
+    WidgetRef ref,
+    Playlist playlist,
+    PlaylistOptionsAction action,
+  ) async {
+    switch (action) {
+      case PlaylistOptionsAction.download:
+        await _downloadPlaylist(context, ref, playlist);
+        return;
+      case PlaylistOptionsAction.addToQueue:
+        await _addPlaylistToQueue(context, ref, playlist);
+        return;
+      case PlaylistOptionsAction.edit:
+        await _editPlaylist(context, ref, playlist);
+        return;
+      case PlaylistOptionsAction.delete:
+        await _deletePlaylist(context, ref, playlist);
+        return;
+    }
+  }
+
+  Future<void> _downloadPlaylist(
+    BuildContext context,
+    WidgetRef ref,
+    Playlist playlist,
+  ) async {
+    final songs = playlist.songs ?? const <Song>[];
+    if (songs.isEmpty) {
+      NetworkErrorNotifier.show('歌单暂无可用歌曲');
+      return;
+    }
+
+    final libraryId = ref.read(authStateProvider).currentLibrary?.id ?? '';
+    if (libraryId.isEmpty) {
+      NetworkErrorNotifier.show('未选择音乐库');
+      return;
+    }
+
+    await ref
+        .read(downloadServiceProvider)
+        .enqueueBatch(songs, libraryId: libraryId);
+    if (context.mounted) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('已添加 ${songs.length} 首歌曲到下载队列')));
+    }
+  }
+
+  Future<void> _addPlaylistToQueue(
+    BuildContext context,
+    WidgetRef ref,
+    Playlist playlist,
+  ) async {
+    final songs = playlist.songs ?? const <Song>[];
+    if (songs.isEmpty) {
+      NetworkErrorNotifier.show('歌单暂无可用歌曲');
+      return;
+    }
+
+    ref.read(playerProvider.notifier).addAllToQueue(songs);
+    if (context.mounted) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('已添加 ${songs.length} 首到播放列表')));
+    }
+  }
+
+  Future<void> _editPlaylist(
+    BuildContext context,
+    WidgetRef ref,
+    Playlist playlist,
+  ) async {
+    final repository = ref.read(playlistRepositoryProvider);
+    if (repository == null) {
+      NetworkErrorNotifier.show('未选择音乐库');
+      return;
+    }
+
+    final formResult = await showPlaylistFormDialog(
+      context: context,
+      title: '修改歌单',
+      confirmText: '保存',
+      initialName: playlist.name,
+      initialComment: playlist.comment ?? '',
+      initialPublic: playlist.public,
+    );
+    if (formResult == null) return;
+
+    final currentComment = (playlist.comment ?? '').trim();
+    if (formResult.name == playlist.name &&
+        formResult.comment == currentComment &&
+        formResult.isPublic == playlist.public) {
+      return;
+    }
+
+    try {
+      await ref.read(ensureActiveAddressProvider.future);
+      await repository.updatePlaylist(
+        playlistId: playlist.id,
+        name: formResult.name,
+        comment: formResult.comment,
+        public: formResult.isPublic,
+      );
+      ref.invalidate(playlistsProvider);
+      ref.invalidate(playlistDetailProvider(playlist.id));
+      if (context.mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('已更新歌单「${formResult.name}」')));
+      }
+    } catch (_) {
+      NetworkErrorNotifier.show('网络异常，修改失败');
+    }
+  }
+
+  Future<void> _deletePlaylist(
+    BuildContext context,
+    WidgetRef ref,
+    Playlist playlist,
+  ) async {
+    final repository = ref.read(playlistRepositoryProvider);
+    if (repository == null) {
+      NetworkErrorNotifier.show('未选择音乐库');
+      return;
+    }
+
+    final confirmed = await showDeletePlaylistConfirmDialog(
+      context: context,
+      playlistName: playlist.name,
+    );
+    if (!confirmed) return;
+    if (!context.mounted) return;
+
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      await ref.read(ensureActiveAddressProvider.future);
+      await repository.deletePlaylist(playlist.id);
+      ref.invalidate(playlistsProvider);
+      ref.invalidate(playlistDetailProvider(playlist.id));
+      if (context.mounted) {
+        Navigator.of(context).pop();
+        messenger.showSnackBar(
+          SnackBar(content: Text('已删除歌单「${playlist.name}」')),
+        );
+      }
+    } catch (_) {
+      NetworkErrorNotifier.show('网络异常，删除失败');
+    }
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final playlistAsync = ref.watch(playlistDetailProvider(playlistId));
     final loadFailed = ref.watch(playlistDetailLoadFailedProvider(playlistId));
+    final currentPlaylist = playlistAsync.valueOrNull;
+    final hasActiveLibrary = ref.watch(
+      authStateProvider.select((s) => (s.currentLibrary?.id ?? '').isNotEmpty),
+    );
 
     return Scaffold(
-      appBar: AppBar(title: const Text('歌单')),
+      appBar: AppBar(
+        title: Text(currentPlaylist?.name ?? '歌单'),
+        actions: [
+          if (currentPlaylist != null)
+            IconButton(
+              tooltip: '歌单操作',
+              icon: const Icon(Icons.more_horiz),
+              onPressed: () async {
+                final action = await showPlaylistOptionsSheet(
+                  context: context,
+                  playlist: currentPlaylist,
+                  canDownload: hasActiveLibrary,
+                  hasSongs:
+                      (currentPlaylist.songs ?? const <Song>[]).isNotEmpty,
+                );
+                if (action == null || !context.mounted) return;
+                await _onMoreActionSelected(
+                  context,
+                  ref,
+                  currentPlaylist,
+                  action,
+                );
+              },
+            ),
+        ],
+      ),
       body: playlistAsync.when(
         data: (playlist) {
           if (playlist == null) {
@@ -57,31 +242,16 @@ class PlaylistDetailPage extends ConsumerWidget {
                       ),
                       const SizedBox(height: 16),
                       FilledButton.icon(
-                        onPressed: () {
-                          // 播放全部
-                          ref.read(playerProvider.notifier).playQueue(songs);
-                        },
+                        onPressed: songs.isEmpty
+                            ? null
+                            : () {
+                                // 播放全部
+                                ref
+                                    .read(playerProvider.notifier)
+                                    .playQueue(songs);
+                              },
                         icon: const Icon(Icons.play_arrow),
                         label: const Text('播放全部'),
-                      ),
-                      const SizedBox(width: 8),
-                      IconButton(
-                        onPressed: () {
-                          final authState = ref.read(authStateProvider);
-                          final libraryId = authState.currentLibrary?.id ?? '';
-                          if (libraryId.isEmpty || songs.isEmpty) return;
-
-                          ref
-                              .read(downloadServiceProvider)
-                              .enqueueBatch(songs, libraryId: libraryId);
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text('已添加 ${songs.length} 首歌曲到下载队列'),
-                            ),
-                          );
-                        },
-                        icon: const Icon(Icons.download_outlined),
-                        tooltip: '下载歌单',
                       ),
                     ],
                   ),
@@ -126,9 +296,6 @@ class PlaylistDetailPage extends ConsumerWidget {
   }
 
   void _showSongContextMenu(BuildContext context, WidgetRef ref, Song song) {
-    showSongOptionsSheet(
-      context: context,
-      song: song,
-    );
+    showSongOptionsSheet(context: context, song: song);
   }
 }

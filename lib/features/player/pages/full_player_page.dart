@@ -687,14 +687,54 @@ class ProgressBar extends ConsumerStatefulWidget {
   ConsumerState<ProgressBar> createState() => _ProgressBarState();
 }
 
-class _ProgressBarState extends ConsumerState<ProgressBar> {
+class _ProgressBarState extends ConsumerState<ProgressBar>
+    with SingleTickerProviderStateMixin {
   double? _dragValue;
+  late final AnimationController _loadingOpacityController;
+  late final Animation<double> _loadingOpacity;
+  bool _isLoadingPulseActive = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadingOpacityController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 900),
+    );
+    _loadingOpacity = Tween<double>(begin: 0.95, end: 0.42).animate(
+      CurvedAnimation(
+        parent: _loadingOpacityController,
+        curve: Curves.easeInOut,
+      ),
+    );
+  }
+
+  @override
+  void dispose() {
+    _loadingOpacityController.dispose();
+    super.dispose();
+  }
+
+  void _syncLoadingPulse(bool shouldPulse) {
+    if (shouldPulse == _isLoadingPulseActive) return;
+    _isLoadingPulseActive = shouldPulse;
+    if (shouldPulse) {
+      _loadingOpacityController.repeat(reverse: true);
+    } else {
+      _loadingOpacityController.stop();
+      _loadingOpacityController.value = 0.0;
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     final playerState = ref.watch(playerProvider);
     final position = playerState.position;
     final duration = playerState.duration;
+    final isLoading =
+        playerState.processingState == ProcessingState.loading ||
+        playerState.processingState == ProcessingState.buffering;
+    _syncLoadingPulse(isLoading);
 
     // 确保 value 在有效范围内 (0 到 max)
     final maxMilliseconds = duration.inMilliseconds > 0
@@ -717,28 +757,35 @@ class _ProgressBarState extends ConsumerState<ProgressBar> {
 
     return Column(
       children: [
-        SliderTheme(
-          data: SliderTheme.of(context).copyWith(
-            trackHeight: 3,
-            thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6),
-            overlayShape: const RoundSliderOverlayShape(overlayRadius: 14),
-          ),
-          child: Slider(
-            value: sliderValue,
-            max: maxMilliseconds,
-            onChanged: (value) {
-              setState(() {
-                _dragValue = value;
-              });
-            },
-            onChangeEnd: (value) {
-              ref
-                  .read(playerProvider.notifier)
-                  .seek(Duration(milliseconds: value.toInt()));
-              setState(() {
-                _dragValue = null;
-              });
-            },
+        AnimatedBuilder(
+          animation: _loadingOpacity,
+          builder: (context, child) {
+            final opacity = isLoading ? _loadingOpacity.value : 1.0;
+            return Opacity(opacity: opacity, child: child);
+          },
+          child: SliderTheme(
+            data: SliderTheme.of(context).copyWith(
+              trackHeight: 3,
+              thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6),
+              overlayShape: const RoundSliderOverlayShape(overlayRadius: 14),
+            ),
+            child: Slider(
+              value: sliderValue,
+              max: maxMilliseconds,
+              onChanged: (value) {
+                setState(() {
+                  _dragValue = value;
+                });
+              },
+              onChangeEnd: (value) {
+                ref
+                    .read(playerProvider.notifier)
+                    .seek(Duration(milliseconds: value.toInt()));
+                setState(() {
+                  _dragValue = null;
+                });
+              },
+            ),
           ),
         ),
         Padding(

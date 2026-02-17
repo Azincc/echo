@@ -34,6 +34,7 @@ enum PlaybackSource {
 enum PlaybackMode { shuffle, repeatAll, repeatOne }
 
 const _playerLogTag = 'PLAYER';
+const _playDbgTag = 'PLAYDBG';
 
 /// 播放器状态
 class PlayerState {
@@ -41,6 +42,7 @@ class PlayerState {
   final List<Song> queue;
   final int currentIndex;
   final bool isPlaying;
+  final ProcessingState processingState;
   final Duration position;
   final Duration duration;
   final LoopMode loopMode;
@@ -53,6 +55,7 @@ class PlayerState {
     this.queue = const [],
     this.currentIndex = 0,
     this.isPlaying = false,
+    this.processingState = ProcessingState.idle,
     this.position = Duration.zero,
     this.duration = Duration.zero,
     this.loopMode = LoopMode.off,
@@ -66,6 +69,7 @@ class PlayerState {
     List<Song>? queue,
     int? currentIndex,
     bool? isPlaying,
+    ProcessingState? processingState,
     Duration? position,
     Duration? duration,
     LoopMode? loopMode,
@@ -78,6 +82,7 @@ class PlayerState {
       queue: queue ?? this.queue,
       currentIndex: currentIndex ?? this.currentIndex,
       isPlaying: isPlaying ?? this.isPlaying,
+      processingState: processingState ?? this.processingState,
       position: position ?? this.position,
       duration: duration ?? this.duration,
       loopMode: loopMode ?? this.loopMode,
@@ -139,6 +144,16 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
   String? _forcedNextSongId;
   int? _forcedNextIndex;
   ProcessingState? _lastProcessingStateForDebug;
+  bool _isHandlingCompletion = false;
+  String? _completionHandlingSongId;
+  Timer? _positionPollTimer;
+  Duration _lastPolledPlayerPosition = Duration.zero;
+  int _stagnantPositionTicks = 0;
+  int _lastStagnantLogTick = -1;
+  int _lastIgnoredSyntheticPositionLogTick = -1;
+  bool _syntheticPositionFallbackActive = false;
+  int _playDebugSession = 0;
+  bool _loggedDurationUnavailableForSong = false;
 
   /// 动态获取最新的 API client
   SubsonicApiClient get _apiClient => _ref.read(subsonicApiClientProvider);
@@ -177,13 +192,48 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
 
     // 监听播放状态
     player.playingStream.listen((isPlaying) {
+      _playDbg(
+        'playingStream playing=$isPlaying '
+        'processing=${player.processingState.name} '
+        'position=${player.position} buffered=${player.bufferedPosition} '
+        'song=${state.currentSong?.id}',
+      );
       if (mounted) state = state.copyWith(isPlaying: isPlaying);
     });
 
     // 监听播放进度
     player.positionStream.listen((position) {
-      if (mounted) state = state.copyWith(position: position);
+      if (!mounted) return;
+
+      // 合成进度模式下，lock cache 的 positionStream 可能回传 0 或过时位置，
+      // 会把 UI 进度回退。此时统一忽略，交给轮询器维护并在恢复后切回真实位置。
+      final ignorePositionWhileSynthetic =
+          _syntheticPositionFallbackActive &&
+          _usingLockCachingSource &&
+          state.position > const Duration(milliseconds: 250);
+      if (ignorePositionWhileSynthetic) {
+        final isStuckZero = position <= const Duration(milliseconds: 50);
+        final shouldLog =
+            _stagnantPositionTicks != _lastIgnoredSyntheticPositionLogTick &&
+            _stagnantPositionTicks % 6 == 0;
+        if (shouldLog) {
+          _lastIgnoredSyntheticPositionLogTick = _stagnantPositionTicks;
+          _playDbg(
+            isStuckZero
+                ? 'positionStream ignored_stuck_zero '
+                      'streamPos=$position statePos=${state.position} '
+                      'song=${state.currentSong?.id}'
+                : 'positionStream ignored_while_synthetic '
+                      'streamPos=$position statePos=${state.position} '
+                      'song=${state.currentSong?.id}',
+          );
+        }
+        return;
+      }
+
+      state = state.copyWith(position: position);
     });
+    _startPositionPolling(player);
 
     // 监听总时长
     player.durationStream.listen((duration) {
@@ -191,6 +241,18 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
         if (duration != null && duration > Duration.zero) {
           // 如果流能提供时长，优先使用流的时长（更准确）
           state = state.copyWith(duration: duration);
+          _loggedDurationUnavailableForSong = false;
+          _playDbg(
+            'durationStream duration=$duration song=${state.currentSong?.id}',
+          );
+        } else {
+          if (!_loggedDurationUnavailableForSong && state.currentSong != null) {
+            _loggedDurationUnavailableForSong = true;
+            _playDbg(
+              'durationStream unavailable duration=$duration '
+              'song=${state.currentSong?.id}',
+            );
+          }
         }
       }
       // 如果 duration 为 null 或 0，保持使用歌曲元数据的时长
@@ -198,12 +260,17 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
 
     // 监听播放完成
     player.playerStateStream.listen((playerState) {
+      if (mounted && state.processingState != playerState.processingState) {
+        state = state.copyWith(processingState: playerState.processingState);
+      }
       if (_lastProcessingStateForDebug != playerState.processingState) {
         _lastProcessingStateForDebug = playerState.processingState;
         _seekDbg(
           'playerState=${playerState.processingState.name} '
           'playing=${playerState.playing} '
           'position=${player.position} '
+          'buffered=${player.bufferedPosition} '
+          'duration=${player.duration} '
           'pending=$_pendingSeekPosition '
           'pendingSong=$_pendingSeekSongId '
           'currentSong=${state.currentSong?.id}',
@@ -213,8 +280,29 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
           playerState.processingState == ProcessingState.completed) {
         unawaited(_applyPendingSeekIfNeeded());
       }
+
+      if (playerState.processingState != ProcessingState.completed) {
+        _isHandlingCompletion = false;
+        _completionHandlingSongId = null;
+      }
+
       if (mounted && playerState.processingState == ProcessingState.completed) {
-        _onSongCompleted();
+        final completedSongId = state.currentSong?.id;
+        final shouldHandle =
+            completedSongId != null &&
+            (!_isHandlingCompletion ||
+                _completionHandlingSongId != completedSongId);
+        if (shouldHandle) {
+          _isHandlingCompletion = true;
+          _completionHandlingSongId = completedSongId;
+          _seekDbg(
+            'completed detected song=$completedSongId '
+            'loop=${state.loopMode.name} shuffle=${state.shuffleEnabled} '
+            'index=${state.currentIndex}/${state.queue.length - 1} '
+            'hasNext=${state.hasNext}',
+          );
+          unawaited(_onSongCompleted(completedSongId));
+        }
       }
     });
 
@@ -233,10 +321,16 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
 
   /// 播放单曲
   Future<void> playSong(Song song, {List<Song>? queue, int? index}) async {
+    final debugSession = ++_playDebugSession;
     try {
       _seekDbg(
         'playSong start song=${song.id} title="${song.title}" '
         'suffix=${song.suffix} duration=${song.duration}s '
+        'queue=${(queue ?? [song]).length} index=${index ?? 0}',
+      );
+      _playDbg(
+        'sid=$debugSession playSong enter song=${song.id} '
+        'suffix=${song.suffix} durationSec=${song.duration} '
         'queue=${(queue ?? [song]).length} index=${index ?? 0}',
       );
       await _cacheCompletionSubscription?.cancel();
@@ -246,6 +340,14 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
       _currentStreamUrl = null;
       _clearStreamContext();
       _clearForcedNext();
+      _isHandlingCompletion = false;
+      _completionHandlingSongId = null;
+      _lastPolledPlayerPosition = Duration.zero;
+      _stagnantPositionTicks = 0;
+      _lastStagnantLogTick = -1;
+      _lastIgnoredSyntheticPositionLogTick = -1;
+      _syntheticPositionFallbackActive = false;
+      _loggedDurationUnavailableForSong = false;
 
       final playQueue = queue ?? [song];
       final playIndex = index ?? 0;
@@ -284,6 +386,9 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
       );
       if (downloadedPath != null && File(downloadedPath).existsSync()) {
         Logger.info('Playing from download: ${song.title}');
+        _playDbg(
+          'sid=$debugSession source=download setFilePath path=$downloadedPath',
+        );
         await _audioPlayer?.setFilePath(downloadedPath);
         _usingLockCachingSource = false;
         _currentStreamUrl = null;
@@ -308,6 +413,10 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
       );
       if (cachedPath != null && File(cachedPath).existsSync()) {
         Logger.info('Playing from cache: ${song.title}');
+        _playDbg(
+          'sid=$debugSession source=cache setFilePath path=$cachedPath '
+          'quality=${effectiveQuality.name}',
+        );
         await _audioPlayer?.setFilePath(cachedPath);
         _usingLockCachingSource = false;
         _currentStreamUrl = null;
@@ -330,8 +439,10 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
       final String? transcodeFormat = _needsTranscoding(song.suffix);
       final int? maxBitRate;
       if (transcodeFormat != null) {
-        // 需要转码时，使用音质设置的 maxBitRate
-        maxBitRate = effectiveQuality.maxBitRate ?? 320;
+        // 需要转码时：原始音质不限制码率，其它音质使用对应 maxBitRate。
+        maxBitRate = effectiveQuality == AudioQualityLevel.original
+            ? null
+            : (effectiveQuality.maxBitRate ?? 320);
       } else if (effectiveQuality == AudioQualityLevel.original) {
         // 原始无损 — 不传 maxBitRate
         maxBitRate = null;
@@ -344,10 +455,25 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
         format: transcodeFormat,
         maxBitRate: maxBitRate,
       );
+      final isAppleHttpStream =
+          !kIsWeb &&
+          (Platform.isIOS || Platform.isMacOS) &&
+          streamUrl.startsWith('http://');
+      _playDbg(
+        'sid=$debugSession stream_resolved '
+        'quality=${effectiveQuality.name} transcode=${transcodeFormat ?? 'none'} '
+        'maxBitRate=${maxBitRate ?? 'none'} appleHttp=$isAppleHttpStream '
+        'url=${_summarizeStreamUrl(streamUrl)}',
+      );
 
       if (transcodeFormat != null) {
         Logger.info(
           'Transcoding ${song.suffix} to $transcodeFormat for: ${song.title}',
+        );
+      } else if (maxBitRate != null) {
+        Logger.info(
+          'Playing bitrate-limited stream (${song.suffix}) '
+          'maxBitRate=$maxBitRate: ${song.title}',
         );
       } else {
         Logger.info(
@@ -361,6 +487,7 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
           !kIsWeb &&
           libraryId.isNotEmpty &&
           transcodeFormat == null &&
+          maxBitRate == null &&
           !isLongTrack;
 
       if (!shouldUseLockCaching) {
@@ -368,6 +495,7 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
           if (kIsWeb) 'web',
           if (libraryId.isEmpty) 'no-library',
           if (transcodeFormat != null) 'transcoding',
+          if (maxBitRate != null) 'bitrate-limited',
           if (isLongTrack) 'long-track',
         ].join(',');
         _seekDbg('lock_cache_disabled reason=$reason');
@@ -386,6 +514,10 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
           final audioSource = LockCachingAudioSource(
             Uri.parse(streamUrl),
             cacheFile: cacheFile,
+          );
+          _playDbg(
+            'sid=$debugSession source=lock_cache setAudioSource '
+            'cachePath=$cacheFilePath',
           );
           await _audioPlayer?.setAudioSource(audioSource);
           _usingLockCachingSource = true;
@@ -418,7 +550,15 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
           );
         } catch (e) {
           // Fallback: 直接流式播放不缓存
+          _playDbg(
+            'sid=$debugSession source=lock_cache setAudioSource failed '
+            'err=$e, fallback=setUrl',
+          );
           Logger.warn('LockCachingAudioSource failed, falling back to URL', e);
+          _playDbg(
+            'sid=$debugSession source=direct_stream_from_lock_fallback '
+            'setUrl=${_summarizeStreamUrl(streamUrl)}',
+          );
           await _audioPlayer?.setUrl(streamUrl);
           _usingLockCachingSource = false;
           _currentStreamUrl = streamUrl;
@@ -441,20 +581,70 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
         }
       } else {
         // 直接流式播放（Web / 无音乐库 / 转码流 / 超长音轨）
-        await _audioPlayer?.setUrl(streamUrl);
-        _usingLockCachingSource = false;
-        _currentStreamUrl = streamUrl;
-        _setStreamContext(
-          songId: song.id,
-          format: transcodeFormat,
-          maxBitRate: maxBitRate,
-          seekByReloadStream: transcodeFormat != null,
-        );
-        _startPlayback();
-        _seekDbg(
-          'source=direct_stream quality=${effectiveQuality.name} '
-          'format=${transcodeFormat ?? song.suffix}',
-        );
+        try {
+          _playDbg(
+            'sid=$debugSession source=direct_stream setUrl='
+            '${_summarizeStreamUrl(streamUrl)}',
+          );
+          await _audioPlayer?.setUrl(streamUrl);
+          _usingLockCachingSource = false;
+          _currentStreamUrl = streamUrl;
+          _setStreamContext(
+            songId: song.id,
+            format: transcodeFormat,
+            maxBitRate: maxBitRate,
+            seekByReloadStream: transcodeFormat != null,
+          );
+          _startPlayback();
+          _seekDbg(
+            'source=direct_stream quality=${effectiveQuality.name} '
+            'format=${transcodeFormat ?? song.suffix}',
+          );
+        } catch (e) {
+          final canFallbackToLockCache =
+              isAppleHttpStream && libraryId.isNotEmpty;
+          _playDbg(
+            'sid=$debugSession source=direct_stream setUrl failed err=$e '
+            'canFallbackToLockCache=$canFallbackToLockCache',
+          );
+          if (!canFallbackToLockCache) rethrow;
+
+          Logger.warn(
+            'Direct stream failed on Apple HTTP, falling back to lock cache',
+            e,
+          );
+          final cacheFilePath = await cacheService.getCacheFilePath(
+            songId: song.id,
+            libraryId: libraryId,
+            quality: effectiveQuality,
+          );
+          final cacheFile = File(cacheFilePath);
+          // ignore: experimental_member_use
+          final audioSource = LockCachingAudioSource(
+            Uri.parse(streamUrl),
+            cacheFile: cacheFile,
+          );
+          _playDbg(
+            'sid=$debugSession source=lock_cache_from_direct_fallback '
+            'setAudioSource cachePath=$cacheFilePath',
+          );
+          await _audioPlayer?.setAudioSource(audioSource);
+          _usingLockCachingSource = true;
+          _currentStreamUrl = streamUrl;
+          _setStreamContext(
+            songId: song.id,
+            format: transcodeFormat,
+            maxBitRate: maxBitRate,
+            seekByReloadStream: false,
+          );
+          _startPlayback();
+          _seekDbg(
+            'source=lock_cache_from_direct_fallback '
+            'quality=${effectiveQuality.name} '
+            'format=${transcodeFormat ?? song.suffix}',
+          );
+        }
+
         await _applyPendingSeekIfNeeded();
         state = state.copyWith(
           currentQuality: effectiveQuality,
@@ -469,6 +659,14 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
       _seekDbg(
         'playSong ready song=${song.id} currentPos=${_audioPlayer?.position} '
         'duration=${state.duration}',
+      );
+      _playDbg(
+        'sid=$debugSession playSong ready '
+        'playerPos=${_audioPlayer?.position} '
+        'buffered=${_audioPlayer?.bufferedPosition} '
+        'duration=${_audioPlayer?.duration} '
+        'usingLock=$_usingLockCachingSource '
+        'stream=${_summarizeStreamUrl(_currentStreamUrl)}',
       );
 
       // 预缓存下一首
@@ -486,7 +684,12 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
       // 如果播放失败且没有转码过，尝试转码播放
       if (_needsTranscoding(song.suffix) == null) {
         Logger.info('Original format failed, retrying with MP3 transcoding');
-        await _playWithTranscoding(song, queue: queue, index: index);
+        await _playWithTranscoding(
+          song,
+          queue: queue,
+          index: index,
+          debugSession: debugSession,
+        );
       }
     }
   }
@@ -496,26 +699,87 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
     Song song, {
     List<Song>? queue,
     int? index,
+    int? debugSession,
   }) async {
     try {
+      final authState = _ref.read(authStateProvider);
+      final libraryId = authState.currentLibrary?.id ?? '';
+      final cacheService = _ref.read(audioCacheServiceProvider);
       final streamUrl = _apiClient.getStreamUrl(
         song.id,
         format: 'mp3', // 转码为 MP3
         maxBitRate: 320,
       );
+      final isApplePlatform = !kIsWeb && (Platform.isIOS || Platform.isMacOS);
+      final isAppleHttpStream =
+          isApplePlatform && streamUrl.startsWith('http://');
 
       Logger.info('Retrying with MP3 transcoding: ${song.title}');
-      await _audioPlayer?.setUrl(streamUrl);
-      _usingLockCachingSource = false;
-      _currentStreamUrl = streamUrl;
-      _setStreamContext(
-        songId: song.id,
-        format: 'mp3',
-        maxBitRate: 320,
-        seekByReloadStream: true,
+      _playDbg(
+        'sid=${debugSession ?? _playDebugSession} transcoding retry '
+        'song=${song.id} appleHttp=$isAppleHttpStream '
+        'url=${_summarizeStreamUrl(streamUrl)}',
       );
-      _startPlayback();
-      _seekDbg('source=direct_stream_transcoding mp3 song=${song.id}');
+
+      try {
+        _playDbg(
+          'sid=${debugSession ?? _playDebugSession} '
+          'source=direct_stream_transcoding setUrl='
+          '${_summarizeStreamUrl(streamUrl)}',
+        );
+        await _audioPlayer?.setUrl(streamUrl);
+        _usingLockCachingSource = false;
+        _currentStreamUrl = streamUrl;
+        _setStreamContext(
+          songId: song.id,
+          format: 'mp3',
+          maxBitRate: 320,
+          seekByReloadStream: true,
+        );
+        _startPlayback();
+        _seekDbg('source=direct_stream_transcoding mp3 song=${song.id}');
+      } catch (e) {
+        final canFallbackToLockCache =
+            isAppleHttpStream && libraryId.isNotEmpty;
+        _playDbg(
+          'sid=${debugSession ?? _playDebugSession} '
+          'source=direct_stream_transcoding setUrl failed err=$e '
+          'canFallbackToLockCache=$canFallbackToLockCache',
+        );
+        if (!canFallbackToLockCache) rethrow;
+
+        Logger.warn(
+          'Direct transcoding stream failed on Apple HTTP, retrying lock cache',
+          e,
+        );
+        final cacheFilePath = await cacheService.getCacheFilePath(
+          songId: song.id,
+          libraryId: libraryId,
+          quality: AudioQualityLevel.high,
+        );
+        // ignore: experimental_member_use
+        final audioSource = LockCachingAudioSource(
+          Uri.parse(streamUrl),
+          cacheFile: File(cacheFilePath),
+        );
+        _playDbg(
+          'sid=${debugSession ?? _playDebugSession} '
+          'source=lock_cache_transcoding setAudioSource '
+          'cachePath=$cacheFilePath',
+        );
+        await _audioPlayer?.setAudioSource(audioSource);
+        _usingLockCachingSource = true;
+        _currentStreamUrl = streamUrl;
+        _setStreamContext(
+          songId: song.id,
+          format: 'mp3',
+          maxBitRate: 320,
+          seekByReloadStream: false,
+        );
+        _startPlayback();
+        _seekDbg('source=lock_cache_transcoding mp3 song=${song.id}');
+      }
+
       await _applyPendingSeekIfNeeded();
 
       // 上报"正在播放"
@@ -717,6 +981,15 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
         state = state.copyWith(position: target);
       }
       return;
+    }
+
+    // 可立即 seek 时，先把 UI 锚定到目标位置，避免等待底层回调期间回退到旧进度。
+    if (mounted) {
+      state = state.copyWith(position: target);
+    }
+    if (_usingLockCachingSource) {
+      _syntheticPositionFallbackActive = true;
+      _seekDbg('seek anchor synthetic position target=$target');
     }
 
     _clearPendingSeek();
@@ -993,16 +1266,16 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
   }
 
   /// 歌曲播放完成
-  void _onSongCompleted() async {
-    final currentSong = state.currentSong;
-    if (currentSong != null) {
-      // 上报"已播放"
-      await _scrobble(currentSong.id, submission: true);
-    }
+  Future<void> _onSongCompleted(String completedSongId) async {
+    if (state.currentSong?.id != completedSongId) return;
+
+    // 不阻塞切歌流程，避免完成态停留过久导致竞态。
+    unawaited(_scrobble(completedSongId, submission: true));
 
     // 随机模式优先：从队列中随机到下一首，不走 loopMode 分支。
     if (state.shuffleEnabled) {
       if (state.queue.length > 1) {
+        _seekDbg('completed -> shuffle next song=$completedSongId');
         await next();
       }
       return;
@@ -1011,10 +1284,12 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
     // 根据循环模式决定下一步
     if (state.loopMode == LoopMode.one) {
       // 单曲循环
+      _seekDbg('completed -> repeat one song=$completedSongId');
       await _audioPlayer?.seek(Duration.zero);
       _startPlayback();
     } else if (state.hasNext) {
       // 播放下一首
+      _seekDbg('completed -> sequential next song=$completedSongId');
       await next();
     }
   }
@@ -1177,34 +1452,40 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
         'target=$target offsetSec=$offset format=$_currentStreamFormat '
         'maxBitRate=$_currentStreamMaxBitRate wasPlaying=$shouldResume',
       );
-      await player.setUrl(reloadUrl, initialPosition: target);
-      _currentStreamUrl = reloadUrl;
-      if (shouldResume) {
-        _startPlayback();
-      }
-      await Future<void>.delayed(const Duration(milliseconds: 220));
-      final actualReload = player.position;
-      final reloadDrift = (actualReload - target).inMilliseconds.abs();
-      _seekDbg(
-        'seek reload-stream verify target=$target actual=$actualReload '
-        'driftMs=$reloadDrift',
-      );
-      if (reloadDrift <= 2000) return;
-      if (target > const Duration(seconds: 30) &&
-          actualReload < const Duration(seconds: 3) &&
-          reloadDrift > 60000) {
-        _transcodeTimeOffsetSupported = false;
+      try {
+        await player.setUrl(reloadUrl, initialPosition: target);
+        _currentStreamUrl = reloadUrl;
+        if (shouldResume) {
+          _startPlayback();
+        }
+        await Future<void>.delayed(const Duration(milliseconds: 220));
+        final actualReload = player.position;
+        final reloadDrift = (actualReload - target).inMilliseconds.abs();
         _seekDbg(
-          'reload-stream timeOffset unsupported on current server, '
-          'disable reload-stream seek for this session',
+          'seek reload-stream verify target=$target actual=$actualReload '
+          'driftMs=$reloadDrift',
         );
+        if (reloadDrift <= 2000) return;
+        if (target > const Duration(seconds: 30) &&
+            actualReload < const Duration(seconds: 3) &&
+            reloadDrift > 60000) {
+          _transcodeTimeOffsetSupported = false;
+          _seekDbg(
+            'reload-stream timeOffset unsupported on current server, '
+            'disable reload-stream seek for this session',
+          );
+        }
+        Logger.warn(
+          'Reload-stream seek drift still high '
+          '(target=$target, actual=$actualReload), retrying plain seek',
+        );
+        await player.seek(target);
+        return;
+      } catch (e) {
+        Logger.warn('Reload-stream seek failed, fallback to plain seek', e);
+        await player.seek(target);
+        return;
       }
-      Logger.warn(
-        'Reload-stream seek drift still high '
-        '(target=$target, actual=$actualReload), retrying plain seek',
-      );
-      await player.seek(target);
-      return;
     }
 
     _seekDbg(
@@ -1223,6 +1504,33 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
     // 检测到明显偏差时切换到直连流并携带 initialPosition，保证实际音频位置正确。
     if (_usingLockCachingSource && _currentStreamUrl != null) {
       final shouldResume = player.playing;
+      final isAppleHttpStream = _isAppleHttpUrl(_currentStreamUrl);
+      if (isAppleHttpStream) {
+        Logger.warn(
+          'Lock cache seek drift detected on Apple HTTP '
+          '(target=$target, actual=$actual), trying lock-cache reload',
+        );
+        try {
+          final reloaded = await _trySeekByReloadingLockCache(
+            player: player,
+            target: target,
+            shouldResume: shouldResume,
+          );
+          if (reloaded) return;
+        } catch (e) {
+          Logger.warn('Lock-cache reload seek failed on Apple HTTP', e);
+        }
+        _seekDbg(
+          'seek fallback lock-cache reload unavailable, '
+          'keep synthetic position target=$target',
+        );
+        _syntheticPositionFallbackActive = true;
+        if (mounted) {
+          state = state.copyWith(position: target);
+        }
+        return;
+      }
+
       Logger.warn(
         'Lock cache seek drift detected (target=$target, actual=$actual), '
         'switching to direct stream source',
@@ -1231,13 +1539,26 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
         'seek fallback -> direct stream initialPosition=$target '
         'wasPlaying=$shouldResume',
       );
-      await player.setUrl(_currentStreamUrl!, initialPosition: target);
-      _usingLockCachingSource = false;
-      if (shouldResume) {
-        await player.play();
+      try {
+        await player.setUrl(_currentStreamUrl!, initialPosition: target);
+        _usingLockCachingSource = false;
+        if (shouldResume) {
+          await player.play();
+        }
+        _seekDbg('seek fallback completed now=${player.position}');
+        return;
+      } catch (e) {
+        Logger.warn('Seek fallback direct stream failed, keep lock cache', e);
+        _seekDbg(
+          'seek fallback direct stream failed, '
+          'keep synthetic position target=$target',
+        );
+        _syntheticPositionFallbackActive = true;
+        if (mounted) {
+          state = state.copyWith(position: target);
+        }
+        return;
       }
-      _seekDbg('seek fallback completed now=${player.position}');
-      return;
     }
 
     // 直连流/本地文件也做一次强制重试，规避解码器刚起播时的 seek 抖动。
@@ -1255,6 +1576,89 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
     }
     await Future<void>.delayed(const Duration(milliseconds: 120));
     _seekDbg('seek retry completed now=${player.position}');
+  }
+
+  Future<bool> _trySeekByReloadingLockCache({
+    required AudioPlayer player,
+    required Duration target,
+    required bool shouldResume,
+  }) async {
+    final songId = _currentStreamSongId ?? state.currentSong?.id;
+    if (songId == null) return false;
+
+    final authState = _ref.read(authStateProvider);
+    final libraryId = authState.currentLibrary?.id ?? '';
+    if (libraryId.isEmpty) return false;
+
+    final offset = target.inSeconds;
+    final reloadUrl = _apiClient.getStreamUrl(
+      songId,
+      maxBitRate: _currentStreamMaxBitRate,
+      format: _currentStreamFormat,
+      timeOffset: offset,
+    );
+
+    final cacheService = _ref.read(audioCacheServiceProvider);
+    final quality = state.currentQuality ?? AudioQualityLevel.original;
+    final cacheFilePath = await cacheService.getCacheFilePath(
+      songId: songId,
+      libraryId: libraryId,
+      quality: quality,
+    );
+
+    _seekDbg(
+      'seek fallback -> lock-cache reload target=$target '
+      'offsetSec=$offset format=$_currentStreamFormat '
+      'maxBitRate=$_currentStreamMaxBitRate quality=${quality.name}',
+    );
+    _playDbg(
+      'seek_lock_cache_reload '
+      'url=${_summarizeStreamUrl(reloadUrl)} cachePath=$cacheFilePath',
+    );
+
+    // ignore: experimental_member_use
+    final audioSource = LockCachingAudioSource(
+      Uri.parse(reloadUrl),
+      cacheFile: File(cacheFilePath),
+    );
+    await player.setAudioSource(audioSource);
+    _usingLockCachingSource = true;
+    _currentStreamUrl = reloadUrl;
+    _setStreamContext(
+      songId: songId,
+      format: _currentStreamFormat,
+      maxBitRate: _currentStreamMaxBitRate,
+      seekByReloadStream: false,
+    );
+    if (shouldResume) {
+      _startPlayback();
+    }
+
+    await Future<void>.delayed(const Duration(milliseconds: 220));
+    final actual = player.position;
+    final drift = (actual - target).inMilliseconds.abs();
+    _seekDbg(
+      'seek fallback lock-cache reload verify target=$target '
+      'actual=$actual driftMs=$drift',
+    );
+
+    if (actual <= const Duration(milliseconds: 50)) {
+      // 底层 position 仍可能卡 0，保持 UI 在用户拖动位置，后续由合成进度推进。
+      _syntheticPositionFallbackActive = true;
+      if (mounted) {
+        state = state.copyWith(position: target);
+      }
+      _seekDbg(
+        'seek fallback lock-cache reload position still zero, '
+        'keep synthetic position target=$target',
+      );
+    }
+    return true;
+  }
+
+  bool _isAppleHttpUrl(String? url) {
+    if (url == null || url.isEmpty || kIsWeb) return false;
+    return (Platform.isIOS || Platform.isMacOS) && url.startsWith('http://');
   }
 
   void _clearPendingSeek() {
@@ -1294,8 +1698,141 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
     _seekByReloadStream = false;
   }
 
+  void _startPositionPolling(AudioPlayer player) {
+    _positionPollTimer?.cancel();
+    _positionPollTimer = Timer.periodic(const Duration(milliseconds: 500), (_) {
+      if (!mounted) return;
+      if (state.currentSong == null) return;
+
+      final playerPos = player.position;
+      final processing = player.processingState;
+      final isReadyPlaying =
+          player.playing && processing == ProcessingState.ready;
+
+      final deltaFromLast = (playerPos - _lastPolledPlayerPosition)
+          .inMilliseconds
+          .abs();
+      if (deltaFromLast <= 150) {
+        _stagnantPositionTicks += 1;
+      } else {
+        _stagnantPositionTicks = 0;
+      }
+      _lastPolledPlayerPosition = playerPos;
+
+      // 正常情况下用底层播放器位置对齐 UI 进度。
+      final drift = (playerPos - state.position).inMilliseconds.abs();
+      final keepSyntheticProgress =
+          _syntheticPositionFallbackActive &&
+          _usingLockCachingSource &&
+          isReadyPlaying &&
+          playerPos <= const Duration(milliseconds: 50);
+      final preserveSyntheticPosition =
+          _syntheticPositionFallbackActive &&
+          _usingLockCachingSource &&
+          state.position > const Duration(milliseconds: 250) &&
+          (!isReadyPlaying ||
+              playerPos + const Duration(seconds: 5) < state.position);
+
+      if (drift >= 250 &&
+          !keepSyntheticProgress &&
+          !preserveSyntheticPosition) {
+        final canDeactivateSynthetic =
+            _syntheticPositionFallbackActive &&
+            isReadyPlaying &&
+            playerPos > Duration.zero &&
+            drift <= 3000;
+        if (canDeactivateSynthetic) {
+          _syntheticPositionFallbackActive = false;
+          _seekDbg('position fallback deactivated, player position recovered');
+        }
+        state = state.copyWith(position: playerPos);
+        return;
+      }
+      if (drift >= 250 &&
+          preserveSyntheticPosition &&
+          _stagnantPositionTicks != _lastStagnantLogTick &&
+          _stagnantPositionTicks % 6 == 0) {
+        _playDbg(
+          'position sync skipped to preserve synthetic '
+          'playerPos=$playerPos statePos=${state.position} '
+          'driftMs=$drift playing=${player.playing} '
+          'processing=${processing.name} song=${state.currentSong?.id}',
+        );
+      }
+      if (drift >= 250 &&
+          keepSyntheticProgress &&
+          _stagnantPositionTicks != _lastStagnantLogTick &&
+          _stagnantPositionTicks % 6 == 0) {
+        _playDbg(
+          'position drift sync skipped while synthetic active '
+          'playerPos=$playerPos statePos=${state.position} '
+          'driftMs=$drift song=${state.currentSong?.id}',
+        );
+      }
+
+      // iOS + LockCachingAudioSource 某些流上 position 可能卡在 0。
+      // 当确认持续卡住时，按时间片推进 UI 进度，避免进度条一直 0:00。
+      final shouldUseSyntheticPosition =
+          _usingLockCachingSource &&
+          isReadyPlaying &&
+          playerPos <= const Duration(milliseconds: 50) &&
+          state.duration > Duration.zero &&
+          _stagnantPositionTicks >= 6;
+      if (shouldUseSyntheticPosition &&
+          _stagnantPositionTicks != _lastStagnantLogTick &&
+          _stagnantPositionTicks % 6 == 0) {
+        _lastStagnantLogTick = _stagnantPositionTicks;
+        _playDbg(
+          'position_stagnant ticks=$_stagnantPositionTicks '
+          'playerPos=$playerPos statePos=${state.position} '
+          'buffered=${player.bufferedPosition} duration=${state.duration} '
+          'processing=${processing.name} playing=${player.playing} '
+          'song=${state.currentSong?.id} '
+          'format=$_currentStreamFormat maxBitRate=$_currentStreamMaxBitRate '
+          'stream=${_summarizeStreamUrl(_currentStreamUrl)}',
+        );
+      }
+      if (!shouldUseSyntheticPosition) return;
+
+      final next = _normalizeSeekPosition(
+        state.position + const Duration(milliseconds: 500),
+      );
+      if (next <= state.position) return;
+
+      if (!_syntheticPositionFallbackActive) {
+        _syntheticPositionFallbackActive = true;
+        _seekDbg(
+          'position fallback activated for lock_cache source '
+          'song=${state.currentSong?.id}',
+        );
+      }
+      state = state.copyWith(position: next);
+    });
+  }
+
   void _seekDbg(String message) {
     Logger.info('[SEEKDBG] $message');
+  }
+
+  void _playDbg(String message) {
+    Logger.infoWithTag(_playDbgTag, message);
+  }
+
+  String _summarizeStreamUrl(String? url) {
+    if (url == null || url.isEmpty) return 'none';
+    try {
+      final uri = Uri.parse(url);
+      final host = uri.hasPort ? '${uri.host}:${uri.port}' : uri.host;
+      final q = uri.queryParameters;
+      final id = q['id'] ?? '-';
+      final format = q['format'] ?? '-';
+      final maxBitRate = q['maxBitRate'] ?? '-';
+      final timeOffset = q['timeOffset'] ?? '-';
+      return '${uri.scheme}://$host${uri.path} '
+          'id=$id format=$format maxBitRate=$maxBitRate timeOffset=$timeOffset';
+    } catch (_) {
+      return 'invalid_url';
+    }
   }
 
   /// 缓存完成后注册缓存元数据
@@ -1357,6 +1894,11 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
     final downloadService = _ref.read(downloadServiceProvider);
     final cacheService = _ref.read(audioCacheServiceProvider);
     final effectiveQuality = _ref.read(effectiveQualityProvider);
+    final maxBitRate = effectiveQuality.maxBitRate;
+    if (maxBitRate != null) {
+      _seekDbg('pre_cache_skip song=${nextSong.id} reason=bitrate-limited');
+      return;
+    }
 
     // 已下载则不需要预缓存
     final downloaded = await downloadService.isDownloaded(
@@ -1378,7 +1920,7 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
       final streamUrl = _apiClient.getStreamUrl(
         nextSong.id,
         format: _needsTranscoding(nextSong.suffix),
-        maxBitRate: effectiveQuality.maxBitRate,
+        maxBitRate: maxBitRate,
       );
       final cacheFilePath = await cacheService.getCacheFilePath(
         songId: nextSong.id,
@@ -1399,6 +1941,7 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
 
   @override
   void dispose() {
+    _positionPollTimer?.cancel();
     _cacheCompletionSubscription?.cancel();
     // Check if initialized/assigned before disposing
     // Since it was 'late', we can't check.

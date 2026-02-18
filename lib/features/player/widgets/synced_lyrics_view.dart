@@ -46,6 +46,7 @@ class _SyncedLyricsViewState extends ConsumerState<SyncedLyricsView> {
   final ItemPositionsListener _itemPositionsListener =
       ItemPositionsListener.create();
   int _currentIndex = -1;
+  bool _hasInitialAutoPositioned = false;
   bool _isUserScrolling = false;
   Timer? _userScrollTimer;
 
@@ -55,12 +56,9 @@ class _SyncedLyricsViewState extends ConsumerState<SyncedLyricsView> {
     // 歌词数据变化时重置状态
     if (oldWidget.lyrics != widget.lyrics) {
       _currentIndex = -1;
+      _hasInitialAutoPositioned = false;
       _isUserScrolling = false;
       _userScrollTimer?.cancel();
-      // 尝试重置滚动位置，忽略未挂载错误
-      try {
-        _itemScrollController.jumpTo(index: 0);
-      } catch (_) {}
     }
   }
 
@@ -70,26 +68,35 @@ class _SyncedLyricsViewState extends ConsumerState<SyncedLyricsView> {
     super.dispose();
   }
 
-  void _scrollToLine(int index) {
-    if (_isUserScrolling) return;
-    if (!widget.lyrics.synced) return;
-    if (index < 0 || index >= widget.lyrics.lines.length) return;
+  double _alignmentForIndex(int index) {
+    if (index < 0 || index >= widget.lyrics.lines.length) return 0.47;
 
     final renderParts = _splitBilingualLine(widget.lyrics.lines[index].value);
     final hasSecondary =
         renderParts.secondary != null && renderParts.secondary!.isNotEmpty;
     // scrollable_positioned_list 的 alignment 作用在“条目顶部”。
     // 双行歌词需要把条目顶部再往上提一点，才能让第二行进入视觉焦点区。
-    final alignment = hasSecondary ? 0.44 : 0.47;
+    return hasSecondary ? 0.44 : 0.47;
+  }
+
+  void _scrollToLine(int index, {bool animated = true}) {
+    if (_isUserScrolling) return;
+    if (!widget.lyrics.synced) return;
+    if (index < 0 || index >= widget.lyrics.lines.length) return;
+    final alignment = _alignmentForIndex(index);
 
     // 使用 scrollable_positioned_list 直接滚动到指定索引
     try {
-      _itemScrollController.scrollTo(
-        index: index,
-        duration: const Duration(milliseconds: 300),
-        curve: Curves.easeInOut,
-        alignment: alignment,
-      );
+      if (animated) {
+        _itemScrollController.scrollTo(
+          index: index,
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeInOut,
+          alignment: alignment,
+        );
+      } else {
+        _itemScrollController.jumpTo(index: index, alignment: alignment);
+      }
     } catch (e) {
       // 忽略控制器未挂载等错误
     }
@@ -152,6 +159,10 @@ class _SyncedLyricsViewState extends ConsumerState<SyncedLyricsView> {
 
     final lines = widget.lyrics.lines;
     final offsetMs = widget.lyrics.offsetMs;
+    if (lines.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
     final colorScheme = Theme.of(context).colorScheme;
     final onSurface = colorScheme.onSurface;
     final activePrimaryColor = widget.activePrimaryColor ?? colorScheme.primary;
@@ -165,13 +176,17 @@ class _SyncedLyricsViewState extends ConsumerState<SyncedLyricsView> {
 
     // 计算当前歌词行
     final newIndex = _findCurrentLineIndex(currentMs);
+    final initialScrollIndex = newIndex.clamp(0, lines.length - 1);
+    final initialAlignment = _alignmentForIndex(initialScrollIndex);
 
     // 索引变化时触发滚动 + setState 以更新高亮
     if (newIndex != _currentIndex) {
+      final shouldAnimate = _hasInitialAutoPositioned;
       _currentIndex = newIndex;
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) {
-          _scrollToLine(newIndex);
+          _scrollToLine(newIndex, animated: shouldAnimate);
+          _hasInitialAutoPositioned = true;
           setState(() {});
         }
       });
@@ -207,6 +222,8 @@ class _SyncedLyricsViewState extends ConsumerState<SyncedLyricsView> {
       child: ScrollablePositionedList.builder(
         itemScrollController: _itemScrollController,
         itemPositionsListener: _itemPositionsListener,
+        initialScrollIndex: initialScrollIndex,
+        initialAlignment: initialAlignment,
         padding: const EdgeInsets.symmetric(vertical: 100, horizontal: 24),
         itemCount: lines.length,
         itemBuilder: (context, index) {

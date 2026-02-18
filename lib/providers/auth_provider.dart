@@ -110,6 +110,8 @@ class AuthNotifier extends StateNotifier<AuthState> {
     required String serverUrl,
     required String username,
     required String password,
+    String? libraryName,
+    String? addressLabel,
   }) async {
     Logger.infoWithTag('AUTH', 'loginWithPassword start: $serverUrl/$username');
     state = state.copyWith(isLoading: true, errorMessage: null);
@@ -118,6 +120,8 @@ class AuthNotifier extends StateNotifier<AuthState> {
       serverUrl: serverUrl,
       username: username,
       password: password,
+      libraryName: libraryName,
+      addressLabel: addressLabel,
     );
 
     return _handleLoginResult(result);
@@ -128,6 +132,8 @@ class AuthNotifier extends StateNotifier<AuthState> {
     required String serverUrl,
     required String username,
     required String apiKey,
+    String? libraryName,
+    String? addressLabel,
   }) async {
     Logger.infoWithTag('AUTH', 'loginWithApiKey start: $serverUrl/$username');
     state = state.copyWith(isLoading: true, errorMessage: null);
@@ -136,6 +142,8 @@ class AuthNotifier extends StateNotifier<AuthState> {
       serverUrl: serverUrl,
       username: username,
       apiKey: apiKey,
+      libraryName: libraryName,
+      addressLabel: addressLabel,
     );
 
     return _handleLoginResult(result);
@@ -196,7 +204,12 @@ class AuthNotifier extends StateNotifier<AuthState> {
           '',
         ); // Empty ID? Or implement "clearActive"
       } catch (e, stackTrace) {
-        Logger.errorWithTag('AUTH', 'failed to clear active library', e, stackTrace);
+        Logger.errorWithTag(
+          'AUTH',
+          'failed to clear active library',
+          e,
+          stackTrace,
+        );
       }
     }
 

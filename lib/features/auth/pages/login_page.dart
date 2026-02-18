@@ -16,6 +16,8 @@ class _LoginPageState extends ConsumerState<LoginPage> {
   final _serverFormKey = GlobalKey<FormState>();
   final _authFormKey = GlobalKey<FormState>();
   final _serverUrlController = TextEditingController();
+  final _libraryNameController = TextEditingController();
+  final _addressLabelController = TextEditingController();
   final _usernameController = TextEditingController();
   final _passwordController = TextEditingController();
   final _apiKeyController = TextEditingController();
@@ -27,6 +29,8 @@ class _LoginPageState extends ConsumerState<LoginPage> {
   @override
   void dispose() {
     _serverUrlController.dispose();
+    _libraryNameController.dispose();
+    _addressLabelController.dispose();
     _usernameController.dispose();
     _passwordController.dispose();
     _apiKeyController.dispose();
@@ -79,6 +83,8 @@ class _LoginPageState extends ConsumerState<LoginPage> {
         serverUrl: _serverUrlController.text.trim(),
         username: _usernameController.text.trim(),
         apiKey: _apiKeyController.text.trim(),
+        libraryName: _libraryNameController.text.trim(),
+        addressLabel: _addressLabelController.text.trim(),
       );
     } else {
       // 使用密码登录
@@ -86,6 +92,8 @@ class _LoginPageState extends ConsumerState<LoginPage> {
         serverUrl: _serverUrlController.text.trim(),
         username: _usernameController.text.trim(),
         password: _passwordController.text,
+        libraryName: _libraryNameController.text.trim(),
+        addressLabel: _addressLabelController.text.trim(),
       );
     }
 
@@ -179,6 +187,26 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                         }
                         return null;
                       },
+                    ),
+                    const SizedBox(height: 16),
+                    TextFormField(
+                      controller: _libraryNameController,
+                      decoration: const InputDecoration(
+                        labelText: '音乐库名称（可选）',
+                        hintText: '例如：家庭 NAS',
+                        helperText: '不填写则自动使用服务器类型',
+                      ),
+                      textInputAction: TextInputAction.next,
+                    ),
+                    const SizedBox(height: 16),
+                    TextFormField(
+                      controller: _addressLabelController,
+                      decoration: const InputDecoration(
+                        labelText: '线路名称（可选）',
+                        hintText: '例如：主线路 / 家里',
+                        helperText: '不填写则默认使用 Primary',
+                      ),
+                      textInputAction: TextInputAction.next,
                     ),
                     if (_isDetecting) ...[
                       const SizedBox(height: 16),

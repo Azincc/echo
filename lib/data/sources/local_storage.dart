@@ -11,6 +11,8 @@ class LocalStorage {
   static const String _keyAutoFallback = 'auto_fallback';
   static const String _keyAudioQualitySettings = 'audio_quality_settings';
   static const String _keyPlaybackMode = 'playback_mode';
+  static const String _keyThemeMode = 'theme_mode';
+  static const String _keyThemeSeedColor = 'theme_seed_color';
 
   /// 保存服务器配置
   static Future<void> saveServerConfig(ServerConfig config) async {
@@ -125,5 +127,49 @@ class LocalStorage {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_keyPlaybackMode, mode);
     Logger.infoWithTag(_logTag, 'playback mode saved: $mode');
+  }
+
+  /// 读取主题模式（system / light / dark）
+  static Future<String> getThemeModeSetting() async {
+    final prefs = await SharedPreferences.getInstance();
+    final mode = prefs.getString(_keyThemeMode) ?? 'system';
+    switch (mode) {
+      case 'light':
+      case 'dark':
+      case 'system':
+        Logger.debugWithTag(_logTag, 'theme mode loaded: $mode');
+        return mode;
+      default:
+        Logger.warnWithTag(_logTag, 'invalid theme mode in storage: $mode');
+        return 'system';
+    }
+  }
+
+  /// 保存主题模式（system / light / dark）
+  static Future<void> setThemeModeSetting(String mode) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_keyThemeMode, mode);
+    Logger.infoWithTag(_logTag, 'theme mode saved: $mode');
+  }
+
+  /// 读取主题主色（ARGB int）
+  static Future<int> getThemeSeedColorValue() async {
+    final prefs = await SharedPreferences.getInstance();
+    final color = prefs.getInt(_keyThemeSeedColor) ?? 0xFF6750A4;
+    Logger.debugWithTag(
+      _logTag,
+      'theme seed color loaded: 0x${color.toRadixString(16)}',
+    );
+    return color;
+  }
+
+  /// 保存主题主色（ARGB int）
+  static Future<void> setThemeSeedColorValue(int color) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt(_keyThemeSeedColor, color);
+    Logger.infoWithTag(
+      _logTag,
+      'theme seed color saved: 0x${color.toRadixString(16)}',
+    );
   }
 }

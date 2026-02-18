@@ -6,6 +6,8 @@ import '../../../data/sources/local_storage.dart';
 import '../../../providers/api_provider.dart';
 import '../../../providers/audio_cache_provider.dart';
 import '../../../providers/auth_provider.dart';
+import '../../../providers/theme_provider.dart';
+import 'theme_settings_page.dart';
 
 /// 全屏设置页
 class AppSettingsPage extends ConsumerWidget {
@@ -17,6 +19,7 @@ class AppSettingsPage extends ConsumerWidget {
     final library = authState.currentLibrary;
     final activeAddress = ref.watch(activeAddressProvider);
     final autoFallback = ref.watch(autoFallbackProvider);
+    final themeSettings = ref.watch(themeSettingsProvider);
 
     return Scaffold(
       appBar: AppBar(title: const Text('设置')),
@@ -57,6 +60,24 @@ class AppSettingsPage extends ConsumerWidget {
               ref.read(autoFallbackProvider.notifier).state = value;
               ref.read(addressPoolProvider).autoFallback = value;
               await LocalStorage.setAutoFallback(value);
+            },
+          ),
+          ListTile(
+            contentPadding: EdgeInsets.zero,
+            leading: const Icon(Icons.palette_outlined),
+            title: const Text('主题设置'),
+            subtitle: Text(
+              '${_themeModeText(themeSettings.mode)} · ${_colorHex(themeSettings.seedColor)}',
+              style: const TextStyle(fontSize: 12),
+            ),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const ThemeSettingsPage(),
+                ),
+              );
             },
           ),
           const Divider(height: 24),
@@ -149,5 +170,25 @@ class AppSettingsPage extends ConsumerWidget {
         ],
       ),
     );
+  }
+
+  String _themeModeText(ThemeMode mode) {
+    switch (mode) {
+      case ThemeMode.system:
+        return '跟随系统';
+      case ThemeMode.light:
+        return '白色';
+      case ThemeMode.dark:
+        return '黑色';
+    }
+  }
+
+  String _colorHex(Color color) {
+    final value = color
+        .toARGB32()
+        .toRadixString(16)
+        .padLeft(8, '0')
+        .toUpperCase();
+    return '#${value.substring(2)}';
   }
 }

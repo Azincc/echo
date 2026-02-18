@@ -1231,10 +1231,28 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
 
   /// 清空队列
   Future<void> clearQueue() async {
+    _clearForcedNext();
+
+    final currentSong = state.currentSong;
+    if (currentSong != null) {
+      // 保留当前正在播放/暂停的歌曲，仅清空后续队列。
+      state = state.copyWith(queue: [currentSong], currentIndex: 0);
+      return;
+    }
+
     await _audioPlayer?.stop();
     await _audioHandler?.stop();
-    _clearForcedNext();
-    state = PlayerState();
+    state = state.copyWith(
+      currentSong: null,
+      queue: const [],
+      currentIndex: 0,
+      isPlaying: false,
+      processingState: ProcessingState.idle,
+      position: Duration.zero,
+      duration: Duration.zero,
+      currentQuality: null,
+      playbackSource: null,
+    );
   }
 
   /// 从队列移除

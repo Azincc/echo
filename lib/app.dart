@@ -8,6 +8,7 @@ import 'core/utils/logger.dart';
 import 'core/theme/app_theme.dart';
 import 'features/auth/pages/login_page.dart';
 import 'providers/auth_provider.dart';
+import 'providers/theme_provider.dart';
 import 'widgets/main_scaffold.dart';
 import 'features/discover/pages/discover_page.dart';
 import 'features/library/pages/library_page.dart';
@@ -20,12 +21,13 @@ class App extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final router = ref.watch(routerProvider);
+    final themeSettings = ref.watch(themeSettingsProvider);
 
     return MaterialApp.router(
       title: 'SubSonic Flow',
-      theme: AppTheme.light(),
-      darkTheme: AppTheme.dark(),
-      themeMode: ThemeMode.system,
+      theme: AppTheme.light(seedColor: themeSettings.seedColor),
+      darkTheme: AppTheme.dark(seedColor: themeSettings.seedColor),
+      themeMode: themeSettings.mode,
       routerConfig: router,
       debugShowCheckedModeBanner: false,
     );

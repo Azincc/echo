@@ -65,12 +65,16 @@ class AuthRepository {
     required String serverUrl,
     required String username,
     required String password,
+    String? libraryName,
+    String? addressLabel,
   }) async {
     return _attemptLogin(
       serverUrl: serverUrl,
       username: username,
       authType: MusicLibraryAuthType.token,
       password: password,
+      libraryName: libraryName,
+      addressLabel: addressLabel,
     );
   }
 
@@ -79,12 +83,16 @@ class AuthRepository {
     required String serverUrl,
     required String username,
     required String apiKey,
+    String? libraryName,
+    String? addressLabel,
   }) async {
     return _attemptLogin(
       serverUrl: serverUrl,
       username: username,
       authType: MusicLibraryAuthType.apiKey,
       apiKey: apiKey,
+      libraryName: libraryName,
+      addressLabel: addressLabel,
     );
   }
 
@@ -94,6 +102,8 @@ class AuthRepository {
     required MusicLibraryAuthType authType,
     String? password,
     String? apiKey,
+    String? libraryName,
+    String? addressLabel,
   }) async {
     try {
       final tempDio = Dio(
@@ -151,18 +161,24 @@ class AuthRepository {
 
       // Create final MusicLibrary object
       // Define initial address
+      final effectiveAddressLabel = (addressLabel ?? '').trim();
       final address = ServerAddress(
         id: const Uuid().v4(),
         libraryId: tempLib.id,
-        label: 'Primary',
+        label: effectiveAddressLabel.isNotEmpty
+            ? effectiveAddressLabel
+            : 'Primary',
         url: serverUrl,
         priority: 0,
         status: ServerAddressStatus.ok,
         lastLatencyMs: 0, // We could measure this
       );
 
+      final effectiveLibraryName = (libraryName ?? '').trim();
       final finalLib = tempLib.copyWith(
-        name: pingResult.serverType ?? 'Subsonic Server', // Default name
+        name: effectiveLibraryName.isNotEmpty
+            ? effectiveLibraryName
+            : (pingResult.serverType ?? 'Subsonic Server'),
         serverType: pingResult.serverType,
         serverVersion: pingResult.serverVersion,
         isOpenSubsonic: pingResult.isOpenSubsonic,

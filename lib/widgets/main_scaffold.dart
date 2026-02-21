@@ -89,6 +89,11 @@ class _MainScaffoldState extends ConsumerState<MainScaffold> {
               label: '音乐流',
             ),
             NavigationDestination(
+              icon: Icon(Icons.travel_explore_outlined),
+              selectedIcon: Icon(Icons.travel_explore),
+              label: '探索',
+            ),
+            NavigationDestination(
               icon: Icon(Icons.library_music_outlined),
               selectedIcon: Icon(Icons.library_music),
               label: '我的',

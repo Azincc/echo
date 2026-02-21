@@ -5,6 +5,7 @@ import '../data/models/download_task.dart';
 import '../data/repositories/download_repository.dart';
 import '../data/sources/database/database_provider.dart';
 import 'api_provider.dart';
+import 'lyrics_cover_provider.dart';
 
 /// 下载仓库 Provider
 final downloadRepositoryProvider = Provider<DownloadRepository>((ref) {
@@ -16,6 +17,7 @@ final downloadRepositoryProvider = Provider<DownloadRepository>((ref) {
 final downloadServiceProvider = Provider<DownloadService>((ref) {
   final repository = ref.watch(downloadRepositoryProvider);
   final apiClient = ref.watch(subsonicApiClientProvider);
+  final coverRepository = ref.watch(coverRepositoryProvider);
 
   // 使用独立的 Dio 实例进行下载（不走 FallbackInterceptor）
   final downloadDio = Dio(
@@ -29,6 +31,7 @@ final downloadServiceProvider = Provider<DownloadService>((ref) {
     dio: downloadDio,
     apiClient: apiClient,
     repository: repository,
+    coverRepository: coverRepository,
   );
 
   ref.onDispose(() => service.dispose());

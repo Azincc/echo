@@ -11,11 +11,13 @@ import '../providers/auth_provider.dart';
 import '../providers/player_provider.dart';
 import '../providers/playlist_provider.dart';
 import '../providers/music_provider.dart';
+import '../providers/offline_download_provider.dart';
 import '../features/settings/pages/lyrics_providers_page.dart';
 import '../features/settings/pages/cover_providers_page.dart';
 import '../features/settings/pages/audio_quality_page.dart';
 import '../features/settings/pages/app_settings_page.dart';
 import '../features/download/pages/download_manager_page.dart';
+import '../features/offline/pages/offline_download_status_page.dart';
 
 /// 应用侧栏
 class AppDrawer extends ConsumerStatefulWidget {
@@ -226,6 +228,8 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
   }
 
   Widget _buildNavigationList(BuildContext context) {
+    final downloadSummary = ref.watch(offlineDownloadSummaryProvider);
+
     return ListView(
       padding: EdgeInsets.zero,
       children: [
@@ -318,6 +322,27 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
               context,
               MaterialPageRoute(
                 builder: (context) => const DownloadManagerPage(),
+              ),
+            );
+          },
+        ),
+        ListTile(
+          leading: const Icon(Icons.offline_pin_outlined),
+          title: const Text('离线下载状态'),
+          subtitle: Text(
+            downloadSummary.total == 0
+                ? '暂无任务'
+                : '进行中 ${downloadSummary.active} · 完成 ${downloadSummary.completed} · 失败 ${downloadSummary.failed}',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(fontSize: 10),
+          ),
+          onTap: () {
+            Navigator.pop(context);
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => const OfflineDownloadStatusPage(),
               ),
             );
           },

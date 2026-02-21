@@ -17,9 +17,11 @@ import '../data/sources/covers/subsonic_cover_source.dart';
 import '../data/sources/covers/fanart_cover_source.dart';
 import '../data/sources/covers/musicbrainz_cover_source.dart';
 import '../data/sources/covers/custom_cover_source.dart';
+import '../core/utils/lrc_parser.dart';
 import 'api_provider.dart';
 import 'library_provider.dart';
 import 'player_provider.dart';
+import 'gd_music_provider.dart';
 
 // ======== 提供商配置 Providers ========
 
@@ -130,6 +132,30 @@ final currentLyricsProvider = FutureProvider<Lyrics?>((ref) async {
   // 避免每次 position 更新（~200ms）都重新拉取歌词
   final song = ref.watch(playerProvider.select((s) => s.currentSong));
   if (song == null) return null;
+
+  if (song.isPreview) {
+    final source = song.previewSource?.trim() ?? '';
+    final lyricId = (song.previewLyricId ?? song.previewTrackId ?? '').trim();
+    if (source.isNotEmpty && lyricId.isNotEmpty) {
+      try {
+        final client = ref.watch(gdMusicApiClientProvider);
+        final lyric = await client.fetchLyrics(
+          source: source,
+          lyricId: lyricId,
+        );
+        if (lyric != null && lyric.lyric.trim().isNotEmpty) {
+          final entries = [LrcParser.parse(lyric.lyric)];
+          final tlyric = lyric.translation?.trim();
+          if (tlyric != null && tlyric.isNotEmpty) {
+            entries.add(LrcParser.parse(tlyric));
+          }
+          return Lyrics(sourceId: 'gd_$source', entries: entries);
+        }
+      } catch (_) {
+        // 试听歌词失败后回退到常规歌词源，尽量保证可用性。
+      }
+    }
+  }
 
   final repo = ref.watch(lyricsRepositoryProvider);
   return repo.getLyrics(

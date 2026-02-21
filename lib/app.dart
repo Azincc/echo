@@ -11,6 +11,7 @@ import 'providers/auth_provider.dart';
 import 'providers/theme_provider.dart';
 import 'widgets/main_scaffold.dart';
 import 'features/discover/pages/discover_page.dart';
+import 'features/explore/pages/explore_page.dart';
 import 'features/library/pages/library_page.dart';
 import 'features/library/pages/edit_library_page.dart';
 
@@ -103,7 +104,16 @@ final routerProvider = Provider<GoRouter>((ref) {
               ),
             ],
           ),
-          // Tab 2: 我的
+          // Tab 2: 探索
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
+                path: '/explore',
+                builder: (context, state) => const ExplorePage(),
+              ),
+            ],
+          ),
+          // Tab 3: 我的
           StatefulShellBranch(
             routes: [
               GoRoute(

@@ -67,6 +67,7 @@ class DownloadRepository {
     required String taskId,
     DownloadTaskStatus? status,
     double? progress,
+    String? coverArt,
     String? filePath,
     int? fileSize,
     String? errorMessage,
@@ -78,6 +79,7 @@ class DownloadRepository {
       DownloadTasksCompanion(
         status: status != null ? Value(status.name) : const Value.absent(),
         progress: progress != null ? Value(progress) : const Value.absent(),
+        coverArt: coverArt != null ? Value(coverArt) : const Value.absent(),
         filePath: filePath != null ? Value(filePath) : const Value.absent(),
         fileSize: fileSize != null ? Value(fileSize) : const Value.absent(),
         errorMessage: errorMessage != null

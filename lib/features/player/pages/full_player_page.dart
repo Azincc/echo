@@ -8,8 +8,11 @@ import '../../../providers/player_provider.dart';
 import '../../../providers/lyrics_cover_provider.dart';
 import '../../../providers/api_provider.dart';
 import '../../../providers/audio_quality_provider.dart';
+import '../../../providers/library_provider.dart';
+import '../../../providers/offline_download_provider.dart';
 import '../../../data/models/lyrics.dart';
 import '../../../data/models/audio_quality.dart';
+import '../../../data/models/embed_service_config.dart';
 import '../../../data/models/song.dart';
 import '../../../core/network/connectivity_monitor.dart';
 import '../../../widgets/cover_art_image.dart';
@@ -76,7 +79,7 @@ class _FullPlayerPageState extends ConsumerState<FullPlayerPage>
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final song = ref.read(playerProvider).currentSong;
       if (song != null) {
-        _updatePalette(song.coverArt);
+        _updatePalette(song);
       }
     });
   }
@@ -88,18 +91,30 @@ class _FullPlayerPageState extends ConsumerState<FullPlayerPage>
     super.dispose();
   }
 
-  Future<void> _updatePalette(String? coverArtId) async {
-    if (coverArtId == null) {
+  Future<void> _updatePalette(Song? song) async {
+    if (song == null) {
       if (mounted) setState(() => _paletteGenerator = null);
       return;
     }
 
     try {
-      final url = ref
-          .read(subsonicApiClientProvider)
-          .getCoverArtUrl(coverArtId, size: 300);
+      ImageProvider imageProvider;
+      final previewCover = song.previewCoverUrl?.trim();
+      if (song.isPreview && previewCover != null && previewCover.isNotEmpty) {
+        imageProvider = CachedNetworkImageProvider(previewCover);
+      } else {
+        final coverArtId = song.coverArt;
+        if (coverArtId == null || coverArtId.isEmpty) {
+          if (mounted) setState(() => _paletteGenerator = null);
+          return;
+        }
+        final url = ref
+            .read(subsonicApiClientProvider)
+            .getCoverArtUrl(coverArtId, size: 300);
+        imageProvider = CachedNetworkImageProvider(url);
+      }
       final generator = await PaletteGenerator.fromImageProvider(
-        CachedNetworkImageProvider(url),
+        imageProvider,
         maximumColorCount: 20,
       );
 
@@ -159,6 +174,59 @@ class _FullPlayerPageState extends ConsumerState<FullPlayerPage>
     Navigator.of(context).pop();
   }
 
+  Widget _buildSongCover(Song song, double size) {
+    final previewCover = song.previewCoverUrl?.trim();
+    if (song.isPreview && previewCover != null && previewCover.isNotEmpty) {
+      return Image.network(
+        previewCover,
+        width: size,
+        height: size,
+        fit: BoxFit.contain,
+        errorBuilder: (context, error, stackTrace) => Container(
+          color: Theme.of(context).colorScheme.surfaceContainerHighest,
+          alignment: Alignment.center,
+          child: const Icon(Icons.music_note, size: 64),
+        ),
+      );
+    }
+
+    return CoverArtImage(
+      coverArtId: song.coverArt,
+      size: size,
+      requestSize: 640,
+      fit: BoxFit.contain,
+    );
+  }
+
+  Future<void> _enqueuePreviewSong(Song song) async {
+    final activeLibrary = ref.read(activeLibraryProvider);
+    if (activeLibrary == null) {
+      _showSnackBar('当前没有活跃音乐库');
+      return;
+    }
+
+    final config = EmbedServiceConfig.fromLibraryExtensions(activeLibrary.extensions);
+    try {
+      await ref
+          .read(offlineDownloadServiceProvider)
+          .enqueuePreviewSong(
+            song: song,
+            libraryId: activeLibrary.id,
+            config: config,
+          );
+      _showSnackBar('已添加到离线下载队列');
+    } catch (e) {
+      _showSnackBar('添加失败: $e');
+    }
+  }
+
+  void _showSnackBar(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
+  }
+
   @override
   Widget build(BuildContext context) {
     final playerState = ref.watch(playerProvider);
@@ -167,8 +235,10 @@ class _FullPlayerPageState extends ConsumerState<FullPlayerPage>
 
     // 监听歌曲变化更新背景色
     ref.listen(playerProvider.select((s) => s.currentSong), (previous, next) {
-      if (next?.coverArt != previous?.coverArt) {
-        _updatePalette(next?.coverArt);
+      if (next?.id != previous?.id ||
+          next?.coverArt != previous?.coverArt ||
+          next?.previewCoverUrl != previous?.previewCoverUrl) {
+        _updatePalette(next);
       }
     });
 
@@ -265,10 +335,29 @@ class _FullPlayerPageState extends ConsumerState<FullPlayerPage>
                               IconButton(
                                 icon: const Icon(Icons.more_vert),
                                 onPressed: () {
-                                  showSongOptionsSheet(
-                                    context: context,
-                                    song: currentSong,
-                                  );
+                                  if (currentSong.isPreview) {
+                                    showSongOptionsSheet(
+                                      context: context,
+                                      song: currentSong,
+                                      mode: SongOptionsSheetMode.offlineOnly,
+                                      extraActions: [
+                                        SongOptionsExtraAction(
+                                          icon: Icons.download_outlined,
+                                          title: '添加到离线下载队列',
+                                          onPressed: () async {
+                                            await _enqueuePreviewSong(
+                                              currentSong,
+                                            );
+                                          },
+                                        ),
+                                      ],
+                                    );
+                                  } else {
+                                    showSongOptionsSheet(
+                                      context: context,
+                                      song: currentSong,
+                                    );
+                                  }
                                 },
                               ),
                             ],
@@ -504,12 +593,7 @@ class _FullPlayerPageState extends ConsumerState<FullPlayerPage>
                               ),
                               child: ClipRRect(
                                 borderRadius: BorderRadius.circular(16),
-                                child: CoverArtImage(
-                                  coverArtId: currentSong.coverArt,
-                                  size: coverSize,
-                                  requestSize: 640,
-                                  fit: BoxFit.contain,
-                                ),
+                                child: _buildSongCover(currentSong, coverSize),
                               ),
                             ),
                           ),
@@ -583,43 +667,77 @@ class _FullPlayerPageState extends ConsumerState<FullPlayerPage>
 
   Widget _buildQualityIndicator(WidgetRef ref) {
     final playerState = ref.watch(playerProvider);
+    final song = playerState.currentSong;
+    final rawBitRate = playerState.currentBitRateKbps > 0
+        ? playerState.currentBitRateKbps
+        : ((song?.bitRate ?? 0) >= 10000
+              ? ((song?.bitRate ?? 0) ~/ 1000)
+              : (song?.bitRate ?? 0));
+    final bitRateText = rawBitRate > 0 ? '${rawBitRate}Kbps' : '未知码率';
+
+    if (song?.isPreview == true) {
+      final qualityLabel = song?.previewQualityLabel?.trim();
+      final text =
+          '试听·${qualityLabel == null || qualityLabel.isEmpty ? '未知音质' : qualityLabel}·$bitRateText';
+      return Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(
+            Icons.headphones,
+            size: 12,
+            color: Colors.white.withValues(alpha: 0.76),
+          ),
+          const SizedBox(width: 4),
+          Text(
+            text,
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              fontSize: 10,
+              color: Colors.white.withValues(alpha: 0.76),
+            ),
+          ),
+        ],
+      );
+    }
+
     final AudioQualityLevel quality =
         playerState.currentQuality ?? ref.watch(effectiveQualityProvider);
     final source = playerState.playbackSource ?? PlaybackSource.stream;
     final networkType = ref.watch(currentNetworkTypeProvider).valueOrNull;
+    final qualityLabel = switch (quality) {
+      AudioQualityLevel.original => '原始无损',
+      AudioQualityLevel.high => '高品质',
+      AudioQualityLevel.standard => '标准',
+      AudioQualityLevel.dataSaver => '流量节省',
+    };
 
     String text;
     IconData icon;
     Color? color;
 
-    if (networkType == NetworkType.none) {
-      text = '缓存-${quality.displayName}';
-      icon = Icons.offline_pin;
-      color = Colors.orange;
-    } else {
-      switch (source) {
-        case PlaybackSource.downloaded:
-          text = '已下载 · ${quality.displayName}';
-          icon = Icons.offline_pin;
-          color = Colors.green;
-          break;
-        case PlaybackSource.cached:
-          text = '已缓存 · ${quality.displayName}';
-          icon = Icons.check_circle_outline;
-          color = Colors.blue;
-          break;
-        case PlaybackSource.stream:
-          final netName = switch (networkType) {
-            NetworkType.wifi => 'Wi-Fi',
-            NetworkType.mobile => '移动数据',
-            NetworkType.none => '无网络',
-            null => '未知网络',
-          };
-          text = '$netName · ${quality.displayName}';
-          icon = Icons.cloud_queue;
-          color = null;
-          break;
-      }
+    switch (source) {
+      case PlaybackSource.downloaded:
+        text = '本地已下载·$qualityLabel·$bitRateText';
+        icon = Icons.offline_pin;
+        color = Colors.green;
+        break;
+      case PlaybackSource.cached:
+        text = '本地缓存·$qualityLabel·$bitRateText';
+        icon = Icons.check_circle_outline;
+        color = Colors.blue;
+        break;
+      case PlaybackSource.stream:
+        final netName = switch (networkType) {
+          NetworkType.wifi => 'Wi-Fi',
+          NetworkType.mobile => '移动数据',
+          NetworkType.none => '无网络',
+          null => '未知网络',
+        };
+        text = '$netName·$qualityLabel·$bitRateText';
+        icon = networkType == NetworkType.none
+            ? Icons.offline_pin
+            : Icons.cloud_queue;
+        color = networkType == NetworkType.none ? Colors.orange : null;
+        break;
     }
 
     return Row(

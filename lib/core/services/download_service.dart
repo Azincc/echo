@@ -1,10 +1,12 @@
 import 'dart:async';
 import 'dart:io';
 import 'package:dio/dio.dart';
+import '../../core/constants/api_constants.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as p;
 import 'package:uuid/uuid.dart';
 import '../../data/models/download_task.dart';
+import '../../data/repositories/cover_repository.dart';
 import '../../data/models/song.dart';
 import '../../data/repositories/download_repository.dart';
 import '../../data/sources/subsonic_api_client.dart';
@@ -12,12 +14,15 @@ import '../utils/logger.dart';
 
 /// 下载服务 — 队列管理 + 并发控制
 class DownloadService {
+  static const _logTag = 'DOWNLOAD';
   final Dio _dio;
   final SubsonicApiClient _apiClient;
   final DownloadRepository _repository;
+  final CoverRepository _coverRepository;
   final int maxConcurrent;
 
   final _activeDownloads = <String, CancelToken>{};
+  final _coverEnsuring = <String>{};
   final _progressController = StreamController<Map<String, double>>.broadcast();
   final _progress = <String, double>{};
 
@@ -25,10 +30,12 @@ class DownloadService {
     required Dio dio,
     required SubsonicApiClient apiClient,
     required DownloadRepository repository,
+    required CoverRepository coverRepository,
     this.maxConcurrent = 3,
   }) : _dio = dio,
        _apiClient = apiClient,
-       _repository = repository;
+       _repository = repository,
+       _coverRepository = coverRepository;
 
   /// 下载进度 Stream
   Stream<Map<String, double>> get progressStream => _progressController.stream;
@@ -239,17 +246,22 @@ class DownloadService {
       // 下载完成
       final file = File(savePath);
       final fileSize = await file.length();
+      final resolvedCoverRef = await _resolvePreferredCoverRef(task);
 
       await _repository.updateTask(
         taskId: task.id,
         status: DownloadTaskStatus.completed,
         progress: 1.0,
+        coverArt: resolvedCoverRef,
         filePath: savePath,
         fileSize: fileSize,
         completedAt: DateTime.now().millisecondsSinceEpoch,
       );
 
-      Logger.info('Downloaded: ${task.title}');
+      Logger.infoWithTag(
+        _logTag,
+        'downloaded title="${task.title}" songId=${task.songId} file=$savePath cover=${resolvedCoverRef ?? "-"}',
+      );
     } on DioException catch (e) {
       if (e.type == DioExceptionType.cancel) {
         Logger.info('Download cancelled: ${task.title}');
@@ -283,6 +295,161 @@ class DownloadService {
   ) async {
     final appDir = await getApplicationDocumentsDirectory();
     return p.join(appDir.path, 'echo_downloads', libraryId, '$songId.$suffix');
+  }
+
+  /// 为历史已完成任务补齐封面缓存（可在列表渲染时触发）
+  Future<void> ensureTaskCoverCached(DownloadTask task) async {
+    if (task.status != DownloadTaskStatus.completed) return;
+    if (_coverEnsuring.contains(task.id)) return;
+
+    _coverEnsuring.add(task.id);
+    try {
+      final currentCover = task.coverArt?.trim();
+      Logger.infoWithTag(
+        _logTag,
+        'ensureCover start title="${task.title}" songId=${task.songId} coverRef=${currentCover ?? "-"}',
+      );
+      final resolvedCoverRef = await _resolvePreferredCoverRef(task);
+      if (resolvedCoverRef != null && resolvedCoverRef != currentCover) {
+        await _repository.updateTask(
+          taskId: task.id,
+          coverArt: resolvedCoverRef,
+        );
+        Logger.infoWithTag(
+          _logTag,
+          'ensureCover done title="${task.title}" songId=${task.songId} cover=$resolvedCoverRef',
+        );
+      } else {
+        Logger.debugWithTag(
+          _logTag,
+          'ensureCover unchanged title="${task.title}" songId=${task.songId} cover=${currentCover ?? "-"}',
+        );
+      }
+    } catch (e) {
+      Logger.warnWithTag(
+        _logTag,
+        'ensureCover failed title="${task.title}" songId=${task.songId}',
+        e,
+      );
+    } finally {
+      _coverEnsuring.remove(task.id);
+    }
+  }
+
+  Future<String?> _resolvePreferredCoverRef(DownloadTask task) async {
+    final rawCoverRef = task.coverArt?.trim();
+    final hasRawCoverRef = rawCoverRef != null && rawCoverRef.isNotEmpty;
+    final isLocalRef = hasRawCoverRef && _isLocalFilePath(rawCoverRef);
+    final artist = (task.artist ?? '').trim();
+    final album = task.album?.trim();
+
+    // 已经是外部可访问的 URL（非 Navidrome getCoverArt）时，直接沿用。
+    if (hasRawCoverRef && !isLocalRef && !_isSubsonicCoverRef(rawCoverRef)) {
+      return rawCoverRef;
+    }
+
+    final coverLookupId =
+        (hasRawCoverRef && !isLocalRef && _isSubsonicCoverRef(rawCoverRef))
+        ? rawCoverRef
+        : task.songId;
+
+    Logger.infoWithTag(
+      _logTag,
+      'cover resolve start title="${task.title}" songId=${task.songId} lookupId=$coverLookupId',
+    );
+
+    String? startAfterSourceId;
+    while (true) {
+      final result = await _coverRepository.getCoverUrlWithSource(
+        artist: artist,
+        album: album,
+        coverArtId: coverLookupId,
+        size: 800,
+        startAfterSourceId: startAfterSourceId,
+      );
+
+      if (result == null) {
+        Logger.infoWithTag(
+          _logTag,
+          'cover resolve miss title="${task.title}" songId=${task.songId}',
+        );
+        return null;
+      }
+
+      if (result.sourceId == 'subsonic') {
+        final isDefault = await _isLikelyDefaultNavidromeCover(result.url);
+        if (isDefault) {
+          Logger.infoWithTag(
+            _logTag,
+            'cover resolve skip source=subsonic title="${task.title}" songId=${task.songId} reason=navidrome_default',
+          );
+          startAfterSourceId = result.sourceId;
+          continue;
+        }
+      }
+
+      Logger.infoWithTag(
+        _logTag,
+        'cover resolve hit source=${result.sourceId} title="${task.title}" songId=${task.songId} url=${result.url}',
+      );
+      return result.url;
+    }
+  }
+
+  bool _isLocalFilePath(String value) {
+    if (value.startsWith('/')) return true;
+    if (value.startsWith('file://')) return true;
+    return false;
+  }
+
+  bool _isSubsonicCoverRef(String coverRef) {
+    if (coverRef.isEmpty) return false;
+    if (_isLocalFilePath(coverRef)) return false;
+    if (coverRef.startsWith('http://') || coverRef.startsWith('https://')) {
+      final uri = Uri.tryParse(coverRef);
+      final path = uri?.path.toLowerCase() ?? '';
+      final apiPath = ApiConstants.getCoverArt.toLowerCase();
+      return path.endsWith(apiPath) || path.contains(apiPath);
+    }
+    return true;
+  }
+
+  Future<bool> _isLikelyDefaultNavidromeCover(String coverUrl) async {
+    try {
+      final response = await _dio.head(
+        coverUrl,
+        options: Options(
+          followRedirects: false,
+          validateStatus: (status) => status != null && status >= 200,
+          receiveTimeout: const Duration(seconds: 10),
+          sendTimeout: const Duration(seconds: 10),
+        ),
+      );
+
+      final marker = [
+        response.headers.value('location'),
+        response.headers.value(Headers.contentTypeHeader),
+        response.realUri.toString(),
+      ].whereType<String>().join(' ').toLowerCase();
+
+      final statusCode = response.statusCode ?? 0;
+      final looksUnavailable = statusCode >= 400;
+      final looksDefault =
+          looksUnavailable ||
+          marker.contains('placeholder') ||
+          marker.contains('default') ||
+          marker.contains('fallback') ||
+          marker.contains('nocover');
+
+      Logger.debugWithTag(
+        _logTag,
+        'cover inspect status=$statusCode default=$looksDefault unavailable=$looksUnavailable marker="$marker" url=$coverUrl',
+      );
+      return looksDefault;
+    } catch (e) {
+      Logger.warnWithTag(_logTag, 'cover inspect failed url=$coverUrl', e);
+      return false;
+    }
   }
 
   void dispose() {

@@ -10,7 +10,11 @@
       "Bash(./gradlew clean:*)",
       "Bash(flutter clean:*)",
       "Bash(adb install:*)",
-      "Bash(adb shell:*)"
+      "Bash(adb shell:*)",
+      "Bash(/Users/azin/echo/docs/gdstudio_embed_service_plan.md:*)",
+      "Bash(make init:*)",
+      "Bash(/Users/azin/PycharmProjects/gdstudio-embeded-service/PROJECT_INFO.md:*)",
+      "Bash(go mod tidy:*)"
     ]
   }
 }

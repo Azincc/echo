@@ -22,6 +22,15 @@ class Song {
   final bool starred;
   final int? discNumber;
   final String? type;
+  final bool isPreview;
+  final String? previewSource;
+  final String? previewTrackId;
+  final String? previewLyricId;
+  final String? previewPicId;
+  final String? previewStreamUrl;
+  final String? previewCoverUrl;
+  final String? previewQualityLabel;
+  final Map<String, String> previewRequestHeaders;
 
   Song({
     required this.id,
@@ -46,7 +55,85 @@ class Song {
     this.starred = false,
     this.discNumber,
     this.type,
+    this.isPreview = false,
+    this.previewSource,
+    this.previewTrackId,
+    this.previewLyricId,
+    this.previewPicId,
+    this.previewStreamUrl,
+    this.previewCoverUrl,
+    this.previewQualityLabel,
+    this.previewRequestHeaders = const {},
   });
+
+  Song copyWith({
+    String? id,
+    String? title,
+    String? album,
+    String? albumId,
+    String? artist,
+    String? artistId,
+    int? track,
+    int? year,
+    String? genre,
+    String? coverArt,
+    int? size,
+    String? contentType,
+    String? suffix,
+    int? duration,
+    int? bitRate,
+    String? path,
+    bool? isVideo,
+    int? playCount,
+    DateTime? created,
+    bool? starred,
+    int? discNumber,
+    String? type,
+    bool? isPreview,
+    String? previewSource,
+    String? previewTrackId,
+    String? previewLyricId,
+    String? previewPicId,
+    String? previewStreamUrl,
+    String? previewCoverUrl,
+    String? previewQualityLabel,
+    Map<String, String>? previewRequestHeaders,
+  }) {
+    return Song(
+      id: id ?? this.id,
+      title: title ?? this.title,
+      album: album ?? this.album,
+      albumId: albumId ?? this.albumId,
+      artist: artist ?? this.artist,
+      artistId: artistId ?? this.artistId,
+      track: track ?? this.track,
+      year: year ?? this.year,
+      genre: genre ?? this.genre,
+      coverArt: coverArt ?? this.coverArt,
+      size: size ?? this.size,
+      contentType: contentType ?? this.contentType,
+      suffix: suffix ?? this.suffix,
+      duration: duration ?? this.duration,
+      bitRate: bitRate ?? this.bitRate,
+      path: path ?? this.path,
+      isVideo: isVideo ?? this.isVideo,
+      playCount: playCount ?? this.playCount,
+      created: created ?? this.created,
+      starred: starred ?? this.starred,
+      discNumber: discNumber ?? this.discNumber,
+      type: type ?? this.type,
+      isPreview: isPreview ?? this.isPreview,
+      previewSource: previewSource ?? this.previewSource,
+      previewTrackId: previewTrackId ?? this.previewTrackId,
+      previewLyricId: previewLyricId ?? this.previewLyricId,
+      previewPicId: previewPicId ?? this.previewPicId,
+      previewStreamUrl: previewStreamUrl ?? this.previewStreamUrl,
+      previewCoverUrl: previewCoverUrl ?? this.previewCoverUrl,
+      previewQualityLabel: previewQualityLabel ?? this.previewQualityLabel,
+      previewRequestHeaders:
+          previewRequestHeaders ?? this.previewRequestHeaders,
+    );
+  }
 
   /// 从 JSON 反序列化
   factory Song.fromJson(Map<String, dynamic> json) {
@@ -75,6 +162,19 @@ class Song {
       starred: json['starred'] != null,
       discNumber: json['discNumber'] as int?,
       type: json['type'] as String?,
+      isPreview: json['isPreview'] as bool? ?? false,
+      previewSource: json['previewSource'] as String?,
+      previewTrackId: json['previewTrackId'] as String?,
+      previewLyricId: json['previewLyricId'] as String?,
+      previewPicId: json['previewPicId'] as String?,
+      previewStreamUrl: json['previewStreamUrl'] as String?,
+      previewCoverUrl: json['previewCoverUrl'] as String?,
+      previewQualityLabel: json['previewQualityLabel'] as String?,
+      previewRequestHeaders:
+          (json['previewRequestHeaders'] as Map?)?.map(
+            (key, value) => MapEntry(key.toString(), value.toString()),
+          ) ??
+          const {},
     );
   }
 
@@ -103,6 +203,15 @@ class Song {
       'starred': starred,
       'discNumber': discNumber,
       'type': type,
+      'isPreview': isPreview,
+      'previewSource': previewSource,
+      'previewTrackId': previewTrackId,
+      'previewLyricId': previewLyricId,
+      'previewPicId': previewPicId,
+      'previewStreamUrl': previewStreamUrl,
+      'previewCoverUrl': previewCoverUrl,
+      'previewQualityLabel': previewQualityLabel,
+      'previewRequestHeaders': previewRequestHeaders,
     };
   }
 

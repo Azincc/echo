@@ -145,6 +145,7 @@ class DownloadManagerPage extends ConsumerWidget {
     DownloadTask task,
     Map<String, double> progress,
   ) {
+    ref.read(downloadServiceProvider).ensureTaskCoverCached(task);
     final currentProgress = progress[task.id] ?? task.progress;
 
     return ListTile(

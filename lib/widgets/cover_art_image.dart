@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'dart:io';
 import '../providers/api_provider.dart';
 
 /// 封面图组件 - 从服务端获取封面
@@ -25,6 +26,36 @@ class CoverArtImage extends ConsumerWidget {
       return _buildPlaceholder(context);
     }
 
+    final raw = coverArtId!.trim();
+    if (raw.startsWith('/') || raw.startsWith('file://')) {
+      final filePath = raw.startsWith('file://')
+          ? Uri.parse(raw).toFilePath()
+          : raw;
+      final file = File(filePath);
+      if (file.existsSync()) {
+        return Image.file(
+          file,
+          width: size,
+          height: size,
+          fit: fit,
+          errorBuilder: (_, error, stackTrace) => _buildPlaceholder(context),
+        );
+      }
+      return _buildPlaceholder(context);
+    }
+
+    if (raw.startsWith('http://') || raw.startsWith('https://')) {
+      return CachedNetworkImage(
+        imageUrl: raw,
+        width: size,
+        height: size,
+        fit: fit,
+        placeholder: (context, url) =>
+            _buildPlaceholder(context, isLoading: true),
+        errorWidget: (context, url, error) => _buildPlaceholder(context),
+      );
+    }
+
     final apiClient = ref.watch(subsonicApiClientProvider);
 
     // 处理 size 参数，避免 Infinity
@@ -41,10 +72,7 @@ class CoverArtImage extends ConsumerWidget {
       resolvedCoverSize = coverSize ?? 500;
     }
 
-    final coverUrl = apiClient.getCoverArtUrl(
-      coverArtId!,
-      size: resolvedCoverSize,
-    );
+    final coverUrl = apiClient.getCoverArtUrl(raw, size: resolvedCoverSize);
 
     if (coverUrl.isEmpty) {
       return _buildPlaceholder(context);
@@ -53,7 +81,7 @@ class CoverArtImage extends ConsumerWidget {
     return CachedNetworkImage(
       imageUrl: coverUrl,
       // 使用 coverArtId 作为缓存键，避免因认证参数变化导致重复下载
-      cacheKey: '${coverArtId!}_$resolvedCoverSize',
+      cacheKey: '${raw}_$resolvedCoverSize',
       width: size,
       height: size,
       fit: fit,

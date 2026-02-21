@@ -1,7 +1,9 @@
 import 'package:echoes/data/models/music_library.dart';
 import 'package:echoes/data/models/server_address.dart';
+import 'package:echoes/data/models/embed_service_config.dart';
 import 'package:echoes/features/library/widgets/address_dialog.dart';
 import 'package:echoes/providers/library_provider.dart';
+import 'package:echoes/providers/offline_download_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:echoes/providers/api_provider.dart';
@@ -24,6 +26,11 @@ class _EditLibraryPageState extends ConsumerState<EditLibraryPage> {
   late TextEditingController _usernameController;
   late TextEditingController _passwordController;
   late TextEditingController _apiKeyController; // Assuming API key support
+  late TextEditingController _embedBaseUrlController;
+  late TextEditingController _embedApiKeyController;
+  late TextEditingController _embedLibraryIdController;
+  bool _embedEnabled = false;
+  bool _isTestingEmbed = false;
 
   @override
   void initState() {
@@ -36,6 +43,9 @@ class _EditLibraryPageState extends ConsumerState<EditLibraryPage> {
     _usernameController = TextEditingController();
     _passwordController = TextEditingController();
     _apiKeyController = TextEditingController();
+    _embedBaseUrlController = TextEditingController();
+    _embedApiKeyController = TextEditingController();
+    _embedLibraryIdController = TextEditingController();
   }
 
   bool _initialized = false;
@@ -46,6 +56,9 @@ class _EditLibraryPageState extends ConsumerState<EditLibraryPage> {
     _usernameController.dispose();
     _passwordController.dispose();
     _apiKeyController.dispose();
+    _embedBaseUrlController.dispose();
+    _embedApiKeyController.dispose();
+    _embedLibraryIdController.dispose();
     super.dispose();
   }
 
@@ -73,6 +86,13 @@ class _EditLibraryPageState extends ConsumerState<EditLibraryPage> {
           _passwordController.text =
               library.password ?? ''; // Be careful showing password
           _apiKeyController.text = library.apiKey ?? '';
+          final embedConfig = EmbedServiceConfig.fromLibraryExtensions(
+            library.extensions,
+          );
+          _embedEnabled = embedConfig.enabled;
+          _embedBaseUrlController.text = embedConfig.baseUrl;
+          _embedApiKeyController.text = embedConfig.apiKey;
+          _embedLibraryIdController.text = embedConfig.libraryId;
           _initialized = true;
         }
 
@@ -94,6 +114,8 @@ class _EditLibraryPageState extends ConsumerState<EditLibraryPage> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   _buildBasicInfoSection(context),
+                  const SizedBox(height: 24),
+                  _buildAria2Section(context),
                   const SizedBox(height: 24),
                   _buildAddressesSection(context, library),
                   const SizedBox(height: 24),
@@ -253,6 +275,141 @@ class _EditLibraryPageState extends ConsumerState<EditLibraryPage> {
     );
   }
 
+  Widget _buildAria2Section(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Text(
+              'Embed Service 离线下载',
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.bold,
+                color: Theme.of(context).colorScheme.primary,
+              ),
+            ),
+            const Spacer(),
+            Switch(
+              value: _embedEnabled,
+              onChanged: (value) {
+                setState(() {
+                  _embedEnabled = value;
+                });
+              },
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        TextFormField(
+          controller: _embedBaseUrlController,
+          decoration: const InputDecoration(
+            labelText: 'Embed Service URL',
+            hintText: 'http://localhost:8080',
+            border: OutlineInputBorder(),
+            prefixIcon: Icon(Icons.cloud),
+          ),
+          validator: (value) {
+            if (!_embedEnabled) return null;
+            return value == null || value.trim().isEmpty ? '请输入 Embed Service URL' : null;
+          },
+          enabled: _embedEnabled,
+        ),
+        const SizedBox(height: 12),
+        TextFormField(
+          controller: _embedApiKeyController,
+          obscureText: true,
+          decoration: const InputDecoration(
+            labelText: 'API Key',
+            hintText: 'your-api-key',
+            border: OutlineInputBorder(),
+            prefixIcon: Icon(Icons.key),
+          ),
+          validator: (value) {
+            if (!_embedEnabled) return null;
+            return value == null || value.trim().isEmpty ? '请输入 API Key' : null;
+          },
+          enabled: _embedEnabled,
+        ),
+        const SizedBox(height: 12),
+        TextFormField(
+          controller: _embedLibraryIdController,
+          decoration: const InputDecoration(
+            labelText: 'Library ID',
+            hintText: 'default',
+            border: OutlineInputBorder(),
+            prefixIcon: Icon(Icons.library_music),
+          ),
+          enabled: _embedEnabled,
+        ),
+        const SizedBox(height: 12),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: OutlinedButton.icon(
+            onPressed: _isTestingEmbed ? null : _testEmbedConnection,
+            icon: _isTestingEmbed
+                ? const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.wifi_tethering),
+            label: Text(_isTestingEmbed ? '测试中...' : '测试连接'),
+          ),
+        ),
+      ],
+    );
+  }
+
+  EmbedServiceConfig _currentEmbedServiceConfig() {
+    return EmbedServiceConfig(
+      enabled: _embedEnabled,
+      baseUrl: _embedBaseUrlController.text.trim(),
+      apiKey: _embedApiKeyController.text.trim(),
+      libraryId: _embedLibraryIdController.text.trim(),
+    );
+  }
+
+  Future<void> _testEmbedConnection() async {
+    if (!_embedEnabled) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('请先启用 Embed Service 配置')));
+      return;
+    }
+
+    final config = _currentEmbedServiceConfig();
+    if (!config.isConfigured) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('请先填写 URL 和 API Key')));
+      return;
+    }
+
+    setState(() {
+      _isTestingEmbed = true;
+    });
+
+    try {
+      final service = ref.read(offlineDownloadServiceProvider);
+      await service.testConnection(config);
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('连接成功！')));
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('连接失败: $e')));
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isTestingEmbed = false;
+        });
+      }
+    }
+  }
+
   Future<void> _onReorderAddresses(
     List<ServerAddress> addresses,
     int oldIndex,
@@ -409,8 +566,12 @@ class _EditLibraryPageState extends ConsumerState<EditLibraryPage> {
   Future<void> _saveLibrary(MusicLibrary original) async {
     if (_formKey.currentState!.validate()) {
       final repo = ref.read(libraryRepositoryProvider);
+      final extensions = Map<String, dynamic>.from(original.extensions);
+      extensions.remove('aria2'); // 删除旧的 Aria2 配置
+      extensions['embedService'] = _currentEmbedServiceConfig().toJson();
       final updated = original.copyWith(
         name: _nameController.text,
+        extensions: extensions,
         // Update other fields as needed
         updatedAt: DateTime.now(),
       );

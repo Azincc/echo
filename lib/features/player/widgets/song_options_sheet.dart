@@ -27,11 +27,14 @@ class SongOptionsExtraAction {
   });
 }
 
+enum SongOptionsSheetMode { full, offlineOnly }
+
 Future<void> showSongOptionsSheet({
   required BuildContext context,
   required Song song,
   bool useRootNavigator = true,
   List<SongOptionsExtraAction> extraActions = const [],
+  SongOptionsSheetMode mode = SongOptionsSheetMode.full,
 }) async {
   await showModalBottomSheet<void>(
     context: context,
@@ -45,6 +48,7 @@ Future<void> showSongOptionsSheet({
       hostContext: context,
       song: song,
       extraActions: extraActions,
+      mode: mode,
     ),
   );
 }
@@ -53,11 +57,13 @@ class _SongOptionsSheet extends ConsumerWidget {
   final BuildContext hostContext;
   final Song song;
   final List<SongOptionsExtraAction> extraActions;
+  final SongOptionsSheetMode mode;
 
   const _SongOptionsSheet({
     required this.hostContext,
     required this.song,
     required this.extraActions,
+    required this.mode,
   });
 
   @override
@@ -80,6 +86,77 @@ class _SongOptionsSheet extends ConsumerWidget {
       authStateProvider.select((s) => s.currentLibrary?.id ?? ''),
     );
     final canDownload = libraryId.isNotEmpty;
+
+    if (mode == SongOptionsSheetMode.offlineOnly) {
+      return SafeArea(
+        top: false,
+        child: SingleChildScrollView(
+          child: Padding(
+            padding: EdgeInsets.only(
+              bottom: MediaQuery.of(context).padding.bottom + 8,
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const SizedBox(height: 12),
+                Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: Theme.of(
+                      context,
+                    ).colorScheme.onSurfaceVariant.withValues(alpha: 0.4),
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                ListTile(
+                  dense: true,
+                  title: Text(
+                    song.title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  subtitle: Text(
+                    '$artistName · $albumName',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                const Divider(height: 1),
+                for (final action in extraActions)
+                  _buildActionTile(
+                    context: context,
+                    icon: action.icon,
+                    title: action.title,
+                    textColor: action.isDestructive
+                        ? Theme.of(context).colorScheme.error
+                        : null,
+                    iconColor: action.isDestructive
+                        ? Theme.of(context).colorScheme.error
+                        : null,
+                    onTap: () async {
+                      await _closeAndRun(context, () async {
+                        await action.onPressed();
+                      });
+                    },
+                  ),
+                if (extraActions.isEmpty)
+                  _buildActionTile(
+                    context: context,
+                    icon: Icons.info_outline,
+                    title: canDownload ? '暂无可用操作' : '当前不可操作',
+                    enabled: false,
+                  ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
 
     return SafeArea(
       top: false,
@@ -170,10 +247,9 @@ class _SongOptionsSheet extends ConsumerWidget {
                     ? null
                     : () async {
                         await _closeAndRun(context, () async {
-                          await ref.read(downloadServiceProvider).enqueue(
-                            song,
-                            libraryId: libraryId,
-                          );
+                          await ref
+                              .read(downloadServiceProvider)
+                              .enqueue(song, libraryId: libraryId);
                           _showSnackBar('已添加「${song.title}」到下载队列');
                         });
                       },

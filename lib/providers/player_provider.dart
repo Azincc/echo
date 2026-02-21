@@ -49,6 +49,7 @@ class PlayerState {
   final bool shuffleEnabled;
   final AudioQualityLevel? currentQuality;
   final PlaybackSource? playbackSource;
+  final int currentBitRateKbps;
 
   PlayerState({
     this.currentSong,
@@ -62,6 +63,7 @@ class PlayerState {
     this.shuffleEnabled = false,
     this.currentQuality,
     this.playbackSource,
+    this.currentBitRateKbps = 0,
   });
 
   PlayerState copyWith({
@@ -76,6 +78,7 @@ class PlayerState {
     bool? shuffleEnabled,
     AudioQualityLevel? currentQuality,
     PlaybackSource? playbackSource,
+    int? currentBitRateKbps,
   }) {
     return PlayerState(
       currentSong: currentSong ?? this.currentSong,
@@ -89,6 +92,7 @@ class PlayerState {
       shuffleEnabled: shuffleEnabled ?? this.shuffleEnabled,
       currentQuality: currentQuality ?? this.currentQuality,
       playbackSource: playbackSource ?? this.playbackSource,
+      currentBitRateKbps: currentBitRateKbps ?? this.currentBitRateKbps,
     );
   }
 
@@ -321,6 +325,11 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
 
   /// 播放单曲
   Future<void> playSong(Song song, {List<Song>? queue, int? index}) async {
+    if (song.isPreview) {
+      await _playPreviewSongInternal(song);
+      return;
+    }
+
     final debugSession = ++_playDebugSession;
     try {
       _seekDbg(
@@ -363,6 +372,7 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
         currentIndex: playIndex,
         position: Duration.zero,
         duration: initialDuration, // 使用歌曲元数据的时长
+        currentBitRateKbps: 0,
       );
 
       // 更新通知栏媒体信息
@@ -399,6 +409,11 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
         state = state.copyWith(
           currentQuality: AudioQualityLevel.original,
           playbackSource: PlaybackSource.downloaded,
+          currentBitRateKbps: _resolveCurrentBitRateKbps(
+            song: song,
+            quality: AudioQualityLevel.original,
+            source: PlaybackSource.downloaded,
+          ),
         );
         await _scrobble(song.id, submission: false);
         _preCacheNextSong();
@@ -429,6 +444,12 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
         state = state.copyWith(
           currentQuality: effectiveQuality,
           playbackSource: PlaybackSource.cached,
+          currentBitRateKbps: _resolveCurrentBitRateKbps(
+            song: song,
+            quality: effectiveQuality,
+            source: PlaybackSource.cached,
+            maxBitRate: effectiveQuality.maxBitRate,
+          ),
         );
         await _scrobble(song.id, submission: false);
         _preCacheNextSong();
@@ -539,6 +560,12 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
           state = state.copyWith(
             currentQuality: effectiveQuality,
             playbackSource: PlaybackSource.stream,
+            currentBitRateKbps: _resolveCurrentBitRateKbps(
+              song: song,
+              quality: effectiveQuality,
+              source: PlaybackSource.stream,
+              maxBitRate: maxBitRate,
+            ),
           );
 
           // 后台注册缓存（等缓存完成后调用）
@@ -577,6 +604,12 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
           state = state.copyWith(
             currentQuality: effectiveQuality,
             playbackSource: PlaybackSource.stream,
+            currentBitRateKbps: _resolveCurrentBitRateKbps(
+              song: song,
+              quality: effectiveQuality,
+              source: PlaybackSource.stream,
+              maxBitRate: maxBitRate,
+            ),
           );
         }
       } else {
@@ -649,6 +682,12 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
         state = state.copyWith(
           currentQuality: effectiveQuality,
           playbackSource: PlaybackSource.stream,
+          currentBitRateKbps: _resolveCurrentBitRateKbps(
+            song: song,
+            quality: effectiveQuality,
+            source: PlaybackSource.stream,
+            maxBitRate: maxBitRate,
+          ),
         );
       }
 
@@ -781,6 +820,17 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
       }
 
       await _applyPendingSeekIfNeeded();
+      final effectiveQuality = _ref.read(effectiveQualityProvider);
+      state = state.copyWith(
+        currentQuality: effectiveQuality,
+        playbackSource: PlaybackSource.stream,
+        currentBitRateKbps: _resolveCurrentBitRateKbps(
+          song: song,
+          quality: effectiveQuality,
+          source: PlaybackSource.stream,
+          maxBitRate: 320,
+        ),
+      );
 
       // 上报"正在播放"
       await _scrobble(song.id, submission: false);
@@ -833,13 +883,65 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
     return null;
   }
 
+  int _normalizeBitRateKbps(int? bitRate) {
+    if (bitRate == null || bitRate <= 0) return 0;
+    // 兼容个别场景可能传入 bps（例如 320000）。
+    if (bitRate >= 10000) return bitRate ~/ 1000;
+    return bitRate;
+  }
+
+  int _parseBitRateFromText(String? text) {
+    if (text == null) return 0;
+    final match = RegExp(
+      r'(\d{2,4})\s*kbps',
+      caseSensitive: false,
+    ).firstMatch(text);
+    if (match == null) return 0;
+    return int.tryParse(match.group(1) ?? '') ?? 0;
+  }
+
+  int _resolveCurrentBitRateKbps({
+    required Song song,
+    required AudioQualityLevel quality,
+    required PlaybackSource source,
+    int? maxBitRate,
+  }) {
+    final songBitRate = _normalizeBitRateKbps(song.bitRate);
+    if (song.isPreview) {
+      if (songBitRate > 0) return songBitRate;
+      return _parseBitRateFromText(song.previewQualityLabel);
+    }
+
+    switch (source) {
+      case PlaybackSource.downloaded:
+        return songBitRate;
+      case PlaybackSource.cached:
+        if (quality != AudioQualityLevel.original &&
+            quality.maxBitRate != null) {
+          return quality.maxBitRate!;
+        }
+        return songBitRate;
+      case PlaybackSource.stream:
+        if (maxBitRate != null && maxBitRate > 0) return maxBitRate;
+        if (quality != AudioQualityLevel.original &&
+            quality.maxBitRate != null) {
+          return quality.maxBitRate!;
+        }
+        return songBitRate;
+    }
+  }
+
   /// 更新通知栏媒体信息
   void _updateMediaItem(Song song) {
     if (_audioHandler == null) return;
 
-    final coverArtUrl = song.coverArt != null
-        ? _apiClient.getCoverArtUrl(song.coverArt!, size: 300)
-        : null;
+    final previewCover = song.previewCoverUrl?.trim();
+    final coverArtUrl =
+        song.isPreview && previewCover != null && previewCover.isNotEmpty
+        ? previewCover
+        : (song.coverArt != null
+              ? _apiClient.getCoverArtUrl(song.coverArt!, size: 300)
+              : null);
 
     final mediaItem = MediaItem(
       id: song.id,
@@ -871,6 +973,87 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
   Future<void> playQueue(List<Song> songs, {int startIndex = 0}) async {
     if (songs.isEmpty) return;
     await playSong(songs[startIndex], queue: songs, index: startIndex);
+  }
+
+  /// 播放试听歌曲（强制单曲队列）
+  Future<void> playPreviewSong(Song song) async {
+    await _playPreviewSongInternal(song);
+  }
+
+  Future<void> _playPreviewSongInternal(Song song) async {
+    final streamUrl = song.previewStreamUrl?.trim() ?? '';
+    if (streamUrl.isEmpty) {
+      NetworkErrorNotifier.show('试听链接不可用');
+      return;
+    }
+    final previewHeaders = song.previewRequestHeaders;
+
+    await _cacheCompletionSubscription?.cancel();
+    _cacheCompletionSubscription = null;
+    _clearPendingSeek();
+    _usingLockCachingSource = false;
+    _currentStreamUrl = null;
+    _clearStreamContext();
+    _clearForcedNext();
+    _isHandlingCompletion = false;
+    _completionHandlingSongId = null;
+    _lastPolledPlayerPosition = Duration.zero;
+    _stagnantPositionTicks = 0;
+    _lastStagnantLogTick = -1;
+    _lastIgnoredSyntheticPositionLogTick = -1;
+    _syntheticPositionFallbackActive = false;
+    _loggedDurationUnavailableForSong = false;
+
+    final initialDuration = song.duration != null
+        ? Duration(seconds: song.duration!)
+        : Duration.zero;
+
+    state = state.copyWith(
+      currentSong: song,
+      queue: [song],
+      currentIndex: 0,
+      position: Duration.zero,
+      duration: initialDuration,
+      currentBitRateKbps: 0,
+    );
+
+    _updateMediaItem(song);
+
+    try {
+      _playDbg(
+        'preview setUrl song=${song.id} url=${_summarizeStreamUrl(streamUrl)} '
+        'headers=${previewHeaders.keys.join(",")}',
+      );
+      await _audioPlayer?.setUrl(streamUrl, headers: previewHeaders);
+      _usingLockCachingSource = false;
+      _currentStreamUrl = streamUrl;
+      _setStreamContext(
+        songId: song.id,
+        format: null,
+        maxBitRate: null,
+        seekByReloadStream: true,
+      );
+      _startPlayback();
+      await _applyPendingSeekIfNeeded();
+      state = state.copyWith(
+        currentQuality: AudioQualityLevel.original,
+        playbackSource: PlaybackSource.stream,
+        currentBitRateKbps: _resolveCurrentBitRateKbps(
+          song: song,
+          quality: AudioQualityLevel.original,
+          source: PlaybackSource.stream,
+          maxBitRate: _normalizeBitRateKbps(song.bitRate),
+        ),
+      );
+    } catch (e) {
+      Logger.error('Failed to play preview song', e);
+      final hasAvailableRoute = await _refreshRoutesAndCheckAvailability();
+      if (!hasAvailableRoute) {
+        NetworkErrorNotifier.show('试听播放失败，当前无可用线路');
+        return;
+      }
+      NetworkErrorNotifier.show('试听播放失败');
+    }
   }
 
   /// 播放/暂停
@@ -1252,6 +1435,7 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
       duration: Duration.zero,
       currentQuality: null,
       playbackSource: null,
+      currentBitRateKbps: 0,
     );
   }
 
@@ -1273,6 +1457,7 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
         queue: newQueue,
         currentSong: null,
         currentIndex: 0,
+        currentBitRateKbps: 0,
       );
     } else {
       // 调整当前索引
@@ -1288,7 +1473,9 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
     if (state.currentSong?.id != completedSongId) return;
 
     // 不阻塞切歌流程，避免完成态停留过久导致竞态。
-    unawaited(_scrobble(completedSongId, submission: true));
+    if (state.currentSong?.isPreview != true) {
+      unawaited(_scrobble(completedSongId, submission: true));
+    }
 
     // 随机模式优先：从队列中随机到下一首，不走 loopMode 分支。
     if (state.shuffleEnabled) {

@@ -12,6 +12,7 @@ import '../data/sources/subsonic_api_client.dart';
 import '../data/sources/local_storage.dart';
 import '../data/repositories/music_repository.dart';
 import '../core/constants/api_constants.dart';
+import '../core/network/connectivity_monitor.dart';
 import '../core/utils/logger.dart';
 import '../core/utils/network_error_notifier.dart';
 import '../core/services/audio_handler_service.dart';
@@ -35,6 +36,17 @@ enum PlaybackMode { shuffle, repeatAll, repeatOne }
 
 const _playerLogTag = 'PLAYER';
 const _playDbgTag = 'PLAYDBG';
+const _maxShuffleHistoryEntries = 200;
+
+class _ShuffleHistoryEntry {
+  const _ShuffleHistoryEntry({
+    required this.songId,
+    required this.preferredIndex,
+  });
+
+  final String songId;
+  final int preferredIndex;
+}
 
 /// 播放器状态
 class PlayerState {
@@ -47,6 +59,7 @@ class PlayerState {
   final Duration duration;
   final LoopMode loopMode;
   final bool shuffleEnabled;
+  final int shuffleHistoryCount;
   final AudioQualityLevel? currentQuality;
   final PlaybackSource? playbackSource;
   final int currentBitRateKbps;
@@ -61,6 +74,7 @@ class PlayerState {
     this.duration = Duration.zero,
     this.loopMode = LoopMode.off,
     this.shuffleEnabled = false,
+    this.shuffleHistoryCount = 0,
     this.currentQuality,
     this.playbackSource,
     this.currentBitRateKbps = 0,
@@ -76,6 +90,7 @@ class PlayerState {
     Duration? duration,
     LoopMode? loopMode,
     bool? shuffleEnabled,
+    int? shuffleHistoryCount,
     AudioQualityLevel? currentQuality,
     PlaybackSource? playbackSource,
     int? currentBitRateKbps,
@@ -90,6 +105,7 @@ class PlayerState {
       duration: duration ?? this.duration,
       loopMode: loopMode ?? this.loopMode,
       shuffleEnabled: shuffleEnabled ?? this.shuffleEnabled,
+      shuffleHistoryCount: shuffleHistoryCount ?? this.shuffleHistoryCount,
       currentQuality: currentQuality ?? this.currentQuality,
       playbackSource: playbackSource ?? this.playbackSource,
       currentBitRateKbps: currentBitRateKbps ?? this.currentBitRateKbps,
@@ -110,9 +126,7 @@ class PlayerState {
 
   bool get hasPrevious {
     if (!_hasValidCurrent) return false;
-    if (shuffleEnabled) return queue.length > 1;
-    if (loopMode == LoopMode.one) return currentIndex > 0;
-    // 列表循环（Repeat All）下，首项仍允许“上一曲”回到最后一首。
+    // 与主流播放器一致：只要队列存在当前曲目，上一曲始终可用（首项回到末项，单曲回自己）。
     return queue.isNotEmpty;
   }
 }
@@ -135,6 +149,10 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
   EchoAudioHandler? _audioHandler;
   StreamSubscription? _cacheCompletionSubscription;
   final Random _random = Random();
+  final List<_ShuffleHistoryEntry> _shuffleBackHistory =
+      <_ShuffleHistoryEntry>[];
+  final List<_ShuffleHistoryEntry> _shuffleForwardHistory =
+      <_ShuffleHistoryEntry>[];
   Duration? _pendingSeekPosition;
   String? _pendingSeekSongId;
   bool _usingLockCachingSource = false;
@@ -317,30 +335,54 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
 
     // 监听随机模式
     player.shuffleModeEnabledStream.listen((enabled) {
-      if (mounted) state = state.copyWith(shuffleEnabled: enabled);
+      if (!enabled) {
+        _resetShuffleHistory(updateState: false);
+      }
+      if (mounted) {
+        state = state.copyWith(
+          shuffleEnabled: enabled,
+          shuffleHistoryCount: enabled ? state.shuffleHistoryCount : 0,
+        );
+      }
     });
 
     await _restorePlaybackMode();
   }
 
   /// 播放单曲
-  Future<void> playSong(Song song, {List<Song>? queue, int? index}) async {
+  Future<void> playSong(
+    Song song, {
+    List<Song>? queue,
+    int? index,
+    bool recordShuffleHistory = false,
+    bool clearShuffleForwardHistory = false,
+  }) async {
     if (song.isPreview) {
       await _playPreviewSongInternal(song);
       return;
     }
+
+    final playQueue = queue ?? [song];
+    final playIndex = index ?? 0;
+    _syncShuffleHistoryBeforeSongChange(
+      nextSong: song,
+      nextQueue: playQueue,
+      nextIndex: playIndex,
+      recordHistory: recordShuffleHistory,
+      clearForwardHistory: clearShuffleForwardHistory,
+    );
 
     final debugSession = ++_playDebugSession;
     try {
       _seekDbg(
         'playSong start song=${song.id} title="${song.title}" '
         'suffix=${song.suffix} duration=${song.duration}s '
-        'queue=${(queue ?? [song]).length} index=${index ?? 0}',
+        'queue=${playQueue.length} index=$playIndex',
       );
       _playDbg(
         'sid=$debugSession playSong enter song=${song.id} '
         'suffix=${song.suffix} durationSec=${song.duration} '
-        'queue=${(queue ?? [song]).length} index=${index ?? 0}',
+        'queue=${playQueue.length} index=$playIndex',
       );
       await _cacheCompletionSubscription?.cancel();
       _cacheCompletionSubscription = null;
@@ -357,9 +399,6 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
       _lastIgnoredSyntheticPositionLogTick = -1;
       _syntheticPositionFallbackActive = false;
       _loggedDurationUnavailableForSong = false;
-
-      final playQueue = queue ?? [song];
-      final playIndex = index ?? 0;
 
       // 如果歌曲有时长信息，先预设 duration（转码流可能无法获取时长）
       final initialDuration = song.duration != null
@@ -452,6 +491,13 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
           ),
         );
         await _scrobble(song.id, submission: false);
+        unawaited(
+          _recordMobileCacheSavedBytesForHit(
+            songId: song.id,
+            cacheFilePath: cachedPath,
+            libraryId: libraryId,
+          ),
+        );
         _preCacheNextSong();
         return;
       }
@@ -1003,6 +1049,7 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
     _lastIgnoredSyntheticPositionLogTick = -1;
     _syntheticPositionFallbackActive = false;
     _loggedDurationUnavailableForSong = false;
+    _resetShuffleHistory(updateState: false);
 
     final initialDuration = song.duration != null
         ? Duration(seconds: song.duration!)
@@ -1012,6 +1059,7 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
       currentSong: song,
       queue: [song],
       currentIndex: 0,
+      shuffleHistoryCount: 0,
       position: Duration.zero,
       duration: initialDuration,
       currentBitRateKbps: 0,
@@ -1086,25 +1134,38 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
     _clearForcedNext();
 
     if (state.shuffleEnabled) {
-      final previousIndex = _getRandomIndexExcludingCurrent();
+      final historyIndex = _takeLastValidBackHistoryIndex();
+      final previousIndex = historyIndex ?? _getQueuePreviousIndex();
       if (previousIndex == null) return;
+
+      if (historyIndex != null) {
+        final currentEntry = _currentShuffleEntry(
+          queue: state.queue,
+          song: state.currentSong,
+          index: state.currentIndex,
+        );
+        if (currentEntry != null) {
+          _pushShuffleEntry(_shuffleForwardHistory, currentEntry);
+        }
+      } else {
+        _shuffleForwardHistory.clear();
+      }
+      _syncShuffleHistoryState();
       final previousSong = state.queue[previousIndex];
-      await playSong(previousSong, queue: state.queue, index: previousIndex);
+      await playSong(
+        previousSong,
+        queue: state.queue,
+        index: previousIndex,
+        recordShuffleHistory: false,
+        clearShuffleForwardHistory: false,
+      );
       return;
     }
 
-    final previousIndex = state.currentIndex - 1;
-    if (previousIndex >= 0) {
-      final previousSong = state.queue[previousIndex];
-      await playSong(previousSong, queue: state.queue, index: previousIndex);
-      return;
-    }
-
-    if (state.loopMode != LoopMode.one && state.queue.isNotEmpty) {
-      final wrapIndex = state.queue.length - 1;
-      final wrapSong = state.queue[wrapIndex];
-      await playSong(wrapSong, queue: state.queue, index: wrapIndex);
-    }
+    final previousIndex = _getQueuePreviousIndex();
+    if (previousIndex == null) return;
+    final previousSong = state.queue[previousIndex];
+    await playSong(previousSong, queue: state.queue, index: previousIndex);
   }
 
   /// 下一首
@@ -1116,14 +1177,47 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
       if (forcedIndex != null) {
         final forcedSong = state.queue[forcedIndex];
         _clearForcedNext();
-        await playSong(forcedSong, queue: state.queue, index: forcedIndex);
+        await playSong(
+          forcedSong,
+          queue: state.queue,
+          index: forcedIndex,
+          recordShuffleHistory: true,
+          clearShuffleForwardHistory: true,
+        );
         return;
       }
       _clearForcedNext();
+      final forwardIndex = _takeLastValidForwardHistoryIndex();
+      if (forwardIndex != null) {
+        final currentEntry = _currentShuffleEntry(
+          queue: state.queue,
+          song: state.currentSong,
+          index: state.currentIndex,
+        );
+        if (currentEntry != null) {
+          _pushShuffleEntry(_shuffleBackHistory, currentEntry);
+        }
+        _syncShuffleHistoryState();
+        final forwardSong = state.queue[forwardIndex];
+        await playSong(
+          forwardSong,
+          queue: state.queue,
+          index: forwardIndex,
+          recordShuffleHistory: false,
+          clearShuffleForwardHistory: false,
+        );
+        return;
+      }
       final nextIndex = _getRandomIndexExcludingCurrent();
       if (nextIndex == null) return;
       final nextSong = state.queue[nextIndex];
-      await playSong(nextSong, queue: state.queue, index: nextIndex);
+      await playSong(
+        nextSong,
+        queue: state.queue,
+        index: nextIndex,
+        recordShuffleHistory: true,
+        clearShuffleForwardHistory: true,
+      );
       return;
     }
 
@@ -1217,8 +1311,9 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
   /// 设置随机播放
   Future<void> setShuffleEnabled(bool enabled) async {
     await _audioPlayer?.setShuffleModeEnabled(enabled);
+    _resetShuffleHistory(updateState: false);
     if (mounted) {
-      state = state.copyWith(shuffleEnabled: enabled);
+      state = state.copyWith(shuffleEnabled: enabled, shuffleHistoryCount: 0);
     }
     final modeToPersist = enabled
         ? PlaybackMode.shuffle
@@ -1261,8 +1356,13 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
         // 在随机模式使用 LoopMode.off，避免底层播放器自动重放当前单曲。
         await _audioPlayer?.setLoopMode(LoopMode.off);
         await _audioPlayer?.setShuffleModeEnabled(true);
+        _resetShuffleHistory(updateState: false);
         if (mounted) {
-          state = state.copyWith(loopMode: LoopMode.off, shuffleEnabled: true);
+          state = state.copyWith(
+            loopMode: LoopMode.off,
+            shuffleEnabled: true,
+            shuffleHistoryCount: 0,
+          );
         }
         break;
       case PlaybackMode.repeatAll:
@@ -1270,15 +1370,25 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
         // 避免底层播放器在单音源下自动回放当前曲目。
         await _audioPlayer?.setShuffleModeEnabled(false);
         await _audioPlayer?.setLoopMode(LoopMode.off);
+        _resetShuffleHistory(updateState: false);
         if (mounted) {
-          state = state.copyWith(loopMode: LoopMode.off, shuffleEnabled: false);
+          state = state.copyWith(
+            loopMode: LoopMode.off,
+            shuffleEnabled: false,
+            shuffleHistoryCount: 0,
+          );
         }
         break;
       case PlaybackMode.repeatOne:
         await _audioPlayer?.setShuffleModeEnabled(false);
         await _audioPlayer?.setLoopMode(LoopMode.one);
+        _resetShuffleHistory(updateState: false);
         if (mounted) {
-          state = state.copyWith(loopMode: LoopMode.one, shuffleEnabled: false);
+          state = state.copyWith(
+            loopMode: LoopMode.one,
+            shuffleEnabled: false,
+            shuffleHistoryCount: 0,
+          );
         }
         break;
     }
@@ -1323,6 +1433,159 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
         e,
       );
     }
+  }
+
+  void _syncShuffleHistoryBeforeSongChange({
+    required Song nextSong,
+    required List<Song> nextQueue,
+    required int nextIndex,
+    required bool recordHistory,
+    required bool clearForwardHistory,
+  }) {
+    if (!state.shuffleEnabled) {
+      _resetShuffleHistory(updateState: false);
+      _syncShuffleHistoryState();
+      return;
+    }
+
+    if (!_isSameQueueBySongId(state.queue, nextQueue)) {
+      _resetShuffleHistory(updateState: false);
+      _syncShuffleHistoryState();
+      return;
+    }
+
+    if (recordHistory) {
+      final currentEntry = _currentShuffleEntry(
+        queue: state.queue,
+        song: state.currentSong,
+        index: state.currentIndex,
+      );
+      if (currentEntry != null) {
+        final isDifferentTrack =
+            currentEntry.songId != nextSong.id ||
+            currentEntry.preferredIndex != nextIndex;
+        if (isDifferentTrack) {
+          _pushShuffleEntry(_shuffleBackHistory, currentEntry);
+        }
+      }
+    }
+
+    if (clearForwardHistory) {
+      _shuffleForwardHistory.clear();
+    }
+
+    _syncShuffleHistoryState();
+  }
+
+  _ShuffleHistoryEntry? _currentShuffleEntry({
+    required List<Song> queue,
+    required Song? song,
+    required int index,
+  }) {
+    if (song == null || queue.isEmpty) return null;
+
+    if (index >= 0 && index < queue.length && queue[index].id == song.id) {
+      return _ShuffleHistoryEntry(songId: song.id, preferredIndex: index);
+    }
+
+    for (var i = 0; i < queue.length; i++) {
+      if (queue[i].id == song.id) {
+        return _ShuffleHistoryEntry(songId: song.id, preferredIndex: i);
+      }
+    }
+    return null;
+  }
+
+  bool _isSameQueueBySongId(List<Song> currentQueue, List<Song> nextQueue) {
+    if (identical(currentQueue, nextQueue)) return true;
+    if (currentQueue.length != nextQueue.length) return false;
+
+    for (var i = 0; i < currentQueue.length; i++) {
+      if (currentQueue[i].id != nextQueue[i].id) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  void _pushShuffleEntry(
+    List<_ShuffleHistoryEntry> stack,
+    _ShuffleHistoryEntry entry,
+  ) {
+    if (stack.isNotEmpty) {
+      final last = stack.last;
+      if (last.songId == entry.songId &&
+          last.preferredIndex == entry.preferredIndex) {
+        return;
+      }
+    }
+
+    stack.add(entry);
+    if (stack.length > _maxShuffleHistoryEntries) {
+      stack.removeAt(0);
+    }
+  }
+
+  int? _resolveShuffleEntryIndex(_ShuffleHistoryEntry entry) {
+    final queue = state.queue;
+    final preferredIndex = entry.preferredIndex;
+    if (preferredIndex >= 0 &&
+        preferredIndex < queue.length &&
+        queue[preferredIndex].id == entry.songId) {
+      return preferredIndex;
+    }
+
+    for (var i = 0; i < queue.length; i++) {
+      if (queue[i].id == entry.songId) {
+        return i;
+      }
+    }
+    return null;
+  }
+
+  int? _takeLastValidHistoryIndex(List<_ShuffleHistoryEntry> stack) {
+    while (stack.isNotEmpty) {
+      final entry = stack.removeLast();
+      final resolvedIndex = _resolveShuffleEntryIndex(entry);
+      if (resolvedIndex != null) {
+        return resolvedIndex;
+      }
+    }
+    return null;
+  }
+
+  int? _takeLastValidBackHistoryIndex() {
+    return _takeLastValidHistoryIndex(_shuffleBackHistory);
+  }
+
+  int? _takeLastValidForwardHistoryIndex() {
+    return _takeLastValidHistoryIndex(_shuffleForwardHistory);
+  }
+
+  void _resetShuffleHistory({bool updateState = true}) {
+    _shuffleBackHistory.clear();
+    _shuffleForwardHistory.clear();
+    if (updateState) {
+      _syncShuffleHistoryState();
+    }
+  }
+
+  void _syncShuffleHistoryState() {
+    if (!mounted) return;
+    final historyCount = _shuffleBackHistory.length;
+    if (state.shuffleHistoryCount == historyCount) return;
+    state = state.copyWith(shuffleHistoryCount: historyCount);
+  }
+
+  int? _getQueuePreviousIndex() {
+    final queue = state.queue;
+    if (queue.isEmpty) return null;
+    if (queue.length == 1) return 0;
+
+    final currentIndex = state.currentIndex;
+    if (currentIndex <= 0) return queue.length - 1;
+    if (currentIndex >= queue.length) return queue.length - 1;
+    return currentIndex - 1;
   }
 
   int? _getRandomIndexExcludingCurrent() {
@@ -1415,11 +1678,16 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
   /// 清空队列
   Future<void> clearQueue() async {
     _clearForcedNext();
+    _resetShuffleHistory(updateState: false);
 
     final currentSong = state.currentSong;
     if (currentSong != null) {
       // 保留当前正在播放/暂停的歌曲，仅清空后续队列。
-      state = state.copyWith(queue: [currentSong], currentIndex: 0);
+      state = state.copyWith(
+        queue: [currentSong],
+        currentIndex: 0,
+        shuffleHistoryCount: 0,
+      );
       return;
     }
 
@@ -1429,6 +1697,7 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
       currentSong: null,
       queue: const [],
       currentIndex: 0,
+      shuffleHistoryCount: 0,
       isPlaying: false,
       processingState: ProcessingState.idle,
       position: Duration.zero,
@@ -1444,6 +1713,7 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
     if (index < 0 || index >= state.queue.length) return;
 
     _clearForcedNext();
+    _resetShuffleHistory(updateState: false);
 
     final newQueue = [...state.queue];
     newQueue.removeAt(index);
@@ -1457,6 +1727,7 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
         queue: newQueue,
         currentSong: null,
         currentIndex: 0,
+        shuffleHistoryCount: 0,
         currentBitRateKbps: 0,
       );
     } else {
@@ -1464,7 +1735,11 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
       final newIndex = index < state.currentIndex
           ? state.currentIndex - 1
           : state.currentIndex;
-      state = state.copyWith(queue: newQueue, currentIndex: newIndex);
+      state = state.copyWith(
+        queue: newQueue,
+        currentIndex: newIndex,
+        shuffleHistoryCount: 0,
+      );
     }
   }
 
@@ -1513,6 +1788,42 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
       Logger.info('Scrobble: $songId (submission: $submission)');
     } catch (e) {
       Logger.warn('Failed to scrobble', e);
+    }
+  }
+
+  Future<void> _recordMobileCacheSavedBytesForHit({
+    required String songId,
+    required String cacheFilePath,
+    required String libraryId,
+  }) async {
+    if (libraryId.isEmpty) return;
+
+    try {
+      final networkType = _ref
+          .read(connectivityMonitorProvider)
+          .currentNetworkType;
+      if (networkType != NetworkType.mobile) return;
+
+      final cacheFile = File(cacheFilePath);
+      if (!await cacheFile.exists()) return;
+
+      final savedBytes = await cacheFile.length();
+      if (savedBytes <= 0) return;
+
+      await LocalStorage.addMobileCacheSavedBytes(
+        libraryId: libraryId,
+        bytes: savedBytes,
+      );
+      Logger.infoWithTag(
+        _playerLogTag,
+        'mobile cache hit recorded song=$songId savedBytes=$savedBytes',
+      );
+    } catch (e) {
+      Logger.warnWithTag(
+        _playerLogTag,
+        'failed to record mobile cache hit savings',
+        e,
+      );
     }
   }
 

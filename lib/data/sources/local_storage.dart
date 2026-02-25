@@ -13,6 +13,8 @@ class LocalStorage {
   static const String _keyPlaybackMode = 'playback_mode';
   static const String _keyThemeMode = 'theme_mode';
   static const String _keyThemeSeedColor = 'theme_seed_color';
+  static const String _keyMobileCacheSavedBytesByLibrary =
+      'mobile_cache_saved_bytes_by_library_v1';
 
   /// 保存服务器配置
   static Future<void> saveServerConfig(ServerConfig config) async {
@@ -171,5 +173,81 @@ class LocalStorage {
       _logTag,
       'theme seed color saved: 0x${color.toRadixString(16)}',
     );
+  }
+
+  /// 读取指定音乐库的“移动网络缓存命中节省流量”累计值（字节）
+  static Future<int> getMobileCacheSavedBytes({
+    required String libraryId,
+  }) async {
+    if (libraryId.trim().isEmpty) return 0;
+
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getString(_keyMobileCacheSavedBytesByLibrary);
+    if (raw == null || raw.isEmpty) return 0;
+
+    try {
+      final map = jsonDecode(raw) as Map<String, dynamic>;
+      return _parsePositiveInt(map[libraryId]);
+    } catch (e) {
+      Logger.warnWithTag(
+        _logTag,
+        'failed to parse mobile cache saved bytes map',
+        e,
+      );
+      return 0;
+    }
+  }
+
+  /// 增加指定音乐库的“移动网络缓存命中节省流量”累计值（字节）
+  static Future<void> addMobileCacheSavedBytes({
+    required String libraryId,
+    required int bytes,
+  }) async {
+    final normalizedLibraryId = libraryId.trim();
+    if (normalizedLibraryId.isEmpty || bytes <= 0) return;
+
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getString(_keyMobileCacheSavedBytesByLibrary);
+
+    Map<String, dynamic> map = <String, dynamic>{};
+    if (raw != null && raw.isNotEmpty) {
+      try {
+        final decoded = jsonDecode(raw);
+        if (decoded is Map<String, dynamic>) {
+          map = decoded;
+        } else if (decoded is Map) {
+          map = decoded.map((key, value) => MapEntry(key.toString(), value));
+        }
+      } catch (e) {
+        Logger.warnWithTag(
+          _logTag,
+          'failed to parse existing mobile cache saved bytes map',
+          e,
+        );
+      }
+    }
+
+    final current = _parsePositiveInt(map[normalizedLibraryId]);
+    final next = current + bytes;
+    map[normalizedLibraryId] = next;
+    await prefs.setString(_keyMobileCacheSavedBytesByLibrary, jsonEncode(map));
+    Logger.infoWithTag(
+      _logTag,
+      'mobile cache saved bytes +$bytes library=$normalizedLibraryId total=$next',
+    );
+  }
+
+  static int _parsePositiveInt(Object? value) {
+    if (value is int) return value < 0 ? 0 : value;
+    if (value is double) {
+      final converted = value.floor();
+      return converted < 0 ? 0 : converted;
+    }
+    if (value is String) {
+      final parsed = int.tryParse(value);
+      if (parsed == null || parsed < 0) return 0;
+      return parsed;
+    }
+    return 0;
   }
 }

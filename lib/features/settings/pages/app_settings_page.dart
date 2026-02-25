@@ -7,6 +7,9 @@ import '../../../providers/api_provider.dart';
 import '../../../providers/audio_cache_provider.dart';
 import '../../../providers/auth_provider.dart';
 import '../../../providers/theme_provider.dart';
+import 'audio_quality_page.dart';
+import 'cover_providers_page.dart';
+import 'lyrics_providers_page.dart';
 import 'theme_settings_page.dart';
 
 /// 全屏设置页
@@ -79,6 +82,55 @@ class AppSettingsPage extends ConsumerWidget {
                 ),
               );
             },
+          ),
+          ListTile(
+            contentPadding: EdgeInsets.zero,
+            leading: const Icon(Icons.high_quality_outlined),
+            title: const Text('音质设置'),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const AudioQualityPage(),
+                ),
+              );
+            },
+          ),
+          ListTile(
+            contentPadding: EdgeInsets.zero,
+            leading: const Icon(Icons.lyrics_outlined),
+            title: const Text('歌词提供商'),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const LyricsProvidersPage(),
+                ),
+              );
+            },
+          ),
+          ListTile(
+            contentPadding: EdgeInsets.zero,
+            leading: const Icon(Icons.image_outlined),
+            title: const Text('封面提供商'),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const CoverProvidersPage(),
+                ),
+              );
+            },
+          ),
+          ListTile(
+            contentPadding: EdgeInsets.zero,
+            leading: const Icon(Icons.info_outline),
+            title: const Text('关于'),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => _showAppAboutDialog(context),
           ),
           const Divider(height: 24),
           Text(
@@ -169,6 +221,16 @@ class AppSettingsPage extends ConsumerWidget {
           Expanded(child: Text(value, style: const TextStyle(fontSize: 12))),
         ],
       ),
+    );
+  }
+
+  void _showAppAboutDialog(BuildContext context) {
+    showAboutDialog(
+      context: context,
+      applicationName: 'Echo',
+      applicationIcon: const FlutterLogo(size: 40),
+      applicationLegalese: '© 2026 Echo Music Player',
+      children: const [SizedBox(height: 12), Text('基于 Subsonic API 的音乐客户端。')],
     );
   }
 

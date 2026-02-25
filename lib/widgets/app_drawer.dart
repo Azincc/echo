@@ -1,23 +1,20 @@
-import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
-import 'package:url_launcher/url_launcher.dart';
 import 'package:echoes/data/models/music_library.dart';
 import 'package:echoes/data/models/server_address.dart';
+import 'package:echoes/features/download/pages/download_manager_page.dart';
+import 'package:echoes/features/offline/pages/offline_download_status_page.dart';
+import 'package:echoes/features/settings/pages/app_settings_page.dart';
+import 'package:echoes/features/settings/pages/playback_stats_page.dart';
 import 'package:echoes/providers/api_provider.dart';
 import 'package:echoes/providers/library_provider.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+
 import '../providers/auth_provider.dart';
-import '../providers/player_provider.dart';
-import '../providers/playlist_provider.dart';
 import '../providers/music_provider.dart';
 import '../providers/offline_download_provider.dart';
-import '../features/settings/pages/lyrics_providers_page.dart';
-import '../features/settings/pages/cover_providers_page.dart';
-import '../features/settings/pages/audio_quality_page.dart';
-import '../features/settings/pages/app_settings_page.dart';
-import '../features/download/pages/download_manager_page.dart';
-import '../features/offline/pages/offline_download_status_page.dart';
+import '../providers/player_provider.dart';
+import '../providers/playlist_provider.dart';
 
 /// 应用侧栏
 class AppDrawer extends ConsumerStatefulWidget {
@@ -74,7 +71,6 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          // 左侧：头像
           CircleAvatar(
             radius: 28,
             backgroundColor: onPrimary,
@@ -84,7 +80,6 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
                 : null,
           ),
           const SizedBox(width: 16),
-          // 中间：信息
           Expanded(
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
@@ -146,7 +141,6 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
               ],
             ),
           ),
-          // 右侧：箭头
           IconButton(
             icon: Icon(
               _showLibraries
@@ -195,13 +189,10 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
                   if (!isActive) {
                     _switchLibrary(lib);
                   }
-                  // Close drawer or switch back?
-                  // Usually Material Drawer stays open or toggles back.
-                  // Let's toggle back to nav after switch?
                   setState(() {
                     _showLibraries = false;
                   });
-                  Navigator.pop(context); // Close drawer to reflect changes
+                  Navigator.pop(context);
                 },
                 trailing: IconButton(
                   icon: const Icon(Icons.edit),
@@ -233,7 +224,6 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
     return ListView(
       padding: EdgeInsets.zero,
       children: [
-        // 切换线路
         ListTile(
           leading: const Icon(Icons.router),
           title: const Text('切换线路'),
@@ -249,70 +239,24 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
             },
           ),
           onTap: () {
-            Navigator.pop(context); // Optional: keep drawer open?
-            // Usually switch route is a quick action, maybe keep drawer open or use dialog on top.
-            // User requested "appdrawer添加...功能", implying inside appdrawer or accessible from it.
-            // Let's close drawer and show dialog for better UX.
+            Navigator.pop(context);
             _showRouteSelectionDialog(context);
           },
         ),
-
-        // 歌词提供商
-        ListTile(
-          leading: const Icon(Icons.lyrics),
-          title: const Text('歌词提供商'),
-          onTap: () {
-            Navigator.pop(context);
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (context) => const LyricsProvidersPage(),
-              ),
-            );
-          },
-        ),
-
-        // 封面提供商
-        ListTile(
-          leading: const Icon(Icons.image),
-          title: const Text('封面提供商'),
-          onTap: () {
-            Navigator.pop(context);
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (context) => const CoverProvidersPage(),
-              ),
-            );
-          },
-        ),
-
-        // 音质设置
-        ListTile(
-          leading: const Icon(Icons.high_quality_outlined),
-          title: const Text('音质设置'),
-          onTap: () {
-            Navigator.pop(context);
-            Navigator.push(
-              context,
-              MaterialPageRoute(builder: (context) => const AudioQualityPage()),
-            );
-          },
-        ),
-
         const Divider(),
-
-        // 统计信息
         ListTile(
           leading: const Icon(Icons.analytics_outlined),
           title: const Text('统计信息'),
           onTap: () {
             Navigator.pop(context);
-            _showComingSoonDialog(context, '统计信息');
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => const PlaybackStatsPage(),
+              ),
+            );
           },
         ),
-
-        // 下载管理
         ListTile(
           leading: const Icon(Icons.download_outlined),
           title: const Text('下载管理'),
@@ -347,10 +291,7 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
             );
           },
         ),
-
         const Divider(),
-
-        // 设置
         ListTile(
           leading: const Icon(Icons.settings_outlined),
           title: const Text('设置'),
@@ -362,16 +303,6 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
             );
           },
         ),
-
-        // 关于
-        ListTile(
-          leading: const Icon(Icons.info_outline),
-          title: const Text('关于'),
-          onTap: () {
-            Navigator.pop(context);
-            _showAboutDialog(context);
-          },
-        ),
       ],
     );
   }
@@ -379,135 +310,14 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
   Future<void> _switchLibrary(MusicLibrary lib) async {
     final repo = ref.read(libraryRepositoryProvider);
     await repo.setActiveLibrary(lib.id);
-    // Update AuthState to reflect change
     ref.read(authStateProvider.notifier).switchLibrary(lib);
 
-    // 切换库后停止音乐并刷新所有数据
     ref.invalidate(playerProvider);
     ref.invalidate(randomSongsProvider);
     ref.invalidate(recentAlbumsProvider);
     ref.invalidate(frequentAlbumsProvider);
     ref.invalidate(playlistsProvider);
     ref.invalidate(starredProvider);
-  }
-
-  /// 显示"即将推出"对话框
-  void _showComingSoonDialog(BuildContext context, String feature) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text(feature),
-        content: const Text('该功能即将推出，敬请期待！'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('确定'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  /// 显示关于对话框
-  void _showAboutDialog(BuildContext context) {
-    const githubHome = 'https://github.com/Azincc/echo';
-    const githubIssues = 'https://github.com/Azincc/echo/issues';
-
-    showAboutDialog(
-      context: context,
-      applicationName: 'Echo',
-      applicationVersion: '1.0.0',
-      applicationIcon: const FlutterLogo(size: 48),
-      applicationLegalese: '© 2026 Echo Music Player',
-      children: [
-        const SizedBox(height: 16),
-        const Text(
-          'Echo 是一个基于 Subsonic API 的音乐播放器，'
-          '支持 Navidrome、Airsonic 等服务器。',
-        ),
-        const SizedBox(height: 16),
-        const Text('功能特性：'),
-        const Text('• 支持多种音频格式（APE/M4A/FLAC 等）'),
-        const Text('• 自动转码不支持的格式'),
-        const Text('• 后台播放和通知栏控制'),
-        const Text('• 收藏和播放列表管理'),
-        const Text('• 多服务器地址自动切换 (v0.2.0)'),
-        const SizedBox(height: 16),
-        const Text('项目地址：'),
-        _buildLinkRow(context, 'GitHub 首页', githubHome),
-        const SizedBox(height: 8),
-        const Text('反馈问题：'),
-        _buildLinkRow(context, 'GitHub Issues', githubIssues),
-      ],
-    );
-  }
-
-  Widget _buildLinkRow(BuildContext context, String label, String url) {
-    return Row(
-      children: [
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(label, style: const TextStyle(fontWeight: FontWeight.w600)),
-              const SizedBox(height: 2),
-              SelectableText(
-                url,
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: Theme.of(context).colorScheme.primary,
-                ),
-              ),
-            ],
-          ),
-        ),
-        IconButton(
-          tooltip: '打开链接',
-          onPressed: () async {
-            await _openExternalUrl(context, url);
-          },
-          icon: const Icon(Icons.arrow_outward, size: 18),
-        ),
-      ],
-    );
-  }
-
-  Future<void> _openExternalUrl(BuildContext context, String url) async {
-    final uri = Uri.tryParse(url);
-    if (uri == null) {
-      if (context.mounted) {
-        ScaffoldMessenger.maybeOf(
-          context,
-        )?.showSnackBar(const SnackBar(content: Text('链接格式无效')));
-      }
-      return;
-    }
-
-    try {
-      final opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
-      if (!opened && context.mounted) {
-        ScaffoldMessenger.maybeOf(
-          context,
-        )?.showSnackBar(const SnackBar(content: Text('无法打开链接')));
-      }
-    } on MissingPluginException {
-      if (context.mounted) {
-        ScaffoldMessenger.maybeOf(
-          context,
-        )?.showSnackBar(const SnackBar(content: Text('请完整重启应用后再试')));
-      }
-    } on PlatformException {
-      if (context.mounted) {
-        ScaffoldMessenger.maybeOf(
-          context,
-        )?.showSnackBar(const SnackBar(content: Text('无法打开浏览器，请稍后重试')));
-      }
-    } catch (_) {
-      if (context.mounted) {
-        ScaffoldMessenger.maybeOf(
-          context,
-        )?.showSnackBar(const SnackBar(content: Text('打开链接失败')));
-      }
-    }
   }
 
   Future<void> _showRouteSelectionDialog(BuildContext context) async {
@@ -530,8 +340,7 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
                   icon: const Icon(Icons.refresh),
                   tooltip: '检测延迟',
                   onPressed: () {
-                    addressPool
-                        .probeAll(); // Trigger probe, UI updates via Stream
+                    addressPool.probeAll();
                   },
                 ),
               ],
@@ -540,7 +349,7 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
               data: (libs) {
                 final lib = libs.firstWhere(
                   (l) => l.id == activeLibId,
-                  orElse: () => libs.first, // Fallback
+                  orElse: () => libs.first,
                 );
                 final addresses = List<ServerAddress>.from(lib.addresses)
                   ..sort((a, b) => a.priority.compareTo(b.priority));
@@ -554,7 +363,6 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
                   child: ListView(
                     shrinkWrap: true,
                     children: [
-                      // 自动选择选项
                       ListTile(
                         leading: const Icon(Icons.hdr_auto),
                         title: const Text('自动选择'),
@@ -570,7 +378,6 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
                         },
                       ),
                       const Divider(),
-                      // 地址列表
                       ...addresses.map((addr) {
                         final isSelected =
                             activeAddress?.id == addr.id && addr.isLocked;

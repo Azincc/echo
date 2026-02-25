@@ -467,12 +467,10 @@ String _formatInteger(num value) {
 
 String _formatDuration(int seconds) {
   if (seconds <= 0) return '0 分';
-  final days = seconds ~/ Duration.secondsPerDay;
-  final hours = (seconds % Duration.secondsPerDay) ~/ Duration.secondsPerHour;
+  final hours = seconds ~/ Duration.secondsPerHour;
   final minutes =
       (seconds % Duration.secondsPerHour) ~/ Duration.secondsPerMinute;
 
-  if (days > 0) return '$days 天 $hours 小时';
   if (hours > 0) return '$hours 小时 $minutes 分';
   return '$minutes 分';
 }

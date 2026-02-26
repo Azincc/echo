@@ -11,6 +11,35 @@ class ArtistDetailPage extends ConsumerWidget {
 
   const ArtistDetailPage({super.key, required this.artistId});
 
+  Future<void> _toggleArtistStarred(
+    BuildContext context,
+    WidgetRef ref,
+    String artistId,
+    bool currentStarred,
+  ) async {
+    final repository = ref.read(musicRepositoryProvider);
+    if (repository == null) return;
+
+    final nextStarred = !currentStarred;
+    try {
+      await repository.setArtistStarred(artistId, nextStarred);
+      ref.invalidate(artistDetailProvider(artistId));
+      ref.invalidate(allArtistsProvider);
+      ref.invalidate(starredProvider);
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(nextStarred ? '已收藏歌手' : '已取消收藏歌手')),
+        );
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('操作失败: $e')));
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final artistDetailAsync = ref.watch(artistDetailProvider(artistId));
@@ -41,10 +70,33 @@ class ArtistDetailPage extends ConsumerWidget {
                         ),
                       ),
                       const SizedBox(height: 16),
-                      Text(
-                        artist.name,
-                        style: Theme.of(context).textTheme.headlineSmall
-                            ?.copyWith(fontWeight: FontWeight.bold),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Flexible(
+                            child: Text(
+                              artist.name,
+                              textAlign: TextAlign.center,
+                              style: Theme.of(context).textTheme.headlineSmall
+                                  ?.copyWith(fontWeight: FontWeight.bold),
+                            ),
+                          ),
+                          IconButton(
+                            tooltip: artist.starred ? '取消收藏歌手' : '收藏歌手',
+                            onPressed: () => _toggleArtistStarred(
+                              context,
+                              ref,
+                              artist.id,
+                              artist.starred,
+                            ),
+                            icon: Icon(
+                              artist.starred
+                                  ? Icons.favorite
+                                  : Icons.favorite_border,
+                              color: artist.starred ? Colors.red : null,
+                            ),
+                          ),
+                        ],
                       ),
                       if (artist.albumCount != null)
                         Text(

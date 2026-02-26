@@ -245,3 +245,24 @@ Future<void> toggleCoverProvider(
   await (db.update(db.coverProviderConfigs)..where((t) => t.id.equals(id)))
       .write(CoverProviderConfigsCompanion(enabled: Value(enabled)));
 }
+
+Future<void> updateCoverProviderConfig(
+  AppDatabase db,
+  String id,
+  Map<String, dynamic>? config,
+) async {
+  final hasValidEntry =
+      config != null &&
+      config.values.any((v) {
+        if (v == null) return false;
+        if (v is String) return v.trim().isNotEmpty;
+        return true;
+      });
+  await (db.update(
+    db.coverProviderConfigs,
+  )..where((t) => t.id.equals(id))).write(
+    CoverProviderConfigsCompanion(
+      config: Value(hasValidEntry ? jsonEncode(config) : null),
+    ),
+  );
+}

@@ -25,7 +25,7 @@ class App extends ConsumerWidget {
     final themeSettings = ref.watch(themeSettingsProvider);
 
     return MaterialApp.router(
-      title: 'SubSonic Flow',
+      title: 'Echoes 回响',
       theme: AppTheme.light(seedColor: themeSettings.seedColor),
       darkTheme: AppTheme.dark(seedColor: themeSettings.seedColor),
       themeMode: themeSettings.mode,
@@ -36,6 +36,16 @@ class App extends ConsumerWidget {
 }
 
 /// 路由配置
+final _homeBranchNavigatorKey = GlobalKey<NavigatorState>();
+final _exploreBranchNavigatorKey = GlobalKey<NavigatorState>();
+final _libraryBranchNavigatorKey = GlobalKey<NavigatorState>();
+
+final _branchNavigatorKeys = <GlobalKey<NavigatorState>>[
+  _homeBranchNavigatorKey,
+  _exploreBranchNavigatorKey,
+  _libraryBranchNavigatorKey,
+];
+
 final routerProvider = Provider<GoRouter>((ref) {
   // 定义 NavigatorKey，以便在 ShellRoute 中使用
   final rootNavigatorKey = GlobalKey<NavigatorState>();
@@ -92,11 +102,15 @@ final routerProvider = Provider<GoRouter>((ref) {
       // StatefulShellRoute 为主要导航结构
       StatefulShellRoute.indexedStack(
         builder: (context, state, navigationShell) {
-          return MainScaffold(navigationShell: navigationShell);
+          return MainScaffold(
+            navigationShell: navigationShell,
+            branchNavigatorKeys: _branchNavigatorKeys,
+          );
         },
         branches: [
           // Tab 1: 音乐流
           StatefulShellBranch(
+            navigatorKey: _homeBranchNavigatorKey,
             routes: [
               GoRoute(
                 path: '/home',
@@ -106,6 +120,7 @@ final routerProvider = Provider<GoRouter>((ref) {
           ),
           // Tab 2: 探索
           StatefulShellBranch(
+            navigatorKey: _exploreBranchNavigatorKey,
             routes: [
               GoRoute(
                 path: '/explore',
@@ -115,6 +130,7 @@ final routerProvider = Provider<GoRouter>((ref) {
           ),
           // Tab 3: 我的
           StatefulShellBranch(
+            navigatorKey: _libraryBranchNavigatorKey,
             routes: [
               GoRoute(
                 path: '/library',
@@ -182,7 +198,7 @@ class _SplashPageState extends ConsumerState<SplashPage> {
             ),
             const SizedBox(height: 24),
             Text(
-              'SubSonic Flow',
+              'Echoes 回响',
               style: Theme.of(
                 context,
               ).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.bold),

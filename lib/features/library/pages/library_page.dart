@@ -259,9 +259,18 @@ class LibraryPage extends ConsumerWidget {
       body: ListView(
         children: [
           // 我的歌单
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+            child: Text(
+              '收藏夹',
+              style: Theme.of(
+                context,
+              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+            ),
+          ),
           ListTile(
             leading: const Icon(Icons.favorite),
-            title: const Text('收藏夹'),
+            title: const Text('收藏歌曲'),
             trailing: starredAsync.when(
               data: (starred) => Text('${starred.songs.length} 首'),
               loading: () => const SizedBox.shrink(),
@@ -270,7 +279,46 @@ class LibraryPage extends ConsumerWidget {
             onTap: () {
               Navigator.push(
                 context,
-                MaterialPageRoute(builder: (context) => const StarredPage()),
+                MaterialPageRoute(
+                  builder: (context) =>
+                      const StarredPage(initialTab: StarredTab.songs),
+                ),
+              );
+            },
+          ),
+          ListTile(
+            leading: const Icon(Icons.album),
+            title: const Text('收藏专辑'),
+            trailing: starredAsync.when(
+              data: (starred) => Text('${starred.albums.length} 张'),
+              loading: () => const SizedBox.shrink(),
+              error: (error, stack) => const SizedBox.shrink(),
+            ),
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) =>
+                      const StarredPage(initialTab: StarredTab.albums),
+                ),
+              );
+            },
+          ),
+          ListTile(
+            leading: const Icon(Icons.person),
+            title: const Text('收藏歌手'),
+            trailing: starredAsync.when(
+              data: (starred) => Text('${starred.artists.length} 位'),
+              loading: () => const SizedBox.shrink(),
+              error: (error, stack) => const SizedBox.shrink(),
+            ),
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) =>
+                      const StarredPage(initialTab: StarredTab.artists),
+                ),
               );
             },
           ),

@@ -227,9 +227,9 @@ class AppSettingsPage extends ConsumerWidget {
   void _showAppAboutDialog(BuildContext context) {
     showAboutDialog(
       context: context,
-      applicationName: 'Echo',
+      applicationName: 'Echoes 回响',
       applicationIcon: const FlutterLogo(size: 40),
-      applicationLegalese: '© 2026 Echo Music Player',
+      applicationLegalese: '© 2026 Echoes 回响',
       children: const [SizedBox(height: 12), Text('基于 Subsonic API 的音乐客户端。')],
     );
   }

@@ -253,6 +253,19 @@ class MusicRepository {
     }
   }
 
+  /// 收藏/取消收藏歌手
+  Future<void> setArtistStarred(String artistId, bool starred) async {
+    try {
+      await _apiClient.get(
+        starred ? ApiConstants.star : ApiConstants.unstar,
+        queryParameters: {'artistId': artistId},
+      );
+    } catch (e) {
+      Logger.error('Failed to set artist starred', e);
+      rethrow;
+    }
+  }
+
   /// 获取收藏列表
   Future<StarredResult> getStarred() async {
     try {

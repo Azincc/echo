@@ -2,50 +2,63 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+
+import '../core/utils/logger.dart';
 import '../features/player/widgets/mini_player.dart';
 import '../providers/player_provider.dart';
 import 'app_drawer.dart';
 
-// GlobalKey 用于访问 Scaffold 状态（打开侧栏）
+// GlobalKey used to access Scaffold state (e.g. opening drawer).
 final scaffoldKey = GlobalKey<ScaffoldState>();
 
-/// 主骨架 - 包含底部导航和内容区域
 class MainScaffold extends ConsumerStatefulWidget {
   final StatefulNavigationShell navigationShell;
+  final List<GlobalKey<NavigatorState>> branchNavigatorKeys;
 
-  const MainScaffold({super.key, required this.navigationShell});
+  const MainScaffold({
+    super.key,
+    required this.navigationShell,
+    required this.branchNavigatorKeys,
+  });
 
   @override
   ConsumerState<MainScaffold> createState() => _MainScaffoldState();
 }
 
 class _MainScaffoldState extends ConsumerState<MainScaffold> {
-  DateTime? _lastPressedAt;
   static const double _miniPlayerHeight = 72;
+  static const _logTag = 'BACK';
+  static const MethodChannel _appLifecycleChannel = MethodChannel(
+    'cc.azin.echoes/app_lifecycle',
+  );
 
   Future<void> _handleBackPressed() async {
-    // 如果当前不是在第一个 Tab (首页)，则跳转到首页
-    if (widget.navigationShell.currentIndex != 0) {
-      widget.navigationShell.goBranch(0, initialLocation: true);
-      return;
+    final index = widget.navigationShell.currentIndex;
+    Logger.infoWithTag(_logTag, 'back pressed, branchIndex=$index');
+    if (index >= 0 && index < widget.branchNavigatorKeys.length) {
+      final navigator = widget.branchNavigatorKeys[index].currentState;
+      if (navigator != null && navigator.canPop()) {
+        Logger.infoWithTag(_logTag, 'branch can pop, pop current route');
+        navigator.pop();
+        return;
+      }
     }
 
-    // 如果在首页，检测两次点击间隔
-    final now = DateTime.now();
-    if (_lastPressedAt == null ||
-        now.difference(_lastPressedAt!) > const Duration(seconds: 2)) {
-      _lastPressedAt = now;
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('再按一次退出应用'),
-          duration: Duration(seconds: 2),
-        ),
-      );
-      return;
-    }
+    Logger.infoWithTag(_logTag, 'branch root reached, move app to background');
+    await _moveAppToBackground();
+  }
 
-    await SystemNavigator.pop();
+  Future<void> _moveAppToBackground() async {
+    try {
+      await _appLifecycleChannel.invokeMethod<void>('moveTaskToBack');
+      Logger.infoWithTag(_logTag, 'moveTaskToBack invoked');
+    } on MissingPluginException {
+      // Ignore on non-Android platforms where this channel is not implemented.
+      Logger.warnWithTag(_logTag, 'moveTaskToBack channel missing');
+    } on PlatformException {
+      // Keep app state unchanged if moving to background fails.
+      Logger.warnWithTag(_logTag, 'moveTaskToBack invoke failed');
+    }
   }
 
   @override
@@ -54,15 +67,13 @@ class _MainScaffoldState extends ConsumerState<MainScaffold> {
       playerProvider.select((state) => state.currentSong != null),
     );
 
-    return PopScope(
-      canPop: false,
-      onPopInvokedWithResult: (didPop, result) {
-        if (didPop) return;
-        _handleBackPressed();
+    return BackButtonListener(
+      onBackButtonPressed: () async {
+        await _handleBackPressed();
+        return true;
       },
       child: Scaffold(
         key: scaffoldKey,
-        // 侧栏
         drawer: const AppDrawer(),
         body: AnimatedPadding(
           duration: const Duration(milliseconds: 180),
@@ -72,7 +83,6 @@ class _MainScaffoldState extends ConsumerState<MainScaffold> {
           ),
           child: widget.navigationShell,
         ),
-        // 迷你播放器
         bottomSheet: const MiniPlayer(),
         bottomNavigationBar: NavigationBar(
           selectedIndex: widget.navigationShell.currentIndex,

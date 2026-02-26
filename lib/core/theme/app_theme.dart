@@ -1,16 +1,25 @@
 import 'package:flutter/material.dart';
 import 'color_scheme.dart';
 
-/// 应用主题配置
+/// Application theme configuration.
 class AppTheme {
-  // 亮色主题
+  // Light theme.
   static ThemeData light({Color seedColor = AppColorScheme.defaultSeedColor}) {
+    final colorScheme = AppColorScheme.lightScheme(seedColor);
     return ThemeData(
       useMaterial3: true,
-      colorScheme: AppColorScheme.lightScheme(seedColor),
-      appBarTheme: const AppBarTheme(centerTitle: true, elevation: 0),
+      colorScheme: colorScheme,
+      scaffoldBackgroundColor: AppColorScheme.lightBackgroundColor,
+      canvasColor: AppColorScheme.lightBackgroundColor,
+      appBarTheme: const AppBarTheme(
+        centerTitle: true,
+        elevation: 0,
+        backgroundColor: AppColorScheme.lightBackgroundColor,
+        surfaceTintColor: Colors.transparent,
+      ),
       cardTheme: CardThemeData(
         elevation: 2,
+        surfaceTintColor: Colors.transparent,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       ),
       inputDecorationTheme: InputDecorationTheme(
@@ -20,14 +29,23 @@ class AppTheme {
     );
   }
 
-  // 暗色主题
+  // Dark theme.
   static ThemeData dark({Color seedColor = AppColorScheme.defaultSeedColor}) {
+    final colorScheme = AppColorScheme.darkScheme(seedColor);
     return ThemeData(
       useMaterial3: true,
-      colorScheme: AppColorScheme.darkScheme(seedColor),
-      appBarTheme: const AppBarTheme(centerTitle: true, elevation: 0),
+      colorScheme: colorScheme,
+      scaffoldBackgroundColor: AppColorScheme.darkBackgroundColor,
+      canvasColor: AppColorScheme.darkBackgroundColor,
+      appBarTheme: const AppBarTheme(
+        centerTitle: true,
+        elevation: 0,
+        backgroundColor: AppColorScheme.darkBackgroundColor,
+        surfaceTintColor: Colors.transparent,
+      ),
       cardTheme: CardThemeData(
         elevation: 2,
+        surfaceTintColor: Colors.transparent,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       ),
       inputDecorationTheme: InputDecorationTheme(

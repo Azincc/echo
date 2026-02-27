@@ -11,6 +11,7 @@ import '../../../providers/auth_provider.dart';
 import '../../player/widgets/song_options_sheet.dart';
 import '../widgets/playlist_manage_dialogs.dart';
 import '../widgets/playlist_options_sheet.dart';
+import '../../../widgets/error_placeholder.dart';
 
 /// 歌单详情页
 class PlaylistDetailPage extends ConsumerWidget {
@@ -281,16 +282,8 @@ class PlaylistDetailPage extends ConsumerWidget {
           );
         },
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (error, stack) => Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const Icon(Icons.error_outline, size: 48),
-              const SizedBox(height: 16),
-              Text('加载失败: $error'),
-            ],
-          ),
-        ),
+        error: (error, stack) =>
+            const ErrorPlaceholder(message: '歌单加载失败，请检查网络后重试'),
       ),
     );
   }

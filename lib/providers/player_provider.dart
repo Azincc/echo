@@ -117,10 +117,7 @@ class PlayerState {
 
   bool get hasNext {
     if (!_hasValidCurrent) return false;
-    if (shuffleEnabled) return queue.length > 1;
-    // 单曲循环只影响播放完成时自动重播；手动下一曲按顺序推进，不回绕。
-    if (loopMode == LoopMode.one) return currentIndex < queue.length - 1;
-    // 列表循环（Repeat All）下，末尾仍允许“下一曲”回到第一首。
+    // 与 hasPrevious 对称：只要队列非空，下一曲始终可用（末项回到首项，单曲重新播放）。
     return queue.isNotEmpty;
   }
 

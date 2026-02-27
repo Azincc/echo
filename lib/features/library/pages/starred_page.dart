@@ -9,6 +9,7 @@ import '../../player/widgets/song_options_sheet.dart';
 import '../widgets/album_options_sheet.dart';
 import 'album_detail_page.dart';
 import 'artist_detail_page.dart';
+import '../../../widgets/error_placeholder.dart';
 
 enum StarredTab { songs, albums, artists }
 
@@ -50,20 +51,9 @@ class StarredPage extends ConsumerWidget {
             ],
           ),
           loading: () => const Center(child: CircularProgressIndicator()),
-          error: (error, stack) => Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                const Icon(Icons.error_outline, size: 48),
-                const SizedBox(height: 16),
-                Text('加载失败: $error'),
-                const SizedBox(height: 16),
-                FilledButton(
-                  onPressed: () => ref.invalidate(starredProvider),
-                  child: const Text('重试'),
-                ),
-              ],
-            ),
+          error: (error, stack) => ErrorPlaceholder(
+            message: '收藏加载失败，请检查网络后重试',
+            onRetry: () => ref.invalidate(starredProvider),
           ),
         ),
       ),

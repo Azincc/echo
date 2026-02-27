@@ -4,6 +4,7 @@ import '../../../providers/music_provider.dart';
 import '../../../widgets/cover_art_image.dart';
 import '../widgets/album_options_sheet.dart';
 import 'album_detail_page.dart';
+import '../../../widgets/error_placeholder.dart';
 
 /// 歌手详情页
 class ArtistDetailPage extends ConsumerWidget {
@@ -200,16 +201,8 @@ class ArtistDetailPage extends ConsumerWidget {
           );
         },
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (error, stack) => Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const Icon(Icons.error_outline, size: 48),
-              const SizedBox(height: 16),
-              Text('加载失败: $error'),
-            ],
-          ),
-        ),
+        error: (error, stack) =>
+            const ErrorPlaceholder(message: '歌手详情加载失败，请检查网络后重试'),
       ),
     );
   }

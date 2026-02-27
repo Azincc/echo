@@ -457,7 +457,7 @@ class _ExplorePageState extends ConsumerState<ExplorePage> {
                         child: Center(child: CircularProgressIndicator()),
                       ),
                       error: (error, _) =>
-                          ListTile(title: Text('音乐库搜索失败: $error')),
+                          const ListTile(title: Text('音乐库搜索失败，请检查网络')),
                     ),
                   const SizedBox(height: 8),
                   _SectionTitle(icon: Icons.headphones, title: '在线试听'),
@@ -633,7 +633,7 @@ class _ExplorePageState extends ConsumerState<ExplorePage> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text('试听搜索失败: $error'),
+                            const Text('试听搜索失败，请检查网络'),
                             const SizedBox(height: 8),
                             OutlinedButton.icon(
                               onPressed: () =>

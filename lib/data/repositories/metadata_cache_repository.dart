@@ -4,6 +4,7 @@ import 'package:echoes/core/utils/logger.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/album.dart';
+import '../models/artist.dart';
 import '../models/playlist.dart';
 import '../models/song.dart';
 import 'music_repository.dart';
@@ -23,27 +24,18 @@ class MetadataCacheRepository {
   ) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_key(libraryId, scope), jsonEncode(value));
-    Logger.debugWithTag(
-      _tag,
-      'cache saved libraryId=$libraryId scope=$scope',
-    );
+    Logger.debugWithTag(_tag, 'cache saved libraryId=$libraryId scope=$scope');
   }
 
   Future<Map<String, dynamic>?> _readMap(String libraryId, String scope) async {
     final prefs = await SharedPreferences.getInstance();
     final raw = prefs.getString(_key(libraryId, scope));
     if (raw == null || raw.isEmpty) {
-      Logger.debugWithTag(
-        _tag,
-        'cache miss libraryId=$libraryId scope=$scope',
-      );
+      Logger.debugWithTag(_tag, 'cache miss libraryId=$libraryId scope=$scope');
       return null;
     }
     try {
-      Logger.debugWithTag(
-        _tag,
-        'cache hit libraryId=$libraryId scope=$scope',
-      );
+      Logger.debugWithTag(_tag, 'cache hit libraryId=$libraryId scope=$scope');
       return jsonDecode(raw) as Map<String, dynamic>;
     } catch (e) {
       Logger.warnWithTag(
@@ -189,4 +181,136 @@ class MetadataCacheRepository {
     if (playlistMap == null) return null;
     return Playlist.fromJson(playlistMap);
   }
+
+  // -------------------------------------------------------------------------
+  // Newest Albums
+  // -------------------------------------------------------------------------
+
+  Future<void> cacheNewestAlbums(String libraryId, List<Album> albums) async {
+    await _saveMap(libraryId, 'newest_albums', {
+      'albums': albums.map((e) => e.toJson()).toList(),
+      'cachedAt': DateTime.now().millisecondsSinceEpoch,
+    });
+  }
+
+  Future<List<Album>?> getNewestAlbums(String libraryId) async {
+    final map = await _readMap(libraryId, 'newest_albums');
+    if (map == null) return null;
+    final list = map['albums'] as List?;
+    if (list == null) return null;
+    return list.map((e) => Album.fromJson(e as Map<String, dynamic>)).toList();
+  }
+
+  // -------------------------------------------------------------------------
+  // All Artists
+  // -------------------------------------------------------------------------
+
+  Future<void> cacheAllArtists(String libraryId, List<Artist> artists) async {
+    await _saveMap(libraryId, 'all_artists', {
+      'artists': artists.map((e) => e.toJson()).toList(),
+      'cachedAt': DateTime.now().millisecondsSinceEpoch,
+    });
+  }
+
+  Future<List<Artist>?> getAllArtists(String libraryId) async {
+    final map = await _readMap(libraryId, 'all_artists');
+    if (map == null) return null;
+    final list = map['artists'] as List?;
+    if (list == null) return null;
+    return list.map((e) => Artist.fromJson(e as Map<String, dynamic>)).toList();
+  }
+
+  // -------------------------------------------------------------------------
+  // Artist Detail
+  // -------------------------------------------------------------------------
+
+  Future<void> cacheArtistDetail(
+    String libraryId,
+    Artist artist,
+    List<Album> albums,
+  ) async {
+    await _saveMap(libraryId, 'artist_detail_${artist.id}', {
+      'artist': artist.toJson(),
+      'albums': albums.map((e) => e.toJson()).toList(),
+      'cachedAt': DateTime.now().millisecondsSinceEpoch,
+    });
+  }
+
+  Future<ArtistDetailCache?> getArtistDetail(
+    String libraryId,
+    String artistId,
+  ) async {
+    final map = await _readMap(libraryId, 'artist_detail_$artistId');
+    if (map == null) return null;
+    final artistMap = map['artist'] as Map<String, dynamic>?;
+    final albumsList = map['albums'] as List?;
+    if (artistMap == null || albumsList == null) return null;
+    return ArtistDetailCache(
+      artist: Artist.fromJson(artistMap),
+      albums: albumsList
+          .map((e) => Album.fromJson(e as Map<String, dynamic>))
+          .toList(),
+    );
+  }
+
+  // -------------------------------------------------------------------------
+  // Starred
+  // -------------------------------------------------------------------------
+
+  Future<void> cacheStarred(
+    String libraryId, {
+    required List<Artist> artists,
+    required List<Album> albums,
+    required List<Song> songs,
+  }) async {
+    await _saveMap(libraryId, 'starred', {
+      'artists': artists.map((e) => e.toJson()).toList(),
+      'albums': albums.map((e) => e.toJson()).toList(),
+      'songs': songs.map((e) => e.toJson()).toList(),
+      'cachedAt': DateTime.now().millisecondsSinceEpoch,
+    });
+  }
+
+  Future<StarredCache?> getStarred(String libraryId) async {
+    final map = await _readMap(libraryId, 'starred');
+    if (map == null) return null;
+    final artistsList = map['artists'] as List?;
+    final albumsList = map['albums'] as List?;
+    final songsList = map['songs'] as List?;
+    if (artistsList == null || albumsList == null || songsList == null) {
+      return null;
+    }
+    return StarredCache(
+      artists: artistsList
+          .map((e) => Artist.fromJson(e as Map<String, dynamic>))
+          .toList(),
+      albums: albumsList
+          .map((e) => Album.fromJson(e as Map<String, dynamic>))
+          .toList(),
+      songs: songsList
+          .map((e) => Song.fromJson(e as Map<String, dynamic>))
+          .toList(),
+    );
+  }
+}
+
+/// Artist detail cache DTO
+class ArtistDetailCache {
+  final Artist artist;
+  final List<Album> albums;
+
+  ArtistDetailCache({required this.artist, required this.albums});
+}
+
+/// Starred cache DTO
+class StarredCache {
+  final List<Artist> artists;
+  final List<Album> albums;
+  final List<Song> songs;
+
+  StarredCache({
+    required this.artists,
+    required this.albums,
+    required this.songs,
+  });
 }

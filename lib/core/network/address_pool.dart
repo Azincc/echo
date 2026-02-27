@@ -77,6 +77,8 @@ class AddressPool {
       );
       if (updatedActive != null) {
         _activeAddress = updatedActive;
+        // 通知 UI 状态已更新（即使 ID 未变，status 可能变化）
+        onActiveAddressChanged?.call(_activeAddress);
         Logger.infoWithTag(
           _tag,
           'manual mode keeps active address: ${updatedActive.label}'
@@ -89,13 +91,23 @@ class AddressPool {
 
     // 自动模式：选择最优可达地址
     final newActive = _getNextAvailable();
-    if (_activeAddress?.id != newActive?.id) {
-      final oldLabel = _activeAddress?.label ?? 'none';
-      final newLabel = newActive?.label ?? 'none';
-      _activeAddress = newActive;
+    final oldActive = _activeAddress;
+    _activeAddress = newActive;
+    // 始终通知 UI：即使 ID 相同，status/latency 也可能已更新
+    if (newActive?.id != oldActive?.id ||
+        newActive?.status != oldActive?.status ||
+        newActive?.lastLatencyMs != oldActive?.lastLatencyMs) {
       onActiveAddressChanged?.call(_activeAddress);
-      Logger.infoWithTag(_tag, 'active address changed: $oldLabel -> $newLabel');
-    } else if (newActive == null) {
+      if (newActive?.id != oldActive?.id) {
+        final oldLabel = oldActive?.label ?? 'none';
+        final newLabel = newActive?.label ?? 'none';
+        Logger.infoWithTag(
+          _tag,
+          'active address changed: $oldLabel -> $newLabel',
+        );
+      }
+    }
+    if (newActive == null) {
       Logger.warnWithTag(_tag, 'probeAll completed but no available address');
     }
     return _activeAddress;
@@ -157,6 +169,7 @@ class AddressPool {
 
     if (_activeAddress?.id == updated.id) {
       _activeAddress = updated;
+      onActiveAddressChanged?.call(_activeAddress);
     }
     Logger.debugWithTag(
       _tag,
@@ -177,6 +190,7 @@ class AddressPool {
       onAddressUpdated?.call(_addresses[index]);
       if (_activeAddress?.id == addr.id) {
         _activeAddress = _addresses[index];
+        onActiveAddressChanged?.call(_activeAddress);
       }
     }
   }

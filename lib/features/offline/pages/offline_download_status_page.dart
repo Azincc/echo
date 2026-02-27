@@ -52,7 +52,7 @@ class OfflineDownloadStatusPage extends ConsumerWidget {
                 );
               },
               loading: () => const Center(child: CircularProgressIndicator()),
-              error: (error, _) => Center(child: Text('加载失败: $error')),
+              error: (error, _) => const Center(child: Text('加载失败，请稍后重试')),
             ),
           ),
         ],
@@ -116,7 +116,8 @@ class _TaskTile extends ConsumerWidget {
         '❌ ${task.errorMessage}',
     ];
 
-    final isActive = task.status == OfflineDownloadTaskStatus.downloading ||
+    final isActive =
+        task.status == OfflineDownloadTaskStatus.downloading ||
         task.status == OfflineDownloadTaskStatus.queued ||
         task.status == OfflineDownloadTaskStatus.resolving ||
         task.status == OfflineDownloadTaskStatus.tagging ||
@@ -154,15 +155,15 @@ class _TaskTile extends ConsumerWidget {
                       .read(offlineDownloadServiceProvider)
                       .retryTask(task.id);
                   if (context.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('已重新提交任务')),
-                    );
+                    ScaffoldMessenger.of(
+                      context,
+                    ).showSnackBar(const SnackBar(content: Text('已重新提交任务')));
                   }
                 } catch (e) {
                   if (context.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('重试失败: $e')),
-                    );
+                    ScaffoldMessenger.of(
+                      context,
+                    ).showSnackBar(SnackBar(content: Text('重试失败: $e')));
                   }
                 }
               },

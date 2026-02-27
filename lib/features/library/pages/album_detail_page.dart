@@ -11,6 +11,7 @@ import '../../../widgets/cover_art_image.dart';
 import '../../player/widgets/song_options_sheet.dart';
 import '../widgets/album_options_sheet.dart';
 import 'package:marquee/marquee.dart';
+import '../../../widgets/error_placeholder.dart';
 
 /// 专辑详情页
 class AlbumDetailPage extends ConsumerWidget {
@@ -368,16 +369,8 @@ class AlbumDetailPage extends ConsumerWidget {
           );
         },
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (error, stack) => Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const Icon(Icons.error_outline, size: 48),
-              const SizedBox(height: 16),
-              Text('加载失败: $error'),
-            ],
-          ),
-        ),
+        error: (error, stack) =>
+            const ErrorPlaceholder(message: '专辑加载失败，请检查网络后重试'),
       ),
     );
   }

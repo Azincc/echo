@@ -12,6 +12,7 @@ import '../../../utils/az_item.dart';
 import '../../../utils/pinyin_helper.dart';
 import '../../../widgets/cover_art_image.dart';
 import '../../player/widgets/song_options_sheet.dart';
+import '../../../widgets/error_placeholder.dart';
 
 class SongListPage extends ConsumerStatefulWidget {
   const SongListPage({super.key});
@@ -182,7 +183,8 @@ class _SongListPageState extends ConsumerState<SongListPage> {
           );
         },
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (err, stack) => Center(child: Text('Error: $err')),
+        error: (err, stack) =>
+            const ErrorPlaceholder(message: '歌曲加载失败，请检查网络后重试'),
       ),
     );
   }

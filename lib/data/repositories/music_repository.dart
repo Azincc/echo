@@ -175,7 +175,7 @@ class MusicRepository {
           .toList();
     } catch (e) {
       Logger.error('Failed to get all songs', e);
-      return [];
+      rethrow;
     }
   }
 

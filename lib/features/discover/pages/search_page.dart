@@ -6,6 +6,7 @@ import '../../../widgets/cover_art_image.dart';
 import '../../library/pages/album_detail_page.dart';
 import '../../library/pages/artist_detail_page.dart';
 import '../../player/widgets/song_options_sheet.dart';
+import '../../../widgets/error_placeholder.dart';
 
 /// 搜索页面
 class SearchPage extends ConsumerStatefulWidget {
@@ -83,8 +84,8 @@ class _SearchPageState extends ConsumerState<SearchPage> {
                   Text(
                     '搜索你喜欢的音乐',
                     style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                          color: Theme.of(context).colorScheme.onSurfaceVariant,
-                        ),
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
                   ),
                 ],
               ),
@@ -116,9 +117,8 @@ class _SearchPageState extends ConsumerState<SearchPage> {
                             const SizedBox(width: 8),
                             Text(
                               '歌曲 (${result.songs.length})',
-                              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                                    fontWeight: FontWeight.bold,
-                                  ),
+                              style: Theme.of(context).textTheme.titleMedium
+                                  ?.copyWith(fontWeight: FontWeight.bold),
                             ),
                           ],
                         ),
@@ -133,10 +133,14 @@ class _SearchPageState extends ConsumerState<SearchPage> {
                             ),
                           ),
                           title: Text(song.title),
-                          subtitle: song.artist != null ? Text(song.artist!) : null,
+                          subtitle: song.artist != null
+                              ? Text(song.artist!)
+                              : null,
                           trailing: Text(song.durationString),
                           onTap: () {
-                            ref.read(playerProvider.notifier).playQueue(
+                            ref
+                                .read(playerProvider.notifier)
+                                .playQueue(
                                   result.songs,
                                   startIndex: result.songs.indexOf(song),
                                 );
@@ -159,9 +163,8 @@ class _SearchPageState extends ConsumerState<SearchPage> {
                             const SizedBox(width: 8),
                             Text(
                               '专辑 (${result.albums.length})',
-                              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                                    fontWeight: FontWeight.bold,
-                                  ),
+                              style: Theme.of(context).textTheme.titleMedium
+                                  ?.copyWith(fontWeight: FontWeight.bold),
                             ),
                           ],
                         ),
@@ -176,13 +179,16 @@ class _SearchPageState extends ConsumerState<SearchPage> {
                             ),
                           ),
                           title: Text(album.name),
-                          subtitle: album.artist != null ? Text(album.artist!) : null,
+                          subtitle: album.artist != null
+                              ? Text(album.artist!)
+                              : null,
                           trailing: Text('${album.songCount} 首'),
                           onTap: () {
                             Navigator.push(
                               context,
                               MaterialPageRoute(
-                                builder: (context) => AlbumDetailPage(albumId: album.id),
+                                builder: (context) =>
+                                    AlbumDetailPage(albumId: album.id),
                               ),
                             );
                           },
@@ -201,9 +207,8 @@ class _SearchPageState extends ConsumerState<SearchPage> {
                             const SizedBox(width: 8),
                             Text(
                               '歌手 (${result.artists.length})',
-                              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                                    fontWeight: FontWeight.bold,
-                                  ),
+                              style: Theme.of(context).textTheme.titleMedium
+                                  ?.copyWith(fontWeight: FontWeight.bold),
                             ),
                           ],
                         ),
@@ -226,7 +231,8 @@ class _SearchPageState extends ConsumerState<SearchPage> {
                             Navigator.push(
                               context,
                               MaterialPageRoute(
-                                builder: (context) => ArtistDetailPage(artistId: artist.id),
+                                builder: (context) =>
+                                    ArtistDetailPage(artistId: artist.id),
                               ),
                             );
                           },
@@ -237,16 +243,8 @@ class _SearchPageState extends ConsumerState<SearchPage> {
                 );
               },
               loading: () => const Center(child: CircularProgressIndicator()),
-              error: (error, stack) => Center(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    const Icon(Icons.error_outline, size: 48),
-                    const SizedBox(height: 16),
-                    Text('搜索失败: $error'),
-                  ],
-                ),
-              ),
+              error: (error, stack) =>
+                  const ErrorPlaceholder(message: '搜索失败，请检查网络后重试'),
             ),
     );
   }

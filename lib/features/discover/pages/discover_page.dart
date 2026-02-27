@@ -7,6 +7,7 @@ import '../../../widgets/main_scaffold.dart';
 import '../../library/pages/album_detail_page.dart';
 import '../../player/widgets/song_options_sheet.dart';
 import 'search_page.dart';
+import '../../../widgets/error_placeholder.dart';
 
 /// 音乐流首页 - Tab 1
 class DiscoverPage extends ConsumerWidget {
@@ -192,18 +193,8 @@ class RandomSongsSection extends ConsumerWidget {
           child: CircularProgressIndicator(),
         ),
       ),
-      error: (error, stack) => Center(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            children: [
-              const Icon(Icons.error_outline, size: 48),
-              const SizedBox(height: 8),
-              Text('加载失败: $error'),
-            ],
-          ),
-        ),
-      ),
+      error: (error, stack) =>
+          const ErrorPlaceholder(message: '随机歌曲加载失败，请检查网络后重试'),
     );
   }
 }
@@ -246,12 +237,8 @@ class RecentAlbumsSection extends ConsumerWidget {
           child: CircularProgressIndicator(),
         ),
       ),
-      error: (error, stack) => Center(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Text('加载失败: $error'),
-        ),
-      ),
+      error: (error, stack) =>
+          const ErrorPlaceholder(message: '最近播放加载失败，请检查网络后重试'),
     );
   }
 }
@@ -298,12 +285,8 @@ class FrequentAlbumsSection extends ConsumerWidget {
           child: CircularProgressIndicator(),
         ),
       ),
-      error: (error, stack) => Center(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Text('加载失败: $error'),
-        ),
-      ),
+      error: (error, stack) =>
+          const ErrorPlaceholder(message: '常听专辑加载失败，请检查网络后重试'),
     );
   }
 }

@@ -1,9 +1,21 @@
+import 'dart:collection';
 import 'package:flutter/foundation.dart';
 
 enum _LogLevel { debug, info, warn, error }
 
 /// 简单日志工具：统一输出格式，支持模块 tag 与异常上下文。
+/// 新增内存环形缓冲区，支持导出最近日志。
 class Logger {
+  /// Maximum number of log lines kept in memory.
+  static const int _maxBufferSize = 5000;
+
+  /// Ring buffer storing the most recent log lines.
+  static final _buffer = ListQueue<String>(_maxBufferSize);
+
+  // ---------------------------------------------------------------------------
+  // Public API
+  // ---------------------------------------------------------------------------
+
   static void debug(String message, [dynamic error, StackTrace? stackTrace]) {
     _log(_LogLevel.debug, message, error: error, stackTrace: stackTrace);
   }
@@ -58,6 +70,27 @@ class Logger {
     );
   }
 
+  // ---------------------------------------------------------------------------
+  // Log export
+  // ---------------------------------------------------------------------------
+
+  /// Returns all buffered log lines as a single string.
+  static String exportLogs() {
+    return _buffer.join('\n');
+  }
+
+  /// Returns the number of buffered log lines.
+  static int get bufferedLineCount => _buffer.length;
+
+  /// Clears the in-memory log buffer.
+  static void clearBuffer() {
+    _buffer.clear();
+  }
+
+  // ---------------------------------------------------------------------------
+  // Internal
+  // ---------------------------------------------------------------------------
+
   static void _log(
     _LogLevel level,
     String message, {
@@ -65,19 +98,39 @@ class Logger {
     dynamic error,
     StackTrace? stackTrace,
   }) {
-    if (!_shouldLog(level)) return;
-
+    // Always buffer (even in release) so that log export captures warn/error.
     final now = DateTime.now().toIso8601String();
     final levelText = level.name.toUpperCase();
     final tagText = (tag == null || tag.isEmpty) ? '' : '[$tag]';
-    debugPrint('[$now][$levelText]$tagText $message');
 
+    final mainLine = '[$now][$levelText]$tagText $message';
+    _addToBuffer(mainLine);
+
+    if (error != null) {
+      final errLine = '[$now][$levelText]$tagText error=$error';
+      _addToBuffer(errLine);
+    }
+    if (stackTrace != null) {
+      final stLine = '[$now][$levelText]$tagText stackTrace=$stackTrace';
+      _addToBuffer(stLine);
+    }
+
+    // Console output gated by log level.
+    if (!_shouldLog(level)) return;
+    debugPrint(mainLine);
     if (error != null) {
       debugPrint('[$now][$levelText]$tagText error=$error');
     }
     if (stackTrace != null) {
       debugPrint('[$now][$levelText]$tagText stackTrace=$stackTrace');
     }
+  }
+
+  static void _addToBuffer(String line) {
+    if (_buffer.length >= _maxBufferSize) {
+      _buffer.removeFirst();
+    }
+    _buffer.addLast(line);
   }
 
   static bool _shouldLog(_LogLevel level) {

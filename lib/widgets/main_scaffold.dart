@@ -34,18 +34,67 @@ class _MainScaffoldState extends ConsumerState<MainScaffold> {
 
   Future<void> _handleBackPressed() async {
     final index = widget.navigationShell.currentIndex;
-    Logger.infoWithTag(_logTag, 'back pressed, branchIndex=$index');
-    if (index >= 0 && index < widget.branchNavigatorKeys.length) {
-      final navigator = widget.branchNavigatorKeys[index].currentState;
+    final branchCount = widget.branchNavigatorKeys.length;
+    Logger.infoWithTag(
+      _logTag,
+      'back pressed, branchIndex=$index, branchCount=$branchCount',
+    );
+
+    // 1. If the drawer is open, close it first.
+    final scaffold = scaffoldKey.currentState;
+    if (scaffold != null && scaffold.isDrawerOpen) {
+      Logger.infoWithTag(_logTag, 'drawer is open, closing drawer');
+      scaffold.closeDrawer();
+      return;
+    }
+
+    // 2. Check if the root navigator can pop (e.g. settings page pushed via
+    //    Navigator.push on top of MainScaffold).
+    final rootNavigator = Navigator.of(context);
+    if (rootNavigator.canPop()) {
+      Logger.infoWithTag(_logTag, 'root navigator can pop, popping');
+      rootNavigator.pop();
+      return;
+    }
+
+    // 3. Check if the current branch navigator can pop.
+    if (index >= 0 && index < branchCount) {
+      final navigatorKey = widget.branchNavigatorKeys[index];
+      final navigator = navigatorKey.currentState;
+      Logger.infoWithTag(
+        _logTag,
+        'navigator for branch $index: '
+        'key=$navigatorKey, '
+        'state=${navigator != null ? "present" : "null"}, '
+        'canPop=${navigator?.canPop()}',
+      );
       if (navigator != null && navigator.canPop()) {
-        Logger.infoWithTag(_logTag, 'branch can pop, pop current route');
+        Logger.infoWithTag(_logTag, 'branch $index can pop, popping');
         navigator.pop();
         return;
       }
+    } else {
+      Logger.warnWithTag(
+        _logTag,
+        'index $index out of range [0, $branchCount)',
+      );
     }
 
-    Logger.infoWithTag(_logTag, 'branch root reached, move app to background');
-    await _moveAppToBackground();
+    // 4. Only move to background when on the home tab (index 0).
+    //    On other tabs, switch back to the home tab instead.
+    if (index == 0) {
+      Logger.infoWithTag(
+        _logTag,
+        'home branch root reached (index=0), move app to background',
+      );
+      await _moveAppToBackground();
+    } else {
+      Logger.infoWithTag(
+        _logTag,
+        'non-home branch root reached (index=$index), switching to home tab',
+      );
+      widget.navigationShell.goBranch(0);
+    }
   }
 
   Future<void> _moveAppToBackground() async {

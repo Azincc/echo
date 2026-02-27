@@ -65,6 +65,8 @@ dependencies:
   fluttertoast: ^8.2.10
   freezed_annotation: ^3.1.0
   url_launcher: ^6.3.2
+  share_plus: ^10.1.4
+  package_info_plus: ^8.3.0
 
   # A-Z Indexing and Sorting
   azlistview: ^2.0.0

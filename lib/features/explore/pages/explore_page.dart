@@ -68,10 +68,13 @@ class _ExplorePageState extends ConsumerState<ExplorePage> {
 
   void _refreshSearchResults(String query, ExplorePreviewQuery? previewQuery) {
     if (query.isEmpty) return;
-    ref.invalidate(searchProvider(query));
+    // ignore: unused_result
+    ref.refresh(searchProvider(query));
     if (previewQuery != null) {
-      ref.invalidate(explorePreviewSongsProvider(previewQuery));
+      // ignore: unused_result
+      ref.refresh(explorePreviewSongsProvider(previewQuery));
     }
+    setState(() {}); // Ensure rebuild picks up refreshed providers
     _showSnackBar('已刷新搜索结果');
   }
 
@@ -144,7 +147,9 @@ class _ExplorePageState extends ConsumerState<ExplorePage> {
       return;
     }
 
-    final config = EmbedServiceConfig.fromLibraryExtensions(activeLibrary.extensions);
+    final config = EmbedServiceConfig.fromLibraryExtensions(
+      activeLibrary.extensions,
+    );
     try {
       Logger.infoWithTag(
         _logTag,
@@ -204,11 +209,14 @@ class _ExplorePageState extends ConsumerState<ExplorePage> {
 
     if (confirm != true) return;
 
-    final config = EmbedServiceConfig.fromLibraryExtensions(activeLibrary.extensions);
+    final config = EmbedServiceConfig.fromLibraryExtensions(
+      activeLibrary.extensions,
+    );
     final service = ref.read(offlineDownloadServiceProvider);
     Logger.infoWithTag(
       _logTag,
-      'batch enqueue start page=$_previewPage count=${songs.length}',
+      'batch enqueue start page=$_previewPage count=${songs.length} '
+      'first="${songs.first.title}" last="${songs.last.title}"',
     );
 
     setState(() {

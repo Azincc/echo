@@ -2,7 +2,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../core/services/offline_download_service.dart';
 import '../data/models/embed_service_config.dart';
-import '../data/models/offline_download_task.dart';
 import '../data/sources/remote/embed_service_client.dart';
 import 'library_provider.dart';
 
@@ -13,66 +12,60 @@ final embedServiceClientProvider = Provider<EmbedServiceClient>((ref) {
 final offlineDownloadServiceProvider = Provider<OfflineDownloadService>((ref) {
   final embedClient = ref.watch(embedServiceClientProvider);
 
-  final service = OfflineDownloadService(
-    embedClient: embedClient,
-  );
+  final service = OfflineDownloadService(embedClient: embedClient);
 
   ref.onDispose(service.dispose);
   return service;
 });
 
-final offlineDownloadTasksProvider = StreamProvider<List<OfflineDownloadTask>>((
-  ref,
-) {
+/// 任务列表（从服务端获取）
+final offlineDownloadJobsProvider = StreamProvider<List<EmbedJobStatus>>((ref) {
   final service = ref.watch(offlineDownloadServiceProvider);
-  return service.tasksStream;
+  return service.jobsStream;
 });
 
+/// 任务摘要统计
 final offlineDownloadSummaryProvider = Provider<OfflineDownloadSummary>((ref) {
-  final tasks = ref.watch(offlineDownloadTasksProvider).valueOrNull ?? const [];
+  final jobs = ref.watch(offlineDownloadJobsProvider).valueOrNull ?? const [];
 
-  var queued = 0;
-  var downloading = 0;
-  var paused = 0;
+  var active = 0;
   var completed = 0;
   var failed = 0;
 
-  for (final task in tasks) {
-    switch (task.status) {
-      case OfflineDownloadTaskStatus.queued:
-      case OfflineDownloadTaskStatus.resolving:
-      case OfflineDownloadTaskStatus.tagging:
-      case OfflineDownloadTaskStatus.moving:
-      case OfflineDownloadTaskStatus.scanning:
-        queued++;
-        break;
-      case OfflineDownloadTaskStatus.downloading:
-        downloading++;
-        break;
-      case OfflineDownloadTaskStatus.paused:
-        paused++;
-        break;
-      case OfflineDownloadTaskStatus.completed:
-        completed++;
-        break;
-      case OfflineDownloadTaskStatus.failed:
-        failed++;
-        break;
-      case OfflineDownloadTaskStatus.removed:
-        break;
+  for (final job in jobs) {
+    if (job.isActive) {
+      active++;
+    } else if (job.isDone) {
+      completed++;
+    } else if (job.isFailed) {
+      failed++;
     }
   }
 
   return OfflineDownloadSummary(
-    queued: queued,
-    downloading: downloading,
-    paused: paused,
+    active: active,
     completed: completed,
     failed: failed,
+    total: jobs.length,
   );
 });
 
+/// 当前音乐库的 Embed Service 配置
 final activeEmbedServiceConfigProvider = Provider<EmbedServiceConfig>((ref) {
   final activeLibrary = ref.watch(activeLibraryProvider);
   return EmbedServiceConfig.fromLibraryExtensions(activeLibrary?.extensions);
 });
+
+class OfflineDownloadSummary {
+  final int active;
+  final int completed;
+  final int failed;
+  final int total;
+
+  const OfflineDownloadSummary({
+    this.active = 0,
+    this.completed = 0,
+    this.failed = 0,
+    this.total = 0,
+  });
+}

@@ -8,7 +8,11 @@ import '../../models/embed_service_config.dart';
 class EmbedJobStatus {
   final String jobId;
   final String
-  status; // queued/resolving/downloading/tagging/moving/scanning/done/failed
+  status; // queued/resolving/downloading/tagging/moving/scanning/done/failed/cancelled
+  final String? title;
+  final String? artist;
+  final String? album;
+  final String? source;
   final int? progress; // 0-100
   final String? message;
   final String? error;
@@ -22,6 +26,10 @@ class EmbedJobStatus {
   const EmbedJobStatus({
     required this.jobId,
     required this.status,
+    this.title,
+    this.artist,
+    this.album,
+    this.source,
     this.progress,
     this.message,
     this.error,
@@ -37,6 +45,10 @@ class EmbedJobStatus {
     return EmbedJobStatus(
       jobId: json['id'] as String? ?? json['job_id'] as String? ?? '',
       status: json['status'] as String? ?? 'unknown',
+      title: json['title'] as String?,
+      artist: json['artist'] as String?,
+      album: json['album'] as String?,
+      source: json['source'] as String?,
       progress: json['progress'] as int?,
       message: json['message'] as String?,
       error: json['error'] as String?,
@@ -48,6 +60,39 @@ class EmbedJobStatus {
       updatedAt: _parseDateTime(json['updated_at']),
     );
   }
+
+  bool get isActive =>
+      status == 'queued' ||
+      status == 'resolving' ||
+      status == 'downloading' ||
+      status == 'tagging' ||
+      status == 'moving' ||
+      status == 'scanning';
+
+  bool get isFailed => status == 'failed';
+  bool get isDone => status == 'done';
+  bool get isCancelled => status == 'cancelled';
+
+  double get progressRatio {
+    if (progress != null) return progress! / 100.0;
+    if (totalBytes != null && totalBytes! > 0 && completedBytes != null) {
+      return completedBytes! / totalBytes!;
+    }
+    return 0;
+  }
+
+  String get statusDisplayName => switch (status) {
+    'queued' => '等待中',
+    'resolving' => '解析中',
+    'downloading' => '下载中',
+    'tagging' => '写入标签',
+    'moving' => '移动文件',
+    'scanning' => '扫描中',
+    'done' => '已完成',
+    'failed' => '失败',
+    'cancelled' => '已取消',
+    _ => status,
+  };
 
   static DateTime _parseDateTime(dynamic value) {
     if (value == null) return DateTime.now();
@@ -85,7 +130,6 @@ class EmbedServiceClient {
     }
 
     try {
-      // /healthz 通常不鉴权，需访问受保护接口验证 API Key。
       final response = await _dio.get(
         '${config.baseUrl}/v1/jobs',
         options: Options(headers: {'X-API-Key': config.apiKey}),
@@ -94,6 +138,45 @@ class EmbedServiceClient {
       if (response.statusCode != 200) {
         throw Exception('连接失败: HTTP ${response.statusCode}');
       }
+    } on DioException catch (e) {
+      throw Exception(_formatDioError(e, config.baseUrl, '/v1/jobs'));
+    }
+  }
+
+  /// 获取所有任务列表
+  Future<List<EmbedJobStatus>> listJobs({
+    required EmbedServiceConfig config,
+    String? status,
+  }) async {
+    if (!config.isConfigured) {
+      throw Exception('Embed Service 未配置');
+    }
+
+    try {
+      final queryParams = <String, dynamic>{};
+      if (status != null) queryParams['status'] = status;
+
+      final response = await _dio.get(
+        '${config.baseUrl}/v1/jobs',
+        queryParameters: queryParams.isNotEmpty ? queryParams : null,
+        options: Options(headers: {'X-API-Key': config.apiKey}),
+      );
+
+      if (response.statusCode != 200) {
+        throw Exception('获取任务列表失败: HTTP ${response.statusCode}');
+      }
+
+      final data = _asMap(response.data);
+      final jobs = data?['jobs'] as List<dynamic>? ?? [];
+      return jobs
+          .map(
+            (j) => EmbedJobStatus.fromJson(
+              j is Map<String, dynamic>
+                  ? j
+                  : (j as Map).cast<String, dynamic>(),
+            ),
+          )
+          .toList();
     } on DioException catch (e) {
       throw Exception(_formatDioError(e, config.baseUrl, '/v1/jobs'));
     }
@@ -236,6 +319,55 @@ class EmbedServiceClient {
     } on DioException catch (e) {
       throw Exception(
         _formatDioError(e, config.baseUrl, '/v1/jobs/$jobId/cancel'),
+      );
+    }
+  }
+
+  /// 删除单个任务
+  Future<void> deleteJob({
+    required EmbedServiceConfig config,
+    required String jobId,
+  }) async {
+    if (!config.isConfigured) {
+      throw Exception('Embed Service 未配置');
+    }
+
+    try {
+      final response = await _dio.delete(
+        '${config.baseUrl}/v1/jobs/$jobId',
+        options: Options(headers: {'X-API-Key': config.apiKey}),
+      );
+
+      if (response.statusCode != 200) {
+        throw Exception('删除任务失败: HTTP ${response.statusCode}');
+      }
+    } on DioException catch (e) {
+      throw Exception(_formatDioError(e, config.baseUrl, '/v1/jobs/$jobId'));
+    }
+  }
+
+  /// 批量删除任务
+  Future<void> batchDeleteJobs({
+    required EmbedServiceConfig config,
+    required List<String> jobIds,
+  }) async {
+    if (!config.isConfigured) {
+      throw Exception('Embed Service 未配置');
+    }
+
+    try {
+      final response = await _dio.post(
+        '${config.baseUrl}/v1/jobs/batch-delete',
+        data: {'ids': jobIds},
+        options: Options(headers: {'X-API-Key': config.apiKey}),
+      );
+
+      if (response.statusCode != 200) {
+        throw Exception('批量删除任务失败: HTTP ${response.statusCode}');
+      }
+    } on DioException catch (e) {
+      throw Exception(
+        _formatDioError(e, config.baseUrl, '/v1/jobs/batch-delete'),
       );
     }
   }

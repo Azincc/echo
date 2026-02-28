@@ -198,14 +198,16 @@ class _FullPlayerPageState extends ConsumerState<FullPlayerPage>
     );
   }
 
-  Future<void> _enqueuePreviewSong(Song song) async {
+  Future<void> _enqueuePreviewSong(Song song, {bool force = false}) async {
     final activeLibrary = ref.read(activeLibraryProvider);
     if (activeLibrary == null) {
       _showSnackBar('当前没有活跃音乐库');
       return;
     }
 
-    final config = EmbedServiceConfig.fromLibraryExtensions(activeLibrary.extensions);
+    final config = EmbedServiceConfig.fromLibraryExtensions(
+      activeLibrary.extensions,
+    );
     try {
       await ref
           .read(offlineDownloadServiceProvider)
@@ -213,11 +215,41 @@ class _FullPlayerPageState extends ConsumerState<FullPlayerPage>
             song: song,
             libraryId: activeLibrary.id,
             config: config,
+            force: force,
           );
-      _showSnackBar('已添加到离线下载队列');
+      _showSnackBar(force ? '已重新添加到离线下载队列' : '已添加到离线下载队列');
     } catch (e) {
-      _showSnackBar('添加失败: $e');
+      if (e.toString().contains('已在离线队列中') && !force) {
+        _showForceRedownloadDialog(song);
+      } else {
+        _showSnackBar('添加失败: $e');
+      }
     }
+  }
+
+  void _showForceRedownloadDialog(Song song) {
+    if (!mounted) return;
+    showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('歌曲已存在'),
+        content: Text('「${song.title}」已在离线队列中，是否重新下载？'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('重新下载'),
+          ),
+        ],
+      ),
+    ).then((confirmed) {
+      if (confirmed == true) {
+        _enqueuePreviewSong(song, force: true);
+      }
+    });
   }
 
   void _showSnackBar(String message) {

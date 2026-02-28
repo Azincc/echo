@@ -19,9 +19,8 @@ class OfflineDownloadService {
 
   Timer? _pollTimer;
 
-  OfflineDownloadService({
-    required EmbedServiceClient embedClient,
-  }) : _embedClient = embedClient;
+  OfflineDownloadService({required EmbedServiceClient embedClient})
+    : _embedClient = embedClient;
 
   Stream<List<OfflineDownloadTask>> get tasksStream async* {
     yield List.unmodifiable(_tasks);
@@ -43,6 +42,7 @@ class OfflineDownloadService {
     required Song song,
     required String libraryId,
     required EmbedServiceConfig config,
+    bool force = false,
   }) async {
     final source = (song.previewSource ?? '').trim();
     final trackId = (song.previewTrackId ?? '').trim();
@@ -64,16 +64,29 @@ class OfflineDownloadService {
         throw Exception('试听歌曲缺少必要元数据（source/trackId）');
       }
 
-      final duplicate = _tasks.any(
-        (task) =>
-            task.libraryId == libraryId &&
-            task.source == source &&
-            task.trackId == trackId &&
-            task.status != OfflineDownloadTaskStatus.failed &&
-            task.status != OfflineDownloadTaskStatus.removed,
-      );
-      if (duplicate) {
-        throw Exception('该歌曲已在离线队列中');
+      // force 模式下跳过客户端重复检查，交由服务端处理
+      if (!force) {
+        final duplicate = _tasks.any(
+          (task) =>
+              task.libraryId == libraryId &&
+              task.source == source &&
+              task.trackId == trackId &&
+              task.status != OfflineDownloadTaskStatus.failed &&
+              task.status != OfflineDownloadTaskStatus.removed,
+        );
+        if (duplicate) {
+          throw Exception('该歌曲已在离线队列中');
+        }
+      } else {
+        // force 模式下移除本地已有的同一歌曲任务记录
+        _tasks.removeWhere(
+          (task) =>
+              task.libraryId == libraryId &&
+              task.source == source &&
+              task.trackId == trackId &&
+              (task.status == OfflineDownloadTaskStatus.completed ||
+                  task.status == OfflineDownloadTaskStatus.removed),
+        );
       }
 
       // 提交任务到 Embed Service
@@ -83,6 +96,7 @@ class OfflineDownloadService {
         trackId: trackId,
         libraryId: config.libraryId,
         quality: 'best',
+        force: force,
         title: song.title,
         artist: song.artist,
         album: song.album,
@@ -166,10 +180,7 @@ class OfflineDownloadService {
     }
 
     try {
-      await _embedClient.retryJob(
-        config: config,
-        jobId: task.embedJobId,
-      );
+      await _embedClient.retryJob(config: config, jobId: task.embedJobId);
 
       final updated = task.copyWith(
         status: OfflineDownloadTaskStatus.queued,
@@ -184,7 +195,11 @@ class OfflineDownloadService {
       Logger.infoWithTag(_logTag, 'task retry jobId=${task.embedJobId}');
       _startPolling();
     } catch (e) {
-      Logger.errorWithTag(_logTag, 'task retry failed jobId=${task.embedJobId}', e);
+      Logger.errorWithTag(
+        _logTag,
+        'task retry failed jobId=${task.embedJobId}',
+        e,
+      );
       rethrow;
     }
   }

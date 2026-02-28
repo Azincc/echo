@@ -7,7 +7,8 @@ import '../../models/embed_service_config.dart';
 /// Embed Service 任务状态
 class EmbedJobStatus {
   final String jobId;
-  final String status; // queued/resolving/downloading/tagging/moving/scanning/done/failed
+  final String
+  status; // queued/resolving/downloading/tagging/moving/scanning/done/failed
   final int? progress; // 0-100
   final String? message;
   final String? error;
@@ -66,15 +67,16 @@ class EmbedServiceClient {
   final Dio _dio;
 
   EmbedServiceClient([Dio? dio])
-      : _dio = dio ??
-            Dio(
-              BaseOptions(
-                connectTimeout: const Duration(seconds: 10),
-                receiveTimeout: const Duration(seconds: 15),
-                responseType: ResponseType.json,
-                headers: {'Content-Type': 'application/json'},
-              ),
-            );
+    : _dio =
+          dio ??
+          Dio(
+            BaseOptions(
+              connectTimeout: const Duration(seconds: 10),
+              receiveTimeout: const Duration(seconds: 15),
+              responseType: ResponseType.json,
+              headers: {'Content-Type': 'application/json'},
+            ),
+          );
 
   /// 测试连接
   Future<void> testConnection(EmbedServiceConfig config) async {
@@ -86,9 +88,7 @@ class EmbedServiceClient {
       // /healthz 通常不鉴权，需访问受保护接口验证 API Key。
       final response = await _dio.get(
         '${config.baseUrl}/v1/jobs',
-        options: Options(
-          headers: {'X-API-Key': config.apiKey},
-        ),
+        options: Options(headers: {'X-API-Key': config.apiKey}),
       );
 
       if (response.statusCode != 200) {
@@ -106,6 +106,7 @@ class EmbedServiceClient {
     required String trackId,
     required String libraryId,
     String quality = 'best',
+    bool force = false,
     String? title,
     String? artist,
     String? album,
@@ -124,6 +125,7 @@ class EmbedServiceClient {
       'library_id': libraryId,
       'quality': quality,
       'idempotency_key': idempotencyKey,
+      if (force) 'force': true,
       if (title != null) 'title': title,
       if (artist != null) 'artist': artist,
       if (album != null) 'album': album,
@@ -135,9 +137,7 @@ class EmbedServiceClient {
       final response = await _dio.post(
         '${config.baseUrl}/v1/jobs',
         data: requestBody,
-        options: Options(
-          headers: {'X-API-Key': config.apiKey},
-        ),
+        options: Options(headers: {'X-API-Key': config.apiKey}),
       );
 
       if (response.statusCode != 200) {
@@ -168,9 +168,7 @@ class EmbedServiceClient {
     try {
       final response = await _dio.get(
         '${config.baseUrl}/v1/jobs/$jobId',
-        options: Options(
-          headers: {'X-API-Key': config.apiKey},
-        ),
+        options: Options(headers: {'X-API-Key': config.apiKey}),
       );
 
       if (response.statusCode == 404) {
@@ -204,16 +202,16 @@ class EmbedServiceClient {
     try {
       final response = await _dio.post(
         '${config.baseUrl}/v1/jobs/$jobId/retry',
-        options: Options(
-          headers: {'X-API-Key': config.apiKey},
-        ),
+        options: Options(headers: {'X-API-Key': config.apiKey}),
       );
 
       if (response.statusCode != 200) {
         throw Exception('重试任务失败: HTTP ${response.statusCode}');
       }
     } on DioException catch (e) {
-      throw Exception(_formatDioError(e, config.baseUrl, '/v1/jobs/$jobId/retry'));
+      throw Exception(
+        _formatDioError(e, config.baseUrl, '/v1/jobs/$jobId/retry'),
+      );
     }
   }
 
@@ -229,16 +227,16 @@ class EmbedServiceClient {
     try {
       final response = await _dio.post(
         '${config.baseUrl}/v1/jobs/$jobId/cancel',
-        options: Options(
-          headers: {'X-API-Key': config.apiKey},
-        ),
+        options: Options(headers: {'X-API-Key': config.apiKey}),
       );
 
       if (response.statusCode != 200) {
         throw Exception('取消任务失败: HTTP ${response.statusCode}');
       }
     } on DioException catch (e) {
-      throw Exception(_formatDioError(e, config.baseUrl, '/v1/jobs/$jobId/cancel'));
+      throw Exception(
+        _formatDioError(e, config.baseUrl, '/v1/jobs/$jobId/cancel'),
+      );
     }
   }
 

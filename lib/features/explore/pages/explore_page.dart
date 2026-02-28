@@ -68,13 +68,14 @@ class _ExplorePageState extends ConsumerState<ExplorePage> {
 
   void _refreshSearchResults(String query, ExplorePreviewQuery? previewQuery) {
     if (query.isEmpty) return;
-    // ignore: unused_result
-    ref.refresh(searchProvider(query));
+    // Use invalidate instead of refresh for autoDispose.family providers.
+    // invalidate fully destroys the provider state so the next ref.watch()
+    // in build() will re-create the provider and issue a fresh remote request.
+    ref.invalidate(searchProvider(query));
     if (previewQuery != null) {
-      // ignore: unused_result
-      ref.refresh(explorePreviewSongsProvider(previewQuery));
+      ref.invalidate(explorePreviewSongsProvider(previewQuery));
     }
-    setState(() {}); // Ensure rebuild picks up refreshed providers
+    setState(() {}); // Ensure rebuild picks up invalidated providers
     _showSnackBar('已刷新搜索结果');
   }
 
@@ -140,7 +141,7 @@ class _ExplorePageState extends ConsumerState<ExplorePage> {
     }
   }
 
-  Future<void> _enqueuePreview(Song song) async {
+  Future<void> _enqueuePreview(Song song, {bool force = false}) async {
     final activeLibrary = ref.read(activeLibraryProvider);
     if (activeLibrary == null) {
       _showSnackBar('当前没有活跃音乐库');
@@ -153,7 +154,7 @@ class _ExplorePageState extends ConsumerState<ExplorePage> {
     try {
       Logger.infoWithTag(
         _logTag,
-        'enqueue single start source=${song.previewSource} track=${song.previewTrackId} title="${song.title}"',
+        'enqueue single start source=${song.previewSource} track=${song.previewTrackId} title="${song.title}" force=$force',
       );
       await ref
           .read(offlineDownloadServiceProvider)
@@ -161,20 +162,50 @@ class _ExplorePageState extends ConsumerState<ExplorePage> {
             song: song,
             libraryId: activeLibrary.id,
             config: config,
+            force: force,
           );
       Logger.infoWithTag(
         _logTag,
         'enqueue single success source=${song.previewSource} track=${song.previewTrackId}',
       );
-      _showSnackBar('已添加到离线下载队列');
+      _showSnackBar(force ? '已重新添加到离线下载队列' : '已添加到离线下载队列');
     } catch (e) {
       Logger.errorWithTag(
         _logTag,
         'enqueue single failed source=${song.previewSource} track=${song.previewTrackId} title="${song.title}"',
         e,
       );
-      _showSnackBar('添加失败: $e');
+      if (e.toString().contains('已在离线队列中') && !force) {
+        _showForceRedownloadDialog(song);
+      } else {
+        _showSnackBar('下载失败: $e');
+      }
     }
+  }
+
+  void _showForceRedownloadDialog(Song song) {
+    if (!mounted) return;
+    showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('歌曲已存在'),
+        content: Text('「${song.title}」已在离线队列中，是否重新下载？'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('重新下载'),
+          ),
+        ],
+      ),
+    ).then((confirmed) {
+      if (confirmed == true) {
+        _enqueuePreview(song, force: true);
+      }
+    });
   }
 
   Future<void> _enqueueCurrentPageSongs(List<Song> songs) async {
@@ -407,6 +438,8 @@ class _ExplorePageState extends ConsumerState<ExplorePage> {
                     const SizedBox.shrink()
                   else
                     localSearchAsync.when(
+                      skipLoadingOnReload: false,
+                      skipLoadingOnRefresh: false,
                       data: (result) {
                         if (result.songs.isEmpty) {
                           return const ListTile(title: Text('音乐库暂无匹配歌曲'));
@@ -465,6 +498,8 @@ class _ExplorePageState extends ConsumerState<ExplorePage> {
                     const SizedBox.shrink()
                   else
                     previewSongsAsync.when(
+                      skipLoadingOnReload: false,
+                      skipLoadingOnRefresh: false,
                       data: (songs) {
                         final canPrev = _previewPage > 1;
                         final canNext = songs.length >= explorePreviewPageSize;

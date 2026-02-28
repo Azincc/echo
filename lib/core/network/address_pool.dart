@@ -168,8 +168,14 @@ class AddressPool {
     onAddressUpdated?.call(updated);
 
     if (_activeAddress?.id == updated.id) {
+      final old = _activeAddress!;
       _activeAddress = updated;
-      onActiveAddressChanged?.call(_activeAddress);
+      // Only notify listeners when something meaningful changed to avoid
+      // cascading provider invalidation on every health-check tick.
+      final changed = old.status != updated.status || old.url != updated.url;
+      if (changed) {
+        onActiveAddressChanged?.call(_activeAddress);
+      }
     }
     Logger.debugWithTag(
       _tag,

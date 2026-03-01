@@ -11,10 +11,10 @@ import '../../../core/utils/logger.dart';
 import '../../../data/models/music_library.dart';
 import '../../../data/sources/local_storage.dart';
 import '../../../providers/api_provider.dart';
-import '../../../providers/audio_cache_provider.dart';
 import '../../../providers/auth_provider.dart';
 import '../../../providers/theme_provider.dart';
 import 'audio_quality_page.dart';
+import 'cache_management_page.dart';
 import 'cover_providers_page.dart';
 import 'lyrics_providers_page.dart';
 import 'theme_settings_page.dart';
@@ -226,7 +226,12 @@ class _AppSettingsPageState extends ConsumerState<AppSettingsPage> {
     return Scaffold(
       appBar: AppBar(title: const Text('设置')),
       body: ListView(
-        padding: const EdgeInsets.all(16),
+        padding: EdgeInsets.fromLTRB(
+          16,
+          16,
+          16,
+          16 + MediaQuery.of(context).padding.bottom,
+        ),
         children: [
           Text(
             '服务器信息',
@@ -325,13 +330,6 @@ class _AppSettingsPageState extends ConsumerState<AppSettingsPage> {
             },
           ),
           const Divider(height: 24),
-          Text(
-            '缓存管理',
-            style: Theme.of(
-              context,
-            ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(height: 8),
           _buildCacheManager(context, ref),
           const Divider(height: 24),
           Text(
@@ -388,61 +386,18 @@ class _AppSettingsPageState extends ConsumerState<AppSettingsPage> {
   }
 
   Widget _buildCacheManager(BuildContext context, WidgetRef ref) {
-    final sizeAsync = ref.watch(cacheSizeProvider);
-    return sizeAsync.when(
-      data: (size) {
-        final mb = size / (1024 * 1024);
-        final gb = mb / 1024;
-        final sizeStr = gb >= 1
-            ? '${gb.toStringAsFixed(2)} GB'
-            : '${mb.toStringAsFixed(1)} MB';
-
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _buildInfoRow('当前占用', sizeStr),
-            const SizedBox(height: 8),
-            SizedBox(
-              width: double.infinity,
-              child: OutlinedButton.icon(
-                onPressed: () async {
-                  final confirmed = await showDialog<bool>(
-                    context: context,
-                    builder: (context) => AlertDialog(
-                      title: const Text('清除缓存'),
-                      content: const Text('确定要清除所有音频缓存吗？'),
-                      actions: [
-                        TextButton(
-                          onPressed: () => Navigator.pop(context, false),
-                          child: const Text('取消'),
-                        ),
-                        TextButton(
-                          onPressed: () => Navigator.pop(context, true),
-                          child: const Text('清除'),
-                        ),
-                      ],
-                    ),
-                  );
-
-                  if (confirmed == true) {
-                    await ref.read(audioCacheServiceProvider).clearAll();
-                    ref.invalidate(cacheSizeProvider);
-                    if (context.mounted) {
-                      ScaffoldMessenger.of(
-                        context,
-                      ).showSnackBar(const SnackBar(content: Text('缓存已清除')));
-                    }
-                  }
-                },
-                icon: const Icon(Icons.delete_outline),
-                label: const Text('清除缓存'),
-              ),
-            ),
-          ],
+    return ListTile(
+      contentPadding: EdgeInsets.zero,
+      leading: const Icon(Icons.storage_outlined),
+      title: const Text('缓存管理'),
+      subtitle: const Text('音频、图片、歌词缓存'),
+      trailing: const Icon(Icons.chevron_right),
+      onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (context) => const CacheManagementPage()),
         );
       },
-      loading: () => const Text('正在计算缓存大小...'),
-      error: (error, stackTrace) => const Text('无法获取缓存大小'),
     );
   }
 

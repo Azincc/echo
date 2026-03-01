@@ -1,22 +1,39 @@
 import 'dart:io';
+import 'package:flutter/painting.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as p;
 import 'package:uuid/uuid.dart';
 import '../../data/models/audio_quality.dart';
 import '../../data/repositories/audio_cache_repository.dart';
+import '../../data/sources/database/app_database.dart';
 import '../utils/logger.dart';
 
 /// 音频缓存服务 — LFU+LRU 混合淘汰
 class AudioCacheService {
+  static const _tag = 'CACHE_SVC';
+
   final AudioCacheRepository _repository;
+  final AppDatabase _db;
   final int maxCacheSizeBytes;
   final int protectionThreshold;
 
   AudioCacheService({
     required AudioCacheRepository repository,
+    required AppDatabase db,
     this.maxCacheSizeBytes = 2 * 1024 * 1024 * 1024, // 2GB
     this.protectionThreshold = 5,
-  }) : _repository = repository;
+  }) : _repository = repository,
+       _db = db;
+
+  // ---------------------------------------------------------------------------
+  // Audio cache directory helpers
+  // ---------------------------------------------------------------------------
+
+  /// 获取音频缓存根目录
+  Future<Directory> getAudioCacheDir() async {
+    final cacheDir = await getApplicationCacheDirectory();
+    return Directory(p.join(cacheDir.path, 'echo_audio_cache'));
+  }
 
   /// 获取缓存文件路径（若已缓存且文件存在）
   /// 同时更新 playCount 和 lastPlayedAt
@@ -86,12 +103,12 @@ class AudioCacheService {
     required String libraryId,
     required AudioQualityLevel quality,
   }) async {
-    final cacheDir = await getApplicationCacheDirectory();
-    final dir = Directory(p.join(cacheDir.path, 'echo_audio_cache', libraryId));
-    if (!await dir.exists()) {
-      await dir.create(recursive: true);
+    final dir = await getAudioCacheDir();
+    final libDir = Directory(p.join(dir.path, libraryId));
+    if (!await libDir.exists()) {
+      await libDir.create(recursive: true);
     }
-    return p.join(dir.path, '${songId}_${quality.name}.cache');
+    return p.join(libDir.path, '${songId}_${quality.name}.cache');
   }
 
   /// 检查并执行缓存淘汰
@@ -125,40 +142,157 @@ class AudioCacheService {
     }
   }
 
-  /// 获取当前缓存总大小
-  Future<int> getTotalCacheSize() async {
-    return _repository.getTotalCacheSize();
+  // ---------------------------------------------------------------------------
+  // 音频缓存大小 & 清理（基于磁盘扫描）
+  // ---------------------------------------------------------------------------
+
+  /// 获取音频缓存磁盘实际大小（字节）
+  Future<int> getAudioCacheSize() async {
+    final dir = await getAudioCacheDir();
+    return _getDirectorySize(dir);
   }
 
-  /// 清除所有缓存
-  Future<void> clearAll() async {
-    final entries = await _repository.getAllEntries();
-    for (final entry in entries) {
-      try {
-        final file = File(entry.filePath);
-        if (await file.exists()) {
-          await file.delete();
-        }
-      } catch (e) {
-        Logger.warn('Failed to delete cache file: ${entry.filePath}', e);
+  /// 清除所有音频缓存（删除目录 + 清空 DB 表）
+  Future<void> clearAllAudioCache() async {
+    try {
+      final dir = await getAudioCacheDir();
+      if (await dir.exists()) {
+        await dir.delete(recursive: true);
+        Logger.infoWithTag(_tag, 'audio cache directory deleted');
       }
+    } catch (e) {
+      Logger.warnWithTag(_tag, 'failed to delete audio cache directory', e);
     }
     await _repository.clearAll();
+    Logger.infoWithTag(_tag, 'audio cache DB cleared');
   }
 
-  /// 清除指定音乐库的缓存
-  Future<void> clearByLibrary(String libraryId) async {
-    final entries = await _repository.getAllEntries();
-    for (final entry in entries.where((e) => e.libraryId == libraryId)) {
-      try {
-        final file = File(entry.filePath);
-        if (await file.exists()) {
-          await file.delete();
-        }
-      } catch (e) {
-        Logger.warn('Failed to delete cache file: ${entry.filePath}', e);
+  /// 清除指定音乐库的音频缓存
+  Future<void> clearAudioCacheByLibrary(String libraryId) async {
+    try {
+      final dir = await getAudioCacheDir();
+      final libDir = Directory(p.join(dir.path, libraryId));
+      if (await libDir.exists()) {
+        await libDir.delete(recursive: true);
+        Logger.infoWithTag(
+          _tag,
+          'audio cache directory deleted for library=$libraryId',
+        );
       }
+    } catch (e) {
+      Logger.warnWithTag(_tag, 'failed to delete library cache dir', e);
     }
     await _repository.clearByLibrary(libraryId);
+  }
+
+  // ---------------------------------------------------------------------------
+  // 图片缓存（cached_network_image / DefaultCacheManager）
+  // ---------------------------------------------------------------------------
+
+  /// 获取图片缓存大小（字节）
+  Future<int> getImageCacheSize() async {
+    try {
+      // flutter_cache_manager stores files under the app cache directory
+      // in a subdirectory named after the cache key (default: "libCachedImageData")
+      final appCacheDir = await getApplicationCacheDirectory();
+      final imageCacheDir = Directory(
+        p.join(appCacheDir.path, 'libCachedImageData'),
+      );
+      return _getDirectorySize(imageCacheDir);
+    } catch (e) {
+      Logger.warnWithTag(_tag, 'failed to calculate image cache size', e);
+      return 0;
+    }
+  }
+
+  /// 清除图片缓存
+  Future<void> clearImageCache() async {
+    try {
+      // 删除磁盘上的图片缓存目录
+      final appCacheDir = await getApplicationCacheDirectory();
+      final imageCacheDir = Directory(
+        p.join(appCacheDir.path, 'libCachedImageData'),
+      );
+      if (await imageCacheDir.exists()) {
+        await imageCacheDir.delete(recursive: true);
+      }
+      // 同时清除内存中的图片缓存
+      PaintingBinding.instance.imageCache.clear();
+      PaintingBinding.instance.imageCache.clearLiveImages();
+      Logger.infoWithTag(_tag, 'image cache cleared');
+    } catch (e) {
+      Logger.warnWithTag(_tag, 'failed to clear image cache', e);
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // 歌词缓存（Drift DB lyricsCache 表）
+  // ---------------------------------------------------------------------------
+
+  /// 获取歌词缓存条数
+  Future<int> getLyricsCacheCount() async {
+    try {
+      final rows = await _db.select(_db.lyricsCache).get();
+      return rows.length;
+    } catch (e) {
+      Logger.warnWithTag(_tag, 'failed to count lyrics cache', e);
+      return 0;
+    }
+  }
+
+  /// 清除歌词缓存
+  Future<void> clearLyricsCache() async {
+    try {
+      await _db.delete(_db.lyricsCache).go();
+      Logger.infoWithTag(_tag, 'lyrics cache cleared');
+    } catch (e) {
+      Logger.warnWithTag(_tag, 'failed to clear lyrics cache', e);
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Legacy compatibility
+  // ---------------------------------------------------------------------------
+
+  /// 获取当前缓存总大小（向后兼容，改用磁盘扫描）
+  Future<int> getTotalCacheSize() async {
+    return getAudioCacheSize();
+  }
+
+  /// 清除所有缓存（向后兼容）
+  Future<void> clearAll() async {
+    await clearAllAudioCache();
+  }
+
+  /// 清除指定音乐库的缓存（向后兼容）
+  Future<void> clearByLibrary(String libraryId) async {
+    await clearAudioCacheByLibrary(libraryId);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Internal helpers
+  // ---------------------------------------------------------------------------
+
+  /// 递归计算目录大小
+  Future<int> _getDirectorySize(Directory dir) async {
+    if (!await dir.exists()) return 0;
+    int totalSize = 0;
+    try {
+      await for (final entity in dir.list(
+        recursive: true,
+        followLinks: false,
+      )) {
+        if (entity is File) {
+          try {
+            totalSize += await entity.length();
+          } catch (_) {
+            // skip unreadable files
+          }
+        }
+      }
+    } catch (e) {
+      Logger.warnWithTag(_tag, 'error scanning directory: ${dir.path}', e);
+    }
+    return totalSize;
   }
 }

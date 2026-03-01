@@ -881,6 +881,7 @@ class _ProgressBarState extends ConsumerState<ProgressBar>
     final playerState = ref.watch(playerProvider);
     final position = playerState.position;
     final duration = playerState.duration;
+    final buffered = playerState.bufferedPosition;
     final isLoading =
         playerState.processingState == ProcessingState.loading ||
         playerState.processingState == ProcessingState.buffering;
@@ -891,12 +892,17 @@ class _ProgressBarState extends ConsumerState<ProgressBar>
         ? duration.inMilliseconds.toDouble()
         : 1.0;
     final currentMilliseconds = position.inMilliseconds.toDouble();
+    final bufferedMilliseconds = buffered.inMilliseconds.toDouble();
 
     // 如果正在拖动，使用拖动值，否则使用当前播放进度
     // 限制在 0 到 max 之间
     final sliderValue = (_dragValue ?? currentMilliseconds).clamp(
       0.0,
       maxMilliseconds,
+    );
+    final bufferedFraction = (bufferedMilliseconds / maxMilliseconds).clamp(
+      0.0,
+      1.0,
     );
     final displayPosition = _dragValue != null
         ? Duration(milliseconds: _dragValue!.toInt())
@@ -916,6 +922,9 @@ class _ProgressBarState extends ConsumerState<ProgressBar>
           child: SliderTheme(
             data: SliderTheme.of(context).copyWith(
               trackHeight: 3,
+              trackShape: _BufferedTrackShape(
+                bufferedFraction: bufferedFraction,
+              ),
               thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6),
               overlayShape: const RoundSliderOverlayShape(overlayRadius: 14),
             ),
@@ -958,6 +967,88 @@ class _ProgressBarState extends ConsumerState<ProgressBar>
     final minutes = duration.inMinutes;
     final seconds = duration.inSeconds % 60;
     return '${minutes.toString()}:${seconds.toString().padLeft(2, '0')}';
+  }
+}
+
+/// 自定义 Slider 轨道形状：inactive → buffer → active 三层绘制
+class _BufferedTrackShape extends SliderTrackShape {
+  final double bufferedFraction;
+
+  const _BufferedTrackShape({required this.bufferedFraction});
+
+  @override
+  Rect getPreferredRect({
+    required RenderBox parentBox,
+    Offset offset = Offset.zero,
+    required SliderThemeData sliderTheme,
+    bool isEnabled = false,
+    bool isDiscrete = false,
+  }) {
+    final trackHeight = sliderTheme.trackHeight ?? 3;
+    final trackLeft = offset.dx + 14; // thumb radius
+    final trackTop = offset.dy + (parentBox.size.height - trackHeight) / 2;
+    final trackWidth = parentBox.size.width - 28;
+    return Rect.fromLTWH(trackLeft, trackTop, trackWidth, trackHeight);
+  }
+
+  @override
+  void paint(
+    PaintingContext context,
+    Offset offset, {
+    required RenderBox parentBox,
+    required SliderThemeData sliderTheme,
+    required Animation<double> enableAnimation,
+    required TextDirection textDirection,
+    required Offset thumbCenter,
+    Offset? secondaryOffset,
+    bool isDiscrete = false,
+    bool isEnabled = false,
+    double additionalActiveTrackHeight = 0,
+  }) {
+    final canvas = context.canvas;
+    final trackHeight = sliderTheme.trackHeight ?? 3;
+    final radius = Radius.circular(trackHeight / 2);
+
+    final trackRect = getPreferredRect(
+      parentBox: parentBox,
+      offset: offset,
+      sliderTheme: sliderTheme,
+    );
+
+    // 1) 底层：inactive 轨道（暗色，全宽）
+    final inactiveRect = RRect.fromRectAndRadius(trackRect, radius);
+    final inactivePaint = Paint()..color = Colors.white.withValues(alpha: 0.15);
+    canvas.drawRRect(inactiveRect, inactivePaint);
+
+    // 2) 中层：buffer 缓冲进度（半透明白色）
+    if (bufferedFraction > 0) {
+      final bufferedWidth = trackRect.width * bufferedFraction;
+      final bufferedRRect = RRect.fromLTRBR(
+        trackRect.left,
+        trackRect.top,
+        trackRect.left + bufferedWidth,
+        trackRect.bottom,
+        radius,
+      );
+      final bufferedPaint = Paint()
+        ..color = Colors.white.withValues(alpha: 0.38);
+      canvas.drawRRect(bufferedRRect, bufferedPaint);
+    }
+
+    // 3) 顶层：active 轨道（已播放部分，主题色）
+    final activeRight = thumbCenter.dx;
+    if (activeRight > trackRect.left) {
+      final activeRRect = RRect.fromLTRBR(
+        trackRect.left,
+        trackRect.top,
+        activeRight,
+        trackRect.bottom,
+        radius,
+      );
+      final activeColor = sliderTheme.activeTrackColor ?? Colors.white;
+      final activePaint = Paint()..color = activeColor;
+      canvas.drawRRect(activeRRect, activePaint);
+    }
   }
 }
 

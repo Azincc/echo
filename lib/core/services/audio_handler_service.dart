@@ -146,7 +146,19 @@ class EchoAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
 
 /// 初始化 AudioService
 Future<EchoAudioHandler> initAudioService() async {
-  final audioPlayer = AudioPlayer();
+  final audioPlayer = AudioPlayer(
+    audioLoadConfiguration: const AudioLoadConfiguration(
+      androidLoadControl: AndroidLoadControl(
+        minBufferDuration: Duration(minutes: 10),
+        maxBufferDuration: Duration(minutes: 15),
+        bufferForPlaybackDuration: Duration(seconds: 5),
+        bufferForPlaybackAfterRebufferDuration: Duration(seconds: 10),
+      ),
+      darwinLoadControl: DarwinLoadControl(
+        preferredForwardBufferDuration: Duration(minutes: 10),
+      ),
+    ),
+  );
 
   final handler = await AudioService.init(
     builder: () => EchoAudioHandler(audioPlayer),

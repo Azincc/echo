@@ -15,6 +15,7 @@ class LocalStorage {
   static const String _keyThemeSeedColor = 'theme_seed_color';
   static const String _keyMobileCacheSavedBytesByLibrary =
       'mobile_cache_saved_bytes_by_library_v1';
+  static const String _keyMaxCacheSizeBytes = 'max_cache_size_bytes';
 
   /// 保存服务器配置
   static Future<void> saveServerConfig(ServerConfig config) async {
@@ -249,5 +250,22 @@ class LocalStorage {
       return parsed;
     }
     return 0;
+  }
+
+  /// 读取音频缓存上限设置（字节）
+  static Future<int?> getMaxCacheSize() async {
+    final prefs = await SharedPreferences.getInstance();
+    final value = prefs.getInt(_keyMaxCacheSizeBytes);
+    if (value != null) {
+      Logger.debugWithTag(_logTag, 'maxCacheSize loaded: $value');
+    }
+    return value;
+  }
+
+  /// 保存音频缓存上限设置（字节）
+  static Future<void> setMaxCacheSize(int bytes) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt(_keyMaxCacheSizeBytes, bytes);
+    Logger.infoWithTag(_logTag, 'maxCacheSize saved: $bytes');
   }
 }

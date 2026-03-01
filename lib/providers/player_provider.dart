@@ -63,6 +63,7 @@ class PlayerState {
   final AudioQualityLevel? currentQuality;
   final PlaybackSource? playbackSource;
   final int currentBitRateKbps;
+  final Duration bufferedPosition;
 
   PlayerState({
     this.currentSong,
@@ -78,6 +79,7 @@ class PlayerState {
     this.currentQuality,
     this.playbackSource,
     this.currentBitRateKbps = 0,
+    this.bufferedPosition = Duration.zero,
   });
 
   PlayerState copyWith({
@@ -94,6 +96,7 @@ class PlayerState {
     AudioQualityLevel? currentQuality,
     PlaybackSource? playbackSource,
     int? currentBitRateKbps,
+    Duration? bufferedPosition,
   }) {
     return PlayerState(
       currentSong: currentSong ?? this.currentSong,
@@ -109,6 +112,7 @@ class PlayerState {
       currentQuality: currentQuality ?? this.currentQuality,
       playbackSource: playbackSource ?? this.playbackSource,
       currentBitRateKbps: currentBitRateKbps ?? this.currentBitRateKbps,
+      bufferedPosition: bufferedPosition ?? this.bufferedPosition,
     );
   }
 
@@ -144,7 +148,7 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
   final Ref _ref;
   AudioPlayer? _audioPlayer;
   EchoAudioHandler? _audioHandler;
-  StreamSubscription? _cacheCompletionSubscription;
+  StreamSubscription? _downloadProgressSubscription;
   final Random _random = Random();
   final List<_ShuffleHistoryEntry> _shuffleBackHistory =
       <_ShuffleHistoryEntry>[];
@@ -204,7 +208,19 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
       };
     } catch (e) {
       Logger.warn('AudioService not available (web platform): $e');
-      player = AudioPlayer();
+      player = AudioPlayer(
+        audioLoadConfiguration: const AudioLoadConfiguration(
+          androidLoadControl: AndroidLoadControl(
+            minBufferDuration: Duration(minutes: 10),
+            maxBufferDuration: Duration(minutes: 15),
+            bufferForPlaybackDuration: Duration(seconds: 5),
+            bufferForPlaybackAfterRebufferDuration: Duration(seconds: 10),
+          ),
+          darwinLoadControl: DarwinLoadControl(
+            preferredForwardBufferDuration: Duration(minutes: 10),
+          ),
+        ),
+      );
     }
 
     _audioPlayer = player;
@@ -254,6 +270,14 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
     });
     _startPositionPolling(player);
 
+    // 监听缓冲进度（仅在非 LockCachingAudioSource 模式下使用）
+    player.bufferedPositionStream.listen((buffered) {
+      if (mounted && _downloadProgressSubscription == null) {
+        // 当使用 LockCachingAudioSource 时,由 downloadProgressStream 更新 bufferedPosition
+        // 避免播放器解码缓冲区（seek 后会重置）覆盖实际下载进度
+        state = state.copyWith(bufferedPosition: buffered);
+      }
+    });
     // 监听总时长
     player.durationStream.listen((duration) {
       if (mounted) {
@@ -381,8 +405,8 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
         'suffix=${song.suffix} durationSec=${song.duration} '
         'queue=${playQueue.length} index=$playIndex',
       );
-      await _cacheCompletionSubscription?.cancel();
-      _cacheCompletionSubscription = null;
+      _downloadProgressSubscription?.cancel();
+      _downloadProgressSubscription = null;
       _clearPendingSeek();
       _usingLockCachingSource = false;
       _currentStreamUrl = null;
@@ -611,13 +635,32 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
             ),
           );
 
-          // 后台注册缓存（等缓存完成后调用）
-          _registerCacheWhenComplete(
-            cacheFile: cacheFile,
-            songId: song.id,
-            libraryId: libraryId,
-            quality: effectiveQuality,
-          );
+          // 监听下载进度：更新缓冲进度条 + 下载完成时注册缓存
+          _downloadProgressSubscription?.cancel();
+          final capSongId = song.id;
+          final capLibraryId = libraryId;
+          final capQuality = effectiveQuality;
+          final capCacheFile = cacheFile;
+          // ignore: experimental_member_use
+          _downloadProgressSubscription = audioSource.downloadProgressStream
+              .listen((progress) {
+                if (mounted && state.duration > Duration.zero) {
+                  final buffered = Duration(
+                    milliseconds: (state.duration.inMilliseconds * progress)
+                        .round(),
+                  );
+                  state = state.copyWith(bufferedPosition: buffered);
+                }
+                // 下载完成 → 注册缓存
+                if (progress >= 1.0) {
+                  _registerCacheFromFile(
+                    capCacheFile,
+                    capSongId,
+                    capLibraryId,
+                    capQuality,
+                  );
+                }
+              });
         } catch (e) {
           // Fallback: 直接流式播放不缓存
           _playDbg(
@@ -1031,8 +1074,8 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
     }
     final previewHeaders = song.previewRequestHeaders;
 
-    await _cacheCompletionSubscription?.cancel();
-    _cacheCompletionSubscription = null;
+    _downloadProgressSubscription?.cancel();
+    _downloadProgressSubscription = null;
     _clearPendingSeek();
     _usingLockCachingSource = false;
     _currentStreamUrl = null;
@@ -2348,45 +2391,33 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
     }
   }
 
-  /// 缓存完成后注册缓存元数据
-  Future<void> _registerCacheWhenComplete({
-    required File cacheFile,
-    required String songId,
-    required String libraryId,
-    required AudioQualityLevel quality,
-  }) async {
-    final player = _audioPlayer;
-    if (player == null) return;
+  /// 从缓存文件注册缓存元数据（downloadProgressStream 到 1.0 时调用）
+  Future<void> _registerCacheFromFile(
+    File cacheFile,
+    String songId,
+    String libraryId,
+    AudioQualityLevel quality,
+  ) async {
+    try {
+      if (!await cacheFile.exists()) return;
+      final fileSize = await cacheFile.length();
+      if (fileSize <= 0) return;
 
-    _cacheCompletionSubscription?.cancel();
-    _cacheCompletionSubscription = player.playerStateStream.listen((ps) async {
-      if (ps.processingState != ProcessingState.completed) return;
-
-      await _cacheCompletionSubscription?.cancel();
-      _cacheCompletionSubscription = null;
-
-      // 仅为当前播放歌曲注册缓存，避免切歌后误写元数据
-      if (state.currentSong?.id != songId) return;
-
-      try {
-        if (await cacheFile.exists()) {
-          final fileSize = await cacheFile.length();
-          if (fileSize > 0) {
-            final cacheService = _ref.read(audioCacheServiceProvider);
-            await cacheService.registerCache(
-              songId: songId,
-              libraryId: libraryId,
-              filePath: cacheFile.path,
-              fileSize: fileSize,
-              quality: quality,
-            );
-            Logger.info('Cache registered for: $songId');
-          }
-        }
-      } catch (e) {
-        Logger.warn('Failed to register cache', e);
-      }
-    });
+      final cacheService = _ref.read(audioCacheServiceProvider);
+      await cacheService.registerCache(
+        songId: songId,
+        libraryId: libraryId,
+        filePath: cacheFile.path,
+        fileSize: fileSize,
+        quality: quality,
+      );
+      Logger.info(
+        'Cache registered (download complete): $songId '
+        '(${(fileSize / 1024 / 1024).toStringAsFixed(1)} MB)',
+      );
+    } catch (e) {
+      Logger.warn('Failed to register cache for $songId', e);
+    }
   }
 
   /// 预缓存队列中下一首歌
@@ -2428,7 +2459,7 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
     );
     if (cached != null) return;
 
-    // 预缓存：构建 LockCachingAudioSource 但不播放
+    // 预缓存：构建 LockCachingAudioSource 并监听下载进度
     try {
       final streamUrl = _apiClient.getStreamUrl(
         nextSong.id,
@@ -2440,13 +2471,26 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
         libraryId: libraryId,
         quality: effectiveQuality,
       );
-      // 创建 LockCachingAudioSource 会自动开始下载缓存
+      final cacheFile = File(cacheFilePath);
       // ignore: experimental_member_use
-      LockCachingAudioSource(
+      final source = LockCachingAudioSource(
         Uri.parse(streamUrl),
-        cacheFile: File(cacheFilePath),
+        cacheFile: cacheFile,
       );
       Logger.info('Pre-caching next song: ${nextSong.title}');
+
+      // 监听 downloadProgressStream，下载完成时注册缓存
+      // ignore: experimental_member_use
+      source.downloadProgressStream.listen((progress) {
+        if (progress >= 1.0) {
+          _registerCacheFromFile(
+            cacheFile,
+            nextSong.id,
+            libraryId,
+            effectiveQuality,
+          );
+        }
+      });
     } catch (e) {
       Logger.warn('Pre-cache failed for next song', e);
     }
@@ -2455,7 +2499,7 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
   @override
   void dispose() {
     _positionPollTimer?.cancel();
-    _cacheCompletionSubscription?.cancel();
+    _downloadProgressSubscription?.cancel();
     // Check if initialized/assigned before disposing
     // Since it was 'late', we can't check.
     // Converting to nullable field:

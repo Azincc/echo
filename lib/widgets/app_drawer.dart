@@ -347,12 +347,18 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
             ),
             content: librariesAsync.when(
               data: (libs) {
-                final lib = libs.firstWhere(
-                  (l) => l.id == activeLibId,
-                  orElse: () => libs.first,
-                );
-                final addresses = List<ServerAddress>.from(lib.addresses)
-                  ..sort((a, b) => a.priority.compareTo(b.priority));
+                // 使用 addressPool 中的实时地址状态，而非 DB 中可能过期的快照
+                final poolAddresses = addressPool.addresses;
+                final addresses = List<ServerAddress>.from(
+                  poolAddresses.isNotEmpty
+                      ? poolAddresses
+                      : libs
+                            .firstWhere(
+                              (l) => l.id == activeLibId,
+                              orElse: () => libs.first,
+                            )
+                            .addresses,
+                )..sort((a, b) => a.priority.compareTo(b.priority));
 
                 final isAuto = !addresses.any(
                   (a) => a.isLocked && a.id == activeAddress?.id,

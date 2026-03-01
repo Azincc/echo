@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../providers/api_provider.dart';
 import '../../../providers/music_provider.dart';
 import '../../../providers/player_provider.dart';
 import '../../../widgets/cover_art_image.dart';
@@ -10,11 +11,30 @@ import 'search_page.dart';
 import '../../../widgets/error_placeholder.dart';
 
 /// 音乐流首页 - Tab 1
-class DiscoverPage extends ConsumerWidget {
+class DiscoverPage extends ConsumerStatefulWidget {
   const DiscoverPage({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<DiscoverPage> createState() => _DiscoverPageState();
+}
+
+class _DiscoverPageState extends ConsumerState<DiscoverPage> {
+  @override
+  void initState() {
+    super.initState();
+    // 监听地址变化：离线→在线时自动刷新首页数据
+    ref.listenManual(activeAddressProvider, (previous, next) {
+      if (previous == null && next != null) {
+        ref.invalidate(randomSongsProvider);
+        ref.invalidate(newestAlbumsProvider);
+        ref.invalidate(recentAlbumsProvider);
+        ref.invalidate(frequentAlbumsProvider);
+      }
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
         leading: IconButton(
@@ -41,6 +61,7 @@ class DiscoverPage extends ConsumerWidget {
         onRefresh: () async {
           // 刷新数据
           ref.invalidate(randomSongsProvider);
+          ref.invalidate(newestAlbumsProvider);
           ref.invalidate(recentAlbumsProvider);
           ref.invalidate(frequentAlbumsProvider);
         },
@@ -51,6 +72,12 @@ class DiscoverPage extends ConsumerWidget {
             const SectionHeader(title: '随机推荐', icon: Icons.shuffle),
             const SizedBox(height: 12),
             const RandomSongsSection(),
+            const SizedBox(height: 24),
+
+            // 最近入库的专辑
+            const SectionHeader(title: '最近入库', icon: Icons.library_add),
+            const SizedBox(height: 12),
+            const NewestAlbumsSection(),
             const SizedBox(height: 24),
 
             // 最近播放的专辑
@@ -287,6 +314,50 @@ class FrequentAlbumsSection extends ConsumerWidget {
       ),
       error: (error, stack) =>
           const ErrorPlaceholder(message: '常听专辑加载失败，请检查网络后重试'),
+    );
+  }
+}
+
+/// 最近入库专辑区块
+class NewestAlbumsSection extends ConsumerWidget {
+  const NewestAlbumsSection({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final newestAlbumsAsync = ref.watch(newestAlbumsProvider);
+    final loadFailed = ref.watch(newestAlbumsLoadFailedProvider);
+
+    return newestAlbumsAsync.when(
+      data: (albums) {
+        if (albums.isEmpty) {
+          return Center(
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Text(loadFailed ? '网络异常，最近入库加载失败' : '暂无最近入库'),
+            ),
+          );
+        }
+
+        return SizedBox(
+          height: 200,
+          child: ListView.builder(
+            scrollDirection: Axis.horizontal,
+            itemCount: albums.length,
+            itemBuilder: (context, index) {
+              final album = albums[index];
+              return AlbumCard(album: album);
+            },
+          ),
+        );
+      },
+      loading: () => const Center(
+        child: Padding(
+          padding: EdgeInsets.all(24),
+          child: CircularProgressIndicator(),
+        ),
+      ),
+      error: (error, stack) =>
+          const ErrorPlaceholder(message: '最近入库加载失败，请检查网络后重试'),
     );
   }
 }

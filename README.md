@@ -1,6 +1,6 @@
 # 回响/Echoes
 
-一款基于 Flutter 的 Navidrome/Subsonic 音乐串流客户端，支持全平台（Android、iOS、macOS、Windows、Linux、Web）。
+一款基于 Flutter 的 Navidrome/Subsonic 音乐串流客户端，目标是支持全平台（优先支持Android、iOS，macOS、Windows、Linux、Web暂未完全适配）。
 
 ## 项目目标
 
@@ -8,20 +8,20 @@
 
 - **多服务器管理** — 支持多后端 + 多地址智能 Fallback，适应复杂网络环境
 - **无感切换** — 按优先级自动探测地址，连接失败时自动切换，无需手动干预
-- **跨平台** — Flutter 一套代码覆盖六大平台
-- **开源免费** — 社区共建，持续迭代
+- **跨平台** — Flutter 一套代码覆盖六大平台 优先支持Android、IOS
+- **开源共建** — 社区共建，持续迭代
 
 ## 技术栈
 
-| 层级 | 技术方案 |
-|------|---------|
-| 框架 | Flutter |
-| 状态管理 | Riverpod |
-| 音频引擎 | just_audio + audio_service |
-| 网络 | Dio + 自定义 Fallback 拦截器 |
-| 本地数据库 | Drift (SQLite) |
-| API 协议 | Subsonic / OpenSubsonic API |
-| 设计 | Material 3 |
+| 层级       | 技术方案                     |
+| ---------- | ---------------------------- |
+| 框架       | Flutter                      |
+| 状态管理   | Riverpod                     |
+| 音频引擎   | just_audio + audio_service   |
+| 网络       | Dio + 自定义 Fallback 拦截器 |
+| 本地数据库 | Drift (SQLite)               |
+| API 协议   | Subsonic / OpenSubsonic API  |
+| 设计       | Material 3                   |
 
 ## 功能进度
 
@@ -70,7 +70,7 @@
 - [ ] 智能缓存（LFU + LRU 混合淘汰策略）
 - [ ] 均衡器 & ReplayGain
 - [ ] Gapless / Crossfade 无缝播放
-- [ ] 播放统计可视化
+- [x] 播放统计可视化
 - [x] 深色模式 & Dynamic Color
 
 ## 快速开始

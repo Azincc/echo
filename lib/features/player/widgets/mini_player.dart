@@ -55,18 +55,15 @@ class MiniPlayer extends ConsumerWidget {
             Positioned.fill(
               child: Hero(
                 tag: 'player-background',
-                child: Material(
-                  color: Theme.of(context).colorScheme.surfaceContainer,
-                  elevation: 0,
-                  child: Container(
-                    decoration: BoxDecoration(
-                      border: Border(
-                        top: BorderSide(
-                          color: Theme.of(
-                            context,
-                          ).colorScheme.outlineVariant.withValues(alpha: 0.2),
-                          width: 0.5,
-                        ),
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).colorScheme.surfaceContainer,
+                    border: Border(
+                      top: BorderSide(
+                        color: Theme.of(
+                          context,
+                        ).colorScheme.outlineVariant.withValues(alpha: 0.2),
+                        width: 0.5,
                       ),
                     ),
                   ),

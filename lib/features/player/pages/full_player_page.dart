@@ -322,7 +322,9 @@ class _FullPlayerPageState extends ConsumerState<FullPlayerPage>
             Positioned.fill(
               child: Hero(
                 tag: 'player-background',
-                child: Container(
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 500),
+                  curve: Curves.easeInOut,
                   decoration: BoxDecoration(
                     color: scaffoldBackgroundColor,
                     gradient: LinearGradient(

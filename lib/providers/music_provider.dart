@@ -49,7 +49,7 @@ final randomSongsProvider = FutureProvider<List<Song>>((ref) async {
   }
 
   try {
-    await ref.watch(ensureActiveAddressProvider.future);
+    await ref.read(ensureActiveAddressProvider.future);
     final songs = await repository.getRandomSongs(size: 20);
     await cache.cacheRandomSongs(libraryId, songs);
     ref.read(randomSongsLoadFailedProvider.notifier).state = false;
@@ -96,7 +96,7 @@ final recentAlbumsProvider = FutureProvider<List<Album>>((ref) async {
   }
 
   try {
-    await ref.watch(ensureActiveAddressProvider.future);
+    await ref.read(ensureActiveAddressProvider.future);
     final albums = await repository.getAlbumList(type: 'recent', size: 10);
     await cache.cacheRecentAlbums(libraryId, albums);
     ref.read(recentAlbumsLoadFailedProvider.notifier).state = false;
@@ -143,7 +143,7 @@ final frequentAlbumsProvider = FutureProvider<List<Album>>((ref) async {
   }
 
   try {
-    await ref.watch(ensureActiveAddressProvider.future);
+    await ref.read(ensureActiveAddressProvider.future);
     final albums = await repository.getAlbumList(type: 'frequent', size: 10);
     await cache.cacheFrequentAlbums(libraryId, albums);
     ref.read(frequentAlbumsLoadFailedProvider.notifier).state = false;
@@ -188,7 +188,7 @@ final newestAlbumsProvider = FutureProvider.autoDispose<List<Album>>((
   }
 
   try {
-    await ref.watch(ensureActiveAddressProvider.future);
+    await ref.read(ensureActiveAddressProvider.future);
     final albums = await repository.getAlbumList(type: 'newest', size: 20);
     await cache.cacheNewestAlbums(libraryId, albums);
     ref.read(newestAlbumsLoadFailedProvider.notifier).state = false;
@@ -228,7 +228,7 @@ final allAlbumsProvider = FutureProvider.autoDispose<List<Album>>((ref) async {
   }
 
   try {
-    await ref.watch(ensureActiveAddressProvider.future);
+    await ref.read(ensureActiveAddressProvider.future);
     final albums = await repository.getAlbumList(
       type: 'alphabeticalByName',
       size: 2000,
@@ -280,7 +280,7 @@ final albumDetailProvider = FutureProvider.autoDispose.family<AlbumDetail?, Stri
     return null;
   }
   try {
-    await ref.watch(ensureActiveAddressProvider.future);
+    await ref.read(ensureActiveAddressProvider.future);
     final detail = await repository.getAlbum(albumId);
     if (detail != null) {
       await cache.cacheAlbumDetail(libraryId, detail);
@@ -341,7 +341,7 @@ final allSongsProvider = FutureProvider.autoDispose<List<Song>>((ref) async {
   }
 
   try {
-    await ref.watch(ensureActiveAddressProvider.future);
+    await ref.read(ensureActiveAddressProvider.future);
     final songs = await repository.getAllSongs();
     await cache.cacheAllSongs(libraryId, songs);
     ref.read(allSongsLoadFailedProvider.notifier).state = false;
@@ -386,7 +386,7 @@ final allArtistsProvider = FutureProvider.autoDispose<List<Artist>>((
   }
 
   try {
-    await ref.watch(ensureActiveAddressProvider.future);
+    await ref.read(ensureActiveAddressProvider.future);
     final artists = await repository.getArtists();
     await cache.cacheAllArtists(libraryId, artists);
     ref.read(allArtistsLoadFailedProvider.notifier).state = false;
@@ -425,7 +425,7 @@ final artistDetailProvider = FutureProvider.autoDispose.family<ArtistDetail?, St
     return null;
   }
   try {
-    await ref.watch(ensureActiveAddressProvider.future);
+    await ref.read(ensureActiveAddressProvider.future);
     final detail = await repository.getArtist(artistId);
     if (detail != null) {
       await cache.cacheArtistDetail(libraryId, detail.artist, detail.albums);
@@ -471,7 +471,7 @@ final searchProvider = FutureProvider.autoDispose.family<SearchResult, String>((
     return SearchResult(artists: [], albums: [], songs: []);
   }
   try {
-    await ref.watch(ensureActiveAddressProvider.future);
+    await ref.read(ensureActiveAddressProvider.future);
     return await repository.search(
       query: query,
       artistCount: 10,
@@ -495,7 +495,7 @@ final starredProvider = FutureProvider.autoDispose<StarredResult>((ref) async {
   }
 
   try {
-    await ref.watch(ensureActiveAddressProvider.future);
+    await ref.read(ensureActiveAddressProvider.future);
     final result = await repository.getStarred();
     await cache.cacheStarred(
       libraryId,

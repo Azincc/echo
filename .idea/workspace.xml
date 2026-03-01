@@ -5,23 +5,9 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="5b69f946-7f9d-4fe4-a71a-1e52a91bf237" name="更改" comment="主题功能">
-      <change beforePath="$PROJECT_DIR$/.idea/libraries/Dart_Packages.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/libraries/Dart_Packages.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/libraries/Dart_SDK.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/libraries/Dart_SDK.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/vcs.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/vcs.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/README.md" beforeDir="false" afterPath="$PROJECT_DIR$/README.md" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/android/echo_android.iml" beforeDir="false" afterPath="$PROJECT_DIR$/android/echo_android.iml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/lib/core/services/audio_cache_service.dart" beforeDir="false" afterPath="$PROJECT_DIR$/lib/core/services/audio_cache_service.dart" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/lib/core/services/audio_handler_service.dart" beforeDir="false" afterPath="$PROJECT_DIR$/lib/core/services/audio_handler_service.dart" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/lib/data/sources/local_storage.dart" beforeDir="false" afterPath="$PROJECT_DIR$/lib/data/sources/local_storage.dart" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/lib/features/discover/pages/discover_page.dart" beforeDir="false" afterPath="$PROJECT_DIR$/lib/features/discover/pages/discover_page.dart" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/lib/features/player/pages/full_player_page.dart" beforeDir="false" afterPath="$PROJECT_DIR$/lib/features/player/pages/full_player_page.dart" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/lib/features/settings/pages/app_settings_page.dart" beforeDir="false" afterPath="$PROJECT_DIR$/lib/features/settings/pages/app_settings_page.dart" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/lib/providers/audio_cache_provider.dart" beforeDir="false" afterPath="$PROJECT_DIR$/lib/providers/audio_cache_provider.dart" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/lib/providers/music_provider.dart" beforeDir="false" afterPath="$PROJECT_DIR$/lib/providers/music_provider.dart" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/lib/providers/player_provider.dart" beforeDir="false" afterPath="$PROJECT_DIR$/lib/providers/player_provider.dart" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/lib/providers/playlist_provider.dart" beforeDir="false" afterPath="$PROJECT_DIR$/lib/providers/playlist_provider.dart" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/lib/widgets/app_drawer.dart" beforeDir="false" afterPath="$PROJECT_DIR$/lib/widgets/app_drawer.dart" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -130,7 +116,7 @@
       <workItem from="1772254211709" duration="725000" />
       <workItem from="1772255406258" duration="85000" />
       <workItem from="1772255511890" duration="9149000" />
-      <workItem from="1772354831118" duration="7551000" />
+      <workItem from="1772354831118" duration="13230000" />
     </task>
     <task id="LOCAL-00001" summary="添加github打包action">
       <option name="closed" value="true" />

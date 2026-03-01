@@ -270,9 +270,16 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
     });
     _startPositionPolling(player);
 
-    // 监听缓冲进度（仅在非 LockCachingAudioSource 模式下使用）
+    // 监听缓冲进度（仅在在线流式播放且非 LockCachingAudioSource 模式下使用）
     player.bufferedPositionStream.listen((buffered) {
       if (mounted && _downloadProgressSubscription == null) {
+        // 本地文件（下载/缓存）的 bufferedPositionStream 仅反映解码缓冲窗口，
+        // 不代表文件可用进度，应跳过以保持 100%。
+        final source = state.playbackSource;
+        if (source == PlaybackSource.downloaded ||
+            source == PlaybackSource.cached) {
+          return;
+        }
         // 当使用 LockCachingAudioSource 时,由 downloadProgressStream 更新 bufferedPosition
         // 避免播放器解码缓冲区（seek 后会重置）覆盖实际下载进度
         state = state.copyWith(bufferedPosition: buffered);
@@ -474,6 +481,7 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
             quality: AudioQualityLevel.original,
             source: PlaybackSource.downloaded,
           ),
+          bufferedPosition: initialDuration,
         );
         await _scrobble(song.id, submission: false);
         _preCacheNextSong();
@@ -510,6 +518,7 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
             source: PlaybackSource.cached,
             maxBitRate: effectiveQuality.maxBitRate,
           ),
+          bufferedPosition: initialDuration,
         );
         await _scrobble(song.id, submission: false);
         unawaited(
@@ -1268,8 +1277,8 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
       return;
     }
 
-    // 列表循环（Repeat All）回绕到首曲。
-    if (state.loopMode != LoopMode.one && state.queue.isNotEmpty) {
+    // 回绕到首曲（单曲队列时等同于重播当前曲目）。
+    if (state.queue.isNotEmpty) {
       await skipToQueueItem(0);
     }
   }
@@ -1630,7 +1639,8 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
 
   int? _getRandomIndexExcludingCurrent() {
     final queue = state.queue;
-    if (queue.length <= 1) return null;
+    if (queue.isEmpty) return null;
+    if (queue.length == 1) return 0;
 
     final currentIndex = state.currentIndex;
     final currentSongId = state.currentSong?.id;
@@ -1794,7 +1804,7 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
 
     // 随机模式优先：从队列中随机到下一首，不走 loopMode 分支。
     if (state.shuffleEnabled) {
-      if (state.queue.length > 1) {
+      if (state.queue.isNotEmpty) {
         _seekDbg('completed -> shuffle next song=$completedSongId');
         await next();
       }

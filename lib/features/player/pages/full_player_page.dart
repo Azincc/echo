@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:palette_generator/palette_generator.dart';
@@ -282,17 +283,26 @@ class _FullPlayerPageState extends ConsumerState<FullPlayerPage>
     }
 
     // 构建背景渐变
-    final rawBackgroundColor =
-        _paletteGenerator?.dominantColor?.color ??
-        Theme.of(context).colorScheme.surface;
-    final backgroundColor = _limitBackgroundLuminance(
-      rawBackgroundColor,
-      maxLuminance: 0.32,
-    );
-    final scaffoldBackgroundColor = _limitBackgroundLuminance(
-      Theme.of(context).scaffoldBackgroundColor,
-      maxLuminance: 0.2,
-    );
+    // 调色板未加载时，使用与迷你播放器相同的 surfaceContainer 颜色，
+    // 避免 Hero 飞行期间出现颜色跳变（黑色闪烁）。
+    // 调色板加载后，AnimatedContainer 会平滑过渡到主题渐变色。
+    final miniPlayerBgColor = Theme.of(context).colorScheme.surfaceContainer;
+    final Color backgroundColor;
+    final Color scaffoldBackgroundColor;
+
+    if (_paletteGenerator?.dominantColor?.color != null) {
+      backgroundColor = _limitBackgroundLuminance(
+        _paletteGenerator!.dominantColor!.color,
+        maxLuminance: 0.32,
+      );
+      scaffoldBackgroundColor = _limitBackgroundLuminance(
+        Theme.of(context).scaffoldBackgroundColor,
+        maxLuminance: 0.2,
+      );
+    } else {
+      backgroundColor = miniPlayerBgColor;
+      scaffoldBackgroundColor = miniPlayerBgColor;
+    }
     const primaryTextColor = Colors.white;
     final secondaryTextColor = Colors.white.withValues(alpha: 0.78);
     const lyricsActivePrimaryColor = Colors.white;
@@ -308,210 +318,215 @@ class _FullPlayerPageState extends ConsumerState<FullPlayerPage>
     );
     final hasSubtitle = subtitle.isNotEmpty;
 
-    return PopScope<void>(
-      canPop: false,
-      onPopInvokedWithResult: (didPop, result) async {
-        if (didPop) return;
-        await _closeToMini();
-      },
-      child: Scaffold(
-        backgroundColor: Colors.transparent,
-        body: Stack(
-          children: [
-            // 背景 Hero
-            Positioned.fill(
-              child: Hero(
-                tag: 'player-background',
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 500),
-                  curve: Curves.easeInOut,
-                  decoration: BoxDecoration(
-                    color: scaffoldBackgroundColor,
-                    gradient: LinearGradient(
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
-                      colors: [
-                        backgroundColor.withValues(alpha: 0.85),
-                        scaffoldBackgroundColor,
-                      ],
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: SystemUiOverlayStyle.light,
+      child: PopScope<void>(
+        canPop: false,
+        onPopInvokedWithResult: (didPop, result) async {
+          if (didPop) return;
+          await _closeToMini();
+        },
+        child: Scaffold(
+          backgroundColor: Colors.transparent,
+          body: Stack(
+            children: [
+              // 背景 Hero
+              Positioned.fill(
+                child: Hero(
+                  tag: 'player-background',
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 500),
+                    curve: Curves.easeInOut,
+                    decoration: BoxDecoration(
+                      color: scaffoldBackgroundColor,
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [
+                          backgroundColor.withValues(alpha: 0.85),
+                          scaffoldBackgroundColor,
+                        ],
+                      ),
                     ),
                   ),
                 ),
               ),
-            ),
-            // 内容
-            SafeArea(
-              child: FadeTransition(
-                opacity: ModalRoute.of(context)!.animation!,
-                child: Column(
-                  children: [
-                    // 顶部操作栏
-                    FadeTransition(
-                      opacity: _topBarAnimation,
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 8),
-                        child: IconTheme(
-                          data: Theme.of(
-                            context,
-                          ).iconTheme.copyWith(color: primaryTextColor),
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              IconButton(
-                                icon: const Icon(Icons.keyboard_arrow_down),
-                                onPressed: _closeToMini,
-                              ),
-                              Text(
-                                '正在播放',
-                                style: Theme.of(context).textTheme.titleMedium
-                                    ?.copyWith(color: primaryTextColor),
-                              ),
-                              IconButton(
-                                icon: const Icon(Icons.more_vert),
-                                onPressed: () {
-                                  if (currentSong.isPreview) {
-                                    showSongOptionsSheet(
-                                      context: context,
-                                      song: currentSong,
-                                      mode: SongOptionsSheetMode.offlineOnly,
-                                      extraActions: [
-                                        SongOptionsExtraAction(
-                                          icon: Icons.download_outlined,
-                                          title: '添加到离线下载队列',
-                                          onPressed: () async {
-                                            await _enqueuePreviewSong(
-                                              currentSong,
+              // 内容
+              SafeArea(
+                child: FadeTransition(
+                  opacity: ModalRoute.of(context)!.animation!,
+                  child: Column(
+                    children: [
+                      // 顶部操作栏
+                      FadeTransition(
+                        opacity: _topBarAnimation,
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 8),
+                          child: IconTheme(
+                            data: Theme.of(
+                              context,
+                            ).iconTheme.copyWith(color: primaryTextColor),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                IconButton(
+                                  icon: const Icon(Icons.keyboard_arrow_down),
+                                  onPressed: _closeToMini,
+                                ),
+                                Text(
+                                  '正在播放',
+                                  style: Theme.of(context).textTheme.titleMedium
+                                      ?.copyWith(color: primaryTextColor),
+                                ),
+                                IconButton(
+                                  icon: const Icon(Icons.more_vert),
+                                  onPressed: () {
+                                    if (currentSong.isPreview) {
+                                      showSongOptionsSheet(
+                                        context: context,
+                                        song: currentSong,
+                                        mode: SongOptionsSheetMode.offlineOnly,
+                                        extraActions: [
+                                          SongOptionsExtraAction(
+                                            icon: Icons.download_outlined,
+                                            title: '添加到离线下载队列',
+                                            onPressed: () async {
+                                              await _enqueuePreviewSong(
+                                                currentSong,
+                                              );
+                                            },
+                                          ),
+                                        ],
+                                      );
+                                    } else {
+                                      showSongOptionsSheet(
+                                        context: context,
+                                        song: currentSong,
+                                      );
+                                    }
+                                  },
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+
+                      // 中间内容区域
+                      Expanded(
+                        child: _buildMiddleContent(
+                          currentSong: currentSong,
+                          lyricsAsync: lyricsAsync,
+                          hasSubtitle: hasSubtitle,
+                          subtitle: subtitle,
+                          primaryTextColor: primaryTextColor,
+                          secondaryTextColor: secondaryTextColor,
+                          lyricsActivePrimaryColor: lyricsActivePrimaryColor,
+                          lyricsActiveSecondaryColor:
+                              lyricsActiveSecondaryColor,
+                          lyricsInactivePrimaryColor:
+                              lyricsInactivePrimaryColor,
+                          lyricsInactiveSecondaryColor:
+                              lyricsInactiveSecondaryColor,
+                        ),
+                      ),
+
+                      // 底部固定控制栏
+                      FadeTransition(
+                        opacity: _controlsAnimation,
+                        child: SlideTransition(
+                          position: _controlsAnimation.drive(
+                            Tween<Offset>(
+                              begin: const Offset(0, 0.2),
+                              end: Offset.zero,
+                            ),
+                          ),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 24,
+                              vertical: 16,
+                            ),
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                // 进度条
+                                const ProgressBar(),
+
+                                const SizedBox(height: 24),
+
+                                // 播放控制按钮
+                                PlaybackControls(currentSong: currentSong),
+
+                                const SizedBox(height: 8),
+
+                                // 底部操作按钮
+                                FadeTransition(
+                                  opacity: _bottomBarAnimation,
+                                  child: SizedBox(
+                                    width: 160,
+                                    child: Row(
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.spaceBetween,
+                                      children: [
+                                        // 歌词按钮
+                                        IconButton(
+                                          icon: Icon(
+                                            Icons.lyrics,
+                                            color: _showLyrics
+                                                ? Colors.white
+                                                : Colors.white.withValues(
+                                                    alpha: 0.72,
+                                                  ),
+                                          ),
+                                          onPressed: () {
+                                            final nextShowLyrics = !_showLyrics;
+                                            setState(() {
+                                              _showLyrics = nextShowLyrics;
+                                            });
+                                            if (nextShowLyrics) {
+                                              _lyricsController.forward();
+                                            } else {
+                                              _lyricsController.reverse();
+                                            }
+                                          },
+                                        ),
+
+                                        // 播放队列按钮
+                                        IconButton(
+                                          icon: Icon(
+                                            Icons.queue_music,
+                                            color: Colors.white.withValues(
+                                              alpha: 0.78,
+                                            ),
+                                          ),
+                                          onPressed: () {
+                                            showModalBottomSheet(
+                                              context: context,
+                                              builder: (context) =>
+                                                  const PlayQueueSheet(),
+                                              isScrollControlled: true,
                                             );
                                           },
                                         ),
                                       ],
-                                    );
-                                  } else {
-                                    showSongOptionsSheet(
-                                      context: context,
-                                      song: currentSong,
-                                    );
-                                  }
-                                },
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
-
-                    // 中间内容区域
-                    Expanded(
-                      child: _buildMiddleContent(
-                        currentSong: currentSong,
-                        lyricsAsync: lyricsAsync,
-                        hasSubtitle: hasSubtitle,
-                        subtitle: subtitle,
-                        primaryTextColor: primaryTextColor,
-                        secondaryTextColor: secondaryTextColor,
-                        lyricsActivePrimaryColor: lyricsActivePrimaryColor,
-                        lyricsActiveSecondaryColor: lyricsActiveSecondaryColor,
-                        lyricsInactivePrimaryColor: lyricsInactivePrimaryColor,
-                        lyricsInactiveSecondaryColor:
-                            lyricsInactiveSecondaryColor,
-                      ),
-                    ),
-
-                    // 底部固定控制栏
-                    FadeTransition(
-                      opacity: _controlsAnimation,
-                      child: SlideTransition(
-                        position: _controlsAnimation.drive(
-                          Tween<Offset>(
-                            begin: const Offset(0, 0.2),
-                            end: Offset.zero,
-                          ),
-                        ),
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 24,
-                            vertical: 16,
-                          ),
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              // 进度条
-                              const ProgressBar(),
-
-                              const SizedBox(height: 24),
-
-                              // 播放控制按钮
-                              PlaybackControls(currentSong: currentSong),
-
-                              const SizedBox(height: 8),
-
-                              // 底部操作按钮
-                              FadeTransition(
-                                opacity: _bottomBarAnimation,
-                                child: SizedBox(
-                                  width: 160,
-                                  child: Row(
-                                    mainAxisAlignment:
-                                        MainAxisAlignment.spaceBetween,
-                                    children: [
-                                      // 歌词按钮
-                                      IconButton(
-                                        icon: Icon(
-                                          Icons.lyrics,
-                                          color: _showLyrics
-                                              ? Colors.white
-                                              : Colors.white.withValues(
-                                                  alpha: 0.72,
-                                                ),
-                                        ),
-                                        onPressed: () {
-                                          final nextShowLyrics = !_showLyrics;
-                                          setState(() {
-                                            _showLyrics = nextShowLyrics;
-                                          });
-                                          if (nextShowLyrics) {
-                                            _lyricsController.forward();
-                                          } else {
-                                            _lyricsController.reverse();
-                                          }
-                                        },
-                                      ),
-
-                                      // 播放队列按钮
-                                      IconButton(
-                                        icon: Icon(
-                                          Icons.queue_music,
-                                          color: Colors.white.withValues(
-                                            alpha: 0.78,
-                                          ),
-                                        ),
-                                        onPressed: () {
-                                          showModalBottomSheet(
-                                            context: context,
-                                            builder: (context) =>
-                                                const PlayQueueSheet(),
-                                            isScrollControlled: true,
-                                          );
-                                        },
-                                      ),
-                                    ],
+                                    ),
                                   ),
                                 ),
-                              ),
 
-                              // 音质指示
-                              const SizedBox(height: 4),
-                              _buildQualityIndicator(ref),
-                            ],
+                                // 音质指示
+                                const SizedBox(height: 4),
+                                _buildQualityIndicator(ref),
+                              ],
+                            ),
                           ),
                         ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

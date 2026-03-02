@@ -233,6 +233,10 @@ class EmbedServiceClient {
         throw Exception('服务返回的 job_id 为空');
       }
 
+      if (!force && data?['message'] == 'job already exists') {
+        throw Exception('已在离线队列中');
+      }
+
       return jobId;
     } on DioException catch (e) {
       throw Exception(_formatDioError(e, config.baseUrl, '/v1/jobs'));

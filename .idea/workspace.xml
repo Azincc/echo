@@ -4,7 +4,12 @@
     <option name="autoReloadType" value="NONE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="5b69f946-7f9d-4fe4-a71a-1e52a91bf237" name="更改" comment="主题功能" />
+    <list default="true" id="5b69f946-7f9d-4fe4-a71a-1e52a91bf237" name="更改" comment="主题功能">
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/gdstudio-embeded-service/internal/api/handlers/job_handler.go" beforeDir="false" afterPath="$PROJECT_DIR$/gdstudio-embeded-service/internal/api/handlers/job_handler.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/lib/data/sources/remote/embed_service_client.dart" beforeDir="false" afterPath="$PROJECT_DIR$/lib/data/sources/remote/embed_service_client.dart" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/lib/features/player/widgets/player_hero_helpers.dart" beforeDir="false" afterPath="$PROJECT_DIR$/lib/features/player/widgets/player_hero_helpers.dart" afterDir="false" />
+    </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />

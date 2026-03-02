@@ -147,45 +147,48 @@ Widget playerTextFlightShuttleBuilder(
       builder: (context, _) {
         final raw = animation.value;
 
+        // Calculate normalized flight progress from 0.0 (start of flight) to 1.0 (end of flight).
+        // During push, animation.value goes 0.0 -> 1.0.
+        // During pop, animation.value goes 1.0 -> 0.0.
+        final progress = flightDirection == HeroFlightDirection.push
+            ? raw
+            : 1.0 - raw;
+
         // 1) Size/weight — linear to match the linear Hero Rect tween.
         //    This prevents FittedBox from fighting with fontSize changes.
-        final sizeStyle = TextStyle.lerp(fromText.style, toText.style, raw);
+        final sizeStyle = TextStyle.lerp(
+          fromText.style,
+          toText.style,
+          progress,
+        );
 
-        // 2) Colour — direction-aware steep curve.
-        final double tColor;
-        if (flightDirection == HeroFlightDirection.push) {
-          // Push: background darkens fast → text should whiten fast
-          tColor = Curves.easeOutQuart.transform(raw);
-        } else {
-          // Pop: background lightens late → text should stay white longer
-          tColor = Curves.easeInQuart.transform(raw);
-        }
-        final colorStyle = TextStyle.lerp(fromText.style, toText.style, tColor);
+        // 2) Colour — synchronize with the flight progress to match the background transition linearly.
+        final colorStyle = TextStyle.lerp(
+          fromText.style,
+          toText.style,
+          progress,
+        );
         final style = sizeStyle?.copyWith(color: colorStyle?.color);
 
         // 3) Alignment — smooth interpolation from source to destination.
-        final alignment = Alignment.lerp(fromAlign, toAlign, raw)!;
+        final alignment = Alignment.lerp(fromAlign, toAlign, progress)!;
 
-        final switched = raw < 0.52 ? fromText : toText;
+        final switched = progress < 0.52 ? fromText : toText;
         return Material(
           type: MaterialType.transparency,
           child: Align(
             alignment: alignment,
-            child: FittedBox(
-              fit: BoxFit.scaleDown,
-              alignment: alignment,
-              child: Text(
-                switched.data,
-                style: style,
-                textAlign: switched.textAlign,
-                maxLines: switched.maxLines,
-                overflow: switched.overflow,
-                softWrap: switched.softWrap,
-                textWidthBasis: switched.textWidthBasis,
-                textHeightBehavior: switched.textHeightBehavior,
-                strutStyle: switched.strutStyle,
-                locale: switched.locale,
-              ),
+            child: Text(
+              switched.data,
+              style: style,
+              textAlign: switched.textAlign,
+              maxLines: switched.maxLines,
+              overflow: switched.overflow,
+              softWrap: switched.softWrap,
+              textWidthBasis: switched.textWidthBasis,
+              textHeightBehavior: switched.textHeightBehavior,
+              strutStyle: switched.strutStyle,
+              locale: switched.locale,
             ),
           ),
         );

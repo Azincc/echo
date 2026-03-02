@@ -23,7 +23,9 @@ class MiniPlayer extends ConsumerWidget {
     final titleColor = theme.colorScheme.onSurface;
     final artistColor = theme.colorScheme.onSurfaceVariant;
     final artistName = song.artist?.trim();
-    final hasArtist = artistName != null && artistName.isNotEmpty;
+    final albumName = song.album?.trim();
+    final subtitleText = artistName ?? albumName ?? '';
+    final hasSubtitle = subtitleText.isNotEmpty;
     final progress = playerState.duration.inMilliseconds > 0
         ? playerState.position.inMilliseconds /
               playerState.duration.inMilliseconds
@@ -88,7 +90,7 @@ class MiniPlayer extends ConsumerWidget {
                         // 封面
                         Hero(
                           tag: 'player-cover',
-                          createRectTween: playerLinearRectTween,
+                          createRectTween: playerCoverRectTween,
                           child: Container(
                             width: 48,
                             height: 48,
@@ -141,7 +143,7 @@ class MiniPlayer extends ConsumerWidget {
                                   ),
                                 ),
                               ),
-                              if (hasArtist)
+                              if (hasSubtitle)
                                 Hero(
                                   tag: 'player-subtitle',
                                   createRectTween: playerLinearRectTween,
@@ -154,7 +156,7 @@ class MiniPlayer extends ConsumerWidget {
                                         vertical: 2,
                                       ),
                                       child: Text(
-                                        artistName,
+                                        subtitleText,
                                         maxLines: 1,
                                         overflow: TextOverflow.ellipsis,
                                         style: theme.textTheme.bodySmall

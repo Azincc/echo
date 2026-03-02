@@ -4,6 +4,15 @@ RectTween playerLinearRectTween(Rect? begin, Rect? end) {
   return RectTween(begin: begin ?? Rect.zero, end: end ?? Rect.zero);
 }
 
+/// Arc-based rect tween for cover image Hero — produces a more natural
+/// curved flight path when the horizontal offset is significant.
+RectTween playerCoverRectTween(Rect? begin, Rect? end) {
+  return MaterialRectCenterArcTween(
+    begin: begin ?? Rect.zero,
+    end: end ?? Rect.zero,
+  );
+}
+
 class _TextSnapshot {
   final String data;
   final TextStyle style;
@@ -85,11 +94,17 @@ _TextSnapshot? _extractTextSnapshot(Widget widget, BuildContext context) {
 }
 
 bool _isPrefixTextPair(String from, String to) {
-  final fromText = from.trim();
-  final toText = to.trim();
+  final fromText = _normalizeForComparison(from);
+  final toText = _normalizeForComparison(to);
   if (fromText.isEmpty || toText.isEmpty) return false;
   if (fromText == toText) return true;
   return fromText.startsWith(toText) || toText.startsWith(fromText);
+}
+
+/// Strip middle-dots, interpuncts and surrounding whitespace so that
+/// "artist" matches "artist · album" after normalisation.
+String _normalizeForComparison(String s) {
+  return s.trim().replaceAll(RegExp(r'[\s·・•]+'), ' ');
 }
 
 Widget playerTextFlightShuttleBuilder(

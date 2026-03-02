@@ -34,6 +34,12 @@ class _FullPlayerPageState extends ConsumerState<FullPlayerPage>
     with TickerProviderStateMixin {
   bool _showLyrics = false;
   bool _isClosingRoute = false;
+
+  /// Palette colours are deferred until the route animation (Hero flight)
+  /// completes so that the background transitions smoothly instead of
+  /// snapping from surfaceContainer to the theme gradient.
+  bool _routeAnimComplete = false;
+  Animation<double>? _routeAnimation;
   PaletteGenerator? _paletteGenerator;
   late AnimationController _controller;
   late AnimationController _lyricsController;
@@ -78,15 +84,51 @@ class _FullPlayerPageState extends ConsumerState<FullPlayerPage>
     _controller.forward();
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      // Start preloading the palette immediately…
       final song = ref.read(playerProvider).currentSong;
       if (song != null) {
         _updatePalette(song);
       }
+
+      // …but only allow the palette to be painted after the route transition
+      // (Hero flight) has fully completed, so the background can transition
+      // smoothly from surfaceContainer → palette gradient.
+      //
+      // We always defer _routeAnimComplete by one extra frame after the
+      // animation ends.  This guarantees that AnimatedContainer has been
+      // built and painted with the initial surfaceContainer decoration
+      // before we switch to palette colours — even when the palette image
+      // is cached and PaletteGenerator returns almost instantly.
+      _routeAnimation = ModalRoute.of(context)?.animation;
+      if (_routeAnimation != null &&
+          _routeAnimation!.status != AnimationStatus.completed) {
+        _routeAnimation!.addStatusListener(_onRouteAnimationStatus);
+      } else {
+        // Animation already completed (e.g. slow first frame).
+        _deferRouteAnimComplete();
+      }
+    });
+  }
+
+  void _onRouteAnimationStatus(AnimationStatus status) {
+    if (status == AnimationStatus.completed) {
+      _routeAnimation?.removeStatusListener(_onRouteAnimationStatus);
+      _deferRouteAnimComplete();
+    }
+  }
+
+  /// Set [_routeAnimComplete] after one more frame so that the
+  /// [AnimatedContainer] has a committed "before" decoration to
+  /// animate from.
+  void _deferRouteAnimComplete() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) setState(() => _routeAnimComplete = true);
     });
   }
 
   @override
   void dispose() {
+    _routeAnimation?.removeStatusListener(_onRouteAnimationStatus);
     _lyricsController.dispose();
     _controller.dispose();
     super.dispose();
@@ -161,18 +203,35 @@ class _FullPlayerPageState extends ConsumerState<FullPlayerPage>
     if (_isClosingRoute || !mounted) return;
     _isClosingRoute = true;
 
-    if (!_showLyrics) {
-      Navigator.of(context).pop();
-      return;
-    }
+    try {
+      if (_showLyrics) {
+        // Collapse lyrics first so the cover Hero has a stable Rect.
+        await _lyricsController.animateBack(
+          0.0,
+          duration: const Duration(milliseconds: 180),
+          curve: Curves.easeInOutCubic,
+        );
+        if (!mounted) return;
+        // Let the framework lay out one more frame with the collapsed state
+        // so Hero can capture the correct source Rect.
+        await WidgetsBinding.instance.endOfFrame;
+        if (!mounted) return;
+      }
 
-    await _lyricsController.animateBack(
-      0.0,
-      duration: const Duration(milliseconds: 180),
-      curve: Curves.easeInOutCubic,
-    );
-    if (!mounted) return;
-    Navigator.of(context).pop();
+      // Fade the background back towards surfaceContainer before popping.
+      // This avoids a hard snap from palette gradient to the mini-player's
+      // plain surfaceContainer colour during the Hero flight.
+      if (_routeAnimComplete) {
+        setState(() => _routeAnimComplete = false);
+        await Future.delayed(const Duration(milliseconds: 180));
+        if (!mounted) return;
+      }
+
+      Navigator.of(context).pop();
+    } catch (_) {
+      // Reset the guard so the user can retry closing.
+      _isClosingRoute = false;
+    }
   }
 
   Widget _buildSongCover(Song song, double size) {
@@ -283,14 +342,17 @@ class _FullPlayerPageState extends ConsumerState<FullPlayerPage>
     }
 
     // 构建背景渐变
-    // 调色板未加载时，使用与迷你播放器相同的 surfaceContainer 颜色，
-    // 避免 Hero 飞行期间出现颜色跳变（黑色闪烁）。
-    // 调色板加载后，AnimatedContainer 会平滑过渡到主题渐变色。
+    // 只有在路由动画完成（Hero 降落）后才使用调色板颜色，
+    // 确保 AnimatedContainer 从 surfaceContainer 平滑过渡到主题渐变色，
+    // 而不是在 Hero 降落那一帧突然跳变。
     final miniPlayerBgColor = Theme.of(context).colorScheme.surfaceContainer;
     final Color backgroundColor;
     final Color scaffoldBackgroundColor;
 
-    if (_paletteGenerator?.dominantColor?.color != null) {
+    final paletteReady =
+        _routeAnimComplete && _paletteGenerator?.dominantColor?.color != null;
+
+    if (paletteReady) {
       backgroundColor = _limitBackgroundLuminance(
         _paletteGenerator!.dominantColor!.color,
         maxLuminance: 0.32,
@@ -334,6 +396,24 @@ class _FullPlayerPageState extends ConsumerState<FullPlayerPage>
               Positioned.fill(
                 child: Hero(
                   tag: 'player-background',
+                  // Always show the mini-player's simple container during
+                  // flight (push → fromHero is mini; pop → toHero is mini).
+                  // This avoids any mismatch with AnimatedContainer's own
+                  // color transition and keeps a stable surfaceContainer
+                  // throughout the Hero flight.
+                  flightShuttleBuilder:
+                      (
+                        flightContext,
+                        animation,
+                        flightDirection,
+                        fromHeroContext,
+                        toHeroContext,
+                      ) {
+                        final hero = flightDirection == HeroFlightDirection.push
+                            ? fromHeroContext.widget as Hero
+                            : toHeroContext.widget as Hero;
+                        return hero.child;
+                      },
                   child: AnimatedContainer(
                     duration: const Duration(milliseconds: 500),
                     curve: Curves.easeInOut,
@@ -623,7 +703,7 @@ class _FullPlayerPageState extends ConsumerState<FullPlayerPage>
                           opacity: 1 - t,
                           child: Hero(
                             tag: 'player-cover',
-                            createRectTween: playerLinearRectTween,
+                            createRectTween: playerCoverRectTween,
                             child: Container(
                               width: coverSize,
                               height: coverSize,

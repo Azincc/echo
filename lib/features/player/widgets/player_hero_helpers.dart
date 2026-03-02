@@ -123,42 +123,57 @@ Widget playerTextFlightShuttleBuilder(
   final toText = _extractTextSnapshot(toChild, toHeroContext);
 
   // 文本英雄使用"单文本样式插值"，避免双层叠加导致的颜色重影。
-  // 字号/字重使用 easeInOut 平滑插值；颜色使用更陡峭的曲线，
-  // 在 push 时快速切到白色（背景迅速变暗），
-  // 在 pop 时保持白色更久再切到深色（背景延迟变亮）。
+  //
+  // 三个维度分别使用不同的插值策略：
+  //
+  // 1) 字号/字重 — 线性，与 Hero Rect 线性 tween 保持同步，
+  //    防止 FittedBox 缩放与字号变化产生冲突导致大小跳变。
+  //
+  // 2) 颜色 — 方向感知的陡峭曲线：
+  //    Push (mini→full): easeOutQuart — 文字迅速变白，匹配背景快速变暗
+  //    Pop  (full→mini): easeInQuart — 文字保持白色更久，直到背景变亮才转暗
+  //
+  // 3) 对齐 — 从源端对齐平滑过渡到目标端对齐（左↔居中），
+  //    避免 Hero 降落最后一帧的对齐跳变。
   if (fromText != null &&
       toText != null &&
       _isPrefixTextPair(fromText.data, toText.data)) {
+    // Resolve effective alignment for each side.
+    final fromAlign = _textAlignToAlignment(fromText.textAlign);
+    final toAlign = _textAlignToAlignment(toText.textAlign);
+
     return AnimatedBuilder(
       animation: animation,
       builder: (context, _) {
-        // t for size/weight — smooth easeInOut
-        final tSize = Curves.easeInOut.transform(animation.value);
-        // t for color — steeper curve that reaches the destination colour
-        // earlier during push and later during pop, keeping text readable
-        // against the transitioning background.
+        final raw = animation.value;
+
+        // 1) Size/weight — linear to match the linear Hero Rect tween.
+        //    This prevents FittedBox from fighting with fontSize changes.
+        final sizeStyle = TextStyle.lerp(fromText.style, toText.style, raw);
+
+        // 2) Colour — direction-aware steep curve.
         final double tColor;
         if (flightDirection == HeroFlightDirection.push) {
           // Push: background darkens fast → text should whiten fast
-          tColor = Curves.easeInQuart.transform(animation.value);
+          tColor = Curves.easeOutQuart.transform(raw);
         } else {
           // Pop: background lightens late → text should stay white longer
-          tColor = Curves.easeOutQuart.transform(animation.value);
+          tColor = Curves.easeInQuart.transform(raw);
         }
-
-        // Interpolate size/weight and color separately
-        final sizeStyle = TextStyle.lerp(fromText.style, toText.style, tSize);
         final colorStyle = TextStyle.lerp(fromText.style, toText.style, tColor);
         final style = sizeStyle?.copyWith(color: colorStyle?.color);
 
-        final switched = tSize < 0.52 ? fromText : toText;
+        // 3) Alignment — smooth interpolation from source to destination.
+        final alignment = Alignment.lerp(fromAlign, toAlign, raw)!;
+
+        final switched = raw < 0.52 ? fromText : toText;
         return Material(
           type: MaterialType.transparency,
           child: Align(
-            alignment: Alignment.center,
+            alignment: alignment,
             child: FittedBox(
               fit: BoxFit.scaleDown,
-              alignment: Alignment.center,
+              alignment: alignment,
               child: Text(
                 switched.data,
                 style: style,
@@ -180,4 +195,13 @@ Widget playerTextFlightShuttleBuilder(
 
   // 非文本场景的兜底，避免双层绘制。
   return flightDirection == HeroFlightDirection.push ? toChild : fromChild;
+}
+
+/// Map [TextAlign] to an [Alignment] for use in the shuttle layout.
+Alignment _textAlignToAlignment(TextAlign? textAlign) {
+  return switch (textAlign) {
+    TextAlign.center => Alignment.center,
+    TextAlign.right || TextAlign.end => Alignment.centerRight,
+    _ => Alignment.centerLeft,
+  };
 }

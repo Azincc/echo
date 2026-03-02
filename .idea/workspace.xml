@@ -4,12 +4,7 @@
     <option name="autoReloadType" value="NONE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="5b69f946-7f9d-4fe4-a71a-1e52a91bf237" name="更改" comment="主题功能">
-      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/lib/features/player/pages/full_player_page.dart" beforeDir="false" afterPath="$PROJECT_DIR$/lib/features/player/pages/full_player_page.dart" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/lib/features/player/widgets/mini_player.dart" beforeDir="false" afterPath="$PROJECT_DIR$/lib/features/player/widgets/mini_player.dart" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/lib/features/player/widgets/player_hero_helpers.dart" beforeDir="false" afterPath="$PROJECT_DIR$/lib/features/player/widgets/player_hero_helpers.dart" afterDir="false" />
-    </list>
+    <list default="true" id="5b69f946-7f9d-4fe4-a71a-1e52a91bf237" name="更改" comment="主题功能" />
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
@@ -118,7 +113,7 @@
       <workItem from="1772255406258" duration="85000" />
       <workItem from="1772255511890" duration="9149000" />
       <workItem from="1772354831118" duration="13230000" />
-      <workItem from="1772422550443" duration="1199000" />
+      <workItem from="1772422550443" duration="1617000" />
     </task>
     <task id="LOCAL-00001" summary="添加github打包action">
       <option name="closed" value="true" />

@@ -122,16 +122,36 @@ Widget playerTextFlightShuttleBuilder(
   final fromText = _extractTextSnapshot(fromChild, fromHeroContext);
   final toText = _extractTextSnapshot(toChild, toHeroContext);
 
-  // 文本英雄使用“单文本样式插值”，避免双层叠加导致的颜色重影。
+  // 文本英雄使用"单文本样式插值"，避免双层叠加导致的颜色重影。
+  // 字号/字重使用 easeInOut 平滑插值；颜色使用更陡峭的曲线，
+  // 在 push 时快速切到白色（背景迅速变暗），
+  // 在 pop 时保持白色更久再切到深色（背景延迟变亮）。
   if (fromText != null &&
       toText != null &&
       _isPrefixTextPair(fromText.data, toText.data)) {
     return AnimatedBuilder(
       animation: animation,
       builder: (context, _) {
-        final t = Curves.easeInOut.transform(animation.value);
-        final style = TextStyle.lerp(fromText.style, toText.style, t);
-        final switched = t < 0.52 ? fromText : toText;
+        // t for size/weight — smooth easeInOut
+        final tSize = Curves.easeInOut.transform(animation.value);
+        // t for color — steeper curve that reaches the destination colour
+        // earlier during push and later during pop, keeping text readable
+        // against the transitioning background.
+        final double tColor;
+        if (flightDirection == HeroFlightDirection.push) {
+          // Push: background darkens fast → text should whiten fast
+          tColor = Curves.easeInQuart.transform(animation.value);
+        } else {
+          // Pop: background lightens late → text should stay white longer
+          tColor = Curves.easeOutQuart.transform(animation.value);
+        }
+
+        // Interpolate size/weight and color separately
+        final sizeStyle = TextStyle.lerp(fromText.style, toText.style, tSize);
+        final colorStyle = TextStyle.lerp(fromText.style, toText.style, tColor);
+        final style = sizeStyle?.copyWith(color: colorStyle?.color);
+
+        final switched = tSize < 0.52 ? fromText : toText;
         return Material(
           type: MaterialType.transparency,
           child: Align(

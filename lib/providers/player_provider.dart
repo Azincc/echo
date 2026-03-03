@@ -809,9 +809,27 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
       Logger.error('Failed to play song', e);
       _seekDbg('playSong failed song=${song.id} err=$e');
 
+      // 如果在重试前用户已切歌（新的 playSong 被调用），放弃本次重试
+      if (_playDebugSession != debugSession) {
+        _playDbg(
+          'sid=$debugSession abandoned (current=$_playDebugSession), '
+          'skip transcoding retry',
+        );
+        return;
+      }
+
       final hasAvailableRoute = await _refreshRoutesAndCheckAvailability();
       if (!hasAvailableRoute) {
         NetworkErrorNotifier.show('网络异常，当前无可用线路');
+        return;
+      }
+
+      // 路由刷新后再次检查会话
+      if (_playDebugSession != debugSession) {
+        _playDbg(
+          'sid=$debugSession abandoned after route refresh '
+          '(current=$_playDebugSession)',
+        );
         return;
       }
 
@@ -835,6 +853,16 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
     int? index,
     int? debugSession,
   }) async {
+    // 会话已被更新的 playSong 取代，放弃本次转码重试
+    final sid = debugSession ?? _playDebugSession;
+    if (debugSession != null && _playDebugSession != debugSession) {
+      _playDbg(
+        'sid=$sid transcoding retry abandoned '
+        '(current=$_playDebugSession)',
+      );
+      return;
+    }
+
     try {
       final authState = _ref.read(authStateProvider);
       final libraryId = authState.currentLibrary?.id ?? '';
@@ -861,6 +889,14 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
           'source=direct_stream_transcoding setUrl='
           '${_summarizeStreamUrl(streamUrl)}',
         );
+        // 在实际设置音源前再次检查会话
+        if (debugSession != null && _playDebugSession != debugSession) {
+          _playDbg(
+            'sid=$sid transcoding setUrl abandoned '
+            '(current=$_playDebugSession)',
+          );
+          return;
+        }
         await _audioPlayer?.setUrl(streamUrl);
         _usingLockCachingSource = false;
         _currentStreamUrl = streamUrl;
@@ -914,6 +950,14 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
         _seekDbg('source=lock_cache_transcoding mp3 song=${song.id}');
       }
 
+      // 转码设置音源完成后再次检查会话
+      if (debugSession != null && _playDebugSession != debugSession) {
+        _playDbg(
+          'sid=$sid transcoding post-setup abandoned '
+          '(current=$_playDebugSession)',
+        );
+        return;
+      }
       await _applyPendingSeekIfNeeded();
       final effectiveQuality = _ref.read(effectiveQualityProvider);
       state = state.copyWith(

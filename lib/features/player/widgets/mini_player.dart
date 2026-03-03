@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../providers/player_provider.dart';
+import '../../../providers/palette_provider.dart';
 import '../../../widgets/cover_art_image.dart';
 import '../pages/full_player_page.dart';
 import 'player_hero_helpers.dart';
@@ -12,6 +13,9 @@ class MiniPlayer extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final playerState = ref.watch(playerProvider);
+    // 预取调色板：即使 mini-player 不使用颜色，也确保 provider 在歌曲
+    // 切换时立即开始计算，全屏播放器展开后无需等待。
+    ref.watch(currentSongPaletteProvider);
 
     // 如果没有播放内容，不显示
     if (playerState.currentSong == null) {

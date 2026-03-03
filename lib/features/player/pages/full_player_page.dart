@@ -2,12 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:just_audio/just_audio.dart';
-import 'package:palette_generator/palette_generator.dart';
-import 'package:cached_network_image/cached_network_image.dart';
 
 import '../../../providers/player_provider.dart';
+import '../../../providers/palette_provider.dart';
 import '../../../providers/lyrics_cover_provider.dart';
-import '../../../providers/api_provider.dart';
 import '../../../providers/audio_quality_provider.dart';
 import '../../../providers/library_provider.dart';
 import '../../../providers/offline_download_provider.dart';
@@ -40,7 +38,6 @@ class _FullPlayerPageState extends ConsumerState<FullPlayerPage>
   /// snapping from surfaceContainer to the theme gradient.
   bool _routeAnimComplete = false;
   Animation<double>? _routeAnimation;
-  PaletteGenerator? _paletteGenerator;
   late AnimationController _controller;
   late AnimationController _lyricsController;
   late Animation<double> _topBarAnimation;
@@ -84,21 +81,9 @@ class _FullPlayerPageState extends ConsumerState<FullPlayerPage>
     _controller.forward();
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      // Start preloading the palette immediately…
-      final song = ref.read(playerProvider).currentSong;
-      if (song != null) {
-        _updatePalette(song);
-      }
-
-      // …but only allow the palette to be painted after the route transition
+      // Only allow the palette to be painted after the route transition
       // (Hero flight) has fully completed, so the background can transition
       // smoothly from surfaceContainer → palette gradient.
-      //
-      // We always defer _routeAnimComplete by one extra frame after the
-      // animation ends.  This guarantees that AnimatedContainer has been
-      // built and painted with the initial surfaceContainer decoration
-      // before we switch to palette colours — even when the palette image
-      // is cached and PaletteGenerator returns almost instantly.
       _routeAnimation = ModalRoute.of(context)?.animation;
       if (_routeAnimation != null &&
           _routeAnimation!.status != AnimationStatus.completed) {
@@ -132,41 +117,6 @@ class _FullPlayerPageState extends ConsumerState<FullPlayerPage>
     _lyricsController.dispose();
     _controller.dispose();
     super.dispose();
-  }
-
-  Future<void> _updatePalette(Song? song) async {
-    if (song == null) {
-      if (mounted) setState(() => _paletteGenerator = null);
-      return;
-    }
-
-    try {
-      ImageProvider imageProvider;
-      final previewCover = song.previewCoverUrl?.trim();
-      if (song.isPreview && previewCover != null && previewCover.isNotEmpty) {
-        imageProvider = CachedNetworkImageProvider(previewCover);
-      } else {
-        final coverArtId = song.coverArt;
-        if (coverArtId == null || coverArtId.isEmpty) {
-          if (mounted) setState(() => _paletteGenerator = null);
-          return;
-        }
-        final url = ref
-            .read(subsonicApiClientProvider)
-            .getCoverArtUrl(coverArtId, size: 300);
-        imageProvider = CachedNetworkImageProvider(url);
-      }
-      final generator = await PaletteGenerator.fromImageProvider(
-        imageProvider,
-        maximumColorCount: 20,
-      );
-
-      if (mounted) {
-        setState(() => _paletteGenerator = generator);
-      }
-    } catch (e) {
-      // Ignore errors
-    }
   }
 
   Color _limitBackgroundLuminance(Color color, {double maxLuminance = 0.3}) {
@@ -324,15 +274,8 @@ class _FullPlayerPageState extends ConsumerState<FullPlayerPage>
     final playerState = ref.watch(playerProvider);
     final currentSong = playerState.currentSong;
     final lyricsAsync = ref.watch(currentLyricsProvider);
-
-    // 监听歌曲变化更新背景色
-    ref.listen(playerProvider.select((s) => s.currentSong), (previous, next) {
-      if (next?.id != previous?.id ||
-          next?.coverArt != previous?.coverArt ||
-          next?.previewCoverUrl != previous?.previewCoverUrl) {
-        _updatePalette(next);
-      }
-    });
+    final paletteAsync = ref.watch(currentSongPaletteProvider);
+    final paletteGenerator = paletteAsync.valueOrNull;
 
     if (currentSong == null) {
       return Scaffold(
@@ -350,11 +293,11 @@ class _FullPlayerPageState extends ConsumerState<FullPlayerPage>
     final Color scaffoldBackgroundColor;
 
     final paletteReady =
-        _routeAnimComplete && _paletteGenerator?.dominantColor?.color != null;
+        _routeAnimComplete && paletteGenerator?.dominantColor?.color != null;
 
     if (paletteReady) {
       backgroundColor = _limitBackgroundLuminance(
-        _paletteGenerator!.dominantColor!.color,
+        paletteGenerator!.dominantColor!.color,
         maxLuminance: 0.32,
       );
       scaffoldBackgroundColor = _limitBackgroundLuminance(

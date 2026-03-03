@@ -191,6 +191,7 @@ class _EditLibraryPageState extends ConsumerState<EditLibraryPage> {
                     tooltip: '检测延迟',
                     onPressed: () async {
                       await ref.read(addressPoolProvider).probeAll();
+                      if (!mounted) return;
                       ref.invalidate(librariesProvider);
                     },
                   ),
@@ -310,7 +311,9 @@ class _EditLibraryPageState extends ConsumerState<EditLibraryPage> {
           ),
           validator: (value) {
             if (!_embedEnabled) return null;
-            return value == null || value.trim().isEmpty ? '请输入 Embed Service URL' : null;
+            return value == null || value.trim().isEmpty
+                ? '请输入 Embed Service URL'
+                : null;
           },
           enabled: _embedEnabled,
         ),

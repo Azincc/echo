@@ -14,7 +14,15 @@ final audioCacheRepositoryProvider = Provider<AudioCacheRepository>((ref) {
 final audioCacheServiceProvider = Provider<AudioCacheService>((ref) {
   final repository = ref.watch(audioCacheRepositoryProvider);
   final db = ref.watch(appDatabaseProvider);
-  return AudioCacheService(repository: repository, db: db);
+  final maxSize = ref.watch(maxCacheSizeProvider);
+  final service = AudioCacheService(
+    repository: repository,
+    db: db,
+    maxCacheSizeBytes: maxSize,
+  );
+  // 每次 service 重建时（含 maxCacheSize 变更），主动触发淘汰检查
+  Future.microtask(() => service.evictIfNeeded());
+  return service;
 });
 
 /// 音频缓存大小 Provider（磁盘扫描）

@@ -51,12 +51,21 @@ class AppDatabase extends _$AppDatabase {
       }
       if (from < 4) {
         // Add bitRate and contentType columns to downloadTasks
-        await customStatement(
-          'ALTER TABLE download_tasks ADD COLUMN bit_rate INTEGER',
-        );
-        await customStatement(
-          'ALTER TABLE download_tasks ADD COLUMN content_type TEXT',
-        );
+        // Use try-catch to handle cases where columns already exist
+        try {
+          await customStatement(
+            'ALTER TABLE download_tasks ADD COLUMN bit_rate INTEGER',
+          );
+        } catch (_) {
+          // Column may already exist
+        }
+        try {
+          await customStatement(
+            'ALTER TABLE download_tasks ADD COLUMN content_type TEXT',
+          );
+        } catch (_) {
+          // Column may already exist
+        }
       }
     },
   );

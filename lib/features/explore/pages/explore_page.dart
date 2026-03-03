@@ -10,6 +10,7 @@ import '../../../providers/library_provider.dart';
 import '../../../providers/music_provider.dart';
 import '../../../providers/offline_download_provider.dart';
 import '../../../providers/player_provider.dart';
+import '../../../data/repositories/music_repository.dart';
 import '../../../widgets/cover_art_image.dart';
 import '../../../widgets/main_scaffold.dart';
 
@@ -23,59 +24,89 @@ class ExplorePage extends ConsumerStatefulWidget {
 class _ExplorePageState extends ConsumerState<ExplorePage> {
   static const _logTag = 'EXPLORE';
   final _searchController = TextEditingController();
+  final _scrollController = ScrollController();
   String _query = '';
   String? _resolvingSongId;
-  int _previewPage = 1;
   bool _isBatchDownloading = false;
+
+  // Selection mode
+  final Set<String> _selectedSongIds = {};
+  bool get _isSelectionMode => _selectedSongIds.isNotEmpty;
+
+  @override
+  void initState() {
+    super.initState();
+    _scrollController.addListener(_onScroll);
+  }
 
   @override
   void dispose() {
     _searchController.dispose();
+    _scrollController.dispose();
     super.dispose();
   }
 
+  void _onScroll() {
+    final mode = ref.read(exploreSearchModeProvider);
+    if (mode != ExploreSearchMode.remote) return;
+    if (_scrollController.position.pixels >=
+        _scrollController.position.maxScrollExtent - 200) {
+      ref.read(exploreRemoteSearchProvider.notifier).loadNextPage();
+    }
+  }
+
   void _submitQuery(String value) {
+    final q = value.trim();
     setState(() {
-      _query = value.trim();
-      _previewPage = 1;
+      _query = q;
+      _selectedSongIds.clear();
     });
+
+    final mode = ref.read(exploreSearchModeProvider);
+    if (mode == ExploreSearchMode.remote && q.isNotEmpty) {
+      final source = ref.read(exploreRemoteSourceProvider);
+      final type = ref.read(exploreSearchTypeProvider);
+      ref
+          .read(exploreRemoteSearchProvider.notifier)
+          .search(keyword: q, source: source, type: type);
+    }
   }
 
-  String _modeLabel(ExplorePreviewSearchMode mode) {
-    switch (mode) {
-      case ExplorePreviewSearchMode.song:
+  String _searchTypeLabel(ExploreSearchType type) {
+    switch (type) {
+      case ExploreSearchType.song:
         return '关键词';
-      case ExplorePreviewSearchMode.artist:
+      case ExploreSearchType.artist:
         return '歌手';
-      case ExplorePreviewSearchMode.album:
+      case ExploreSearchType.album:
         return '专辑';
+      case ExploreSearchType.playlist:
+        return '歌单ID';
     }
   }
 
-  ExplorePreviewQuery _buildPreviewQuery({
-    required String query,
-    required String source,
-    required ExplorePreviewSearchMode mode,
-  }) {
-    return ExplorePreviewQuery(
-      keyword: query,
-      source: source,
-      mode: mode,
-      page: _previewPage,
-      count: explorePreviewPageSize,
-    );
+  String _hintText() {
+    final mode = ref.read(exploreSearchModeProvider);
+    final type = ref.read(exploreSearchTypeProvider);
+    if (mode == ExploreSearchMode.local) return '搜索音乐库';
+    if (type == ExploreSearchType.playlist) return '输入网易云歌单ID';
+    final source = ref.read(exploreRemoteSourceProvider);
+    return '搜索远程源 ($source)';
   }
 
-  void _refreshSearchResults(String query, ExplorePreviewQuery? previewQuery) {
-    if (query.isEmpty) return;
-    // Use invalidate instead of refresh for autoDispose.family providers.
-    // invalidate fully destroys the provider state so the next ref.watch()
-    // in build() will re-create the provider and issue a fresh remote request.
-    ref.invalidate(searchProvider(query));
-    if (previewQuery != null) {
-      ref.invalidate(explorePreviewSongsProvider(previewQuery));
+  void _refreshSearchResults() {
+    if (_query.isEmpty) return;
+    final mode = ref.read(exploreSearchModeProvider);
+    if (mode == ExploreSearchMode.local) {
+      ref.invalidate(searchProvider(_query));
+      setState(() {});
+    } else {
+      final source = ref.read(exploreRemoteSourceProvider);
+      final type = ref.read(exploreSearchTypeProvider);
+      ref
+          .read(exploreRemoteSearchProvider.notifier)
+          .search(keyword: _query, source: source, type: type);
     }
-    setState(() {}); // Ensure rebuild picks up invalidated providers
     _showSnackBar('已刷新搜索结果');
   }
 
@@ -208,9 +239,12 @@ class _ExplorePageState extends ConsumerState<ExplorePage> {
     });
   }
 
-  Future<void> _enqueueCurrentPageSongs(List<Song> songs) async {
-    if (songs.isEmpty) {
-      _showSnackBar('当前页没有可下载歌曲');
+  Future<void> _enqueueSelectedSongs(List<Song> allSongs) async {
+    final selected = allSongs
+        .where((s) => _selectedSongIds.contains(s.id))
+        .toList();
+    if (selected.isEmpty) {
+      _showSnackBar('没有选中的歌曲');
       return;
     }
 
@@ -223,8 +257,8 @@ class _ExplorePageState extends ConsumerState<ExplorePage> {
     final confirm = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('下载本页歌曲'),
-        content: Text('确认将当前页 ${songs.length} 首歌曲加入离线下载队列？'),
+        title: const Text('下载选中歌曲'),
+        content: Text('确认将选中的 ${selected.length} 首歌曲加入离线下载队列？'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
@@ -246,8 +280,8 @@ class _ExplorePageState extends ConsumerState<ExplorePage> {
     final service = ref.read(offlineDownloadServiceProvider);
     Logger.infoWithTag(
       _logTag,
-      'batch enqueue start page=$_previewPage count=${songs.length} '
-      'first="${songs.first.title}" last="${songs.last.title}"',
+      'batch enqueue start count=${selected.length} '
+      'first="${selected.first.title}" last="${selected.last.title}"',
     );
 
     setState(() {
@@ -260,7 +294,7 @@ class _ExplorePageState extends ConsumerState<ExplorePage> {
     final failedDetails = <String>[];
 
     try {
-      for (final song in songs) {
+      for (final song in selected) {
         try {
           await service.enqueuePreviewSong(
             song: song,
@@ -269,22 +303,11 @@ class _ExplorePageState extends ConsumerState<ExplorePage> {
           );
           success++;
         } catch (e) {
-          final source = song.previewSource ?? '';
-          final trackId = song.previewTrackId ?? '';
           final errText = e.toString();
-          if (e.toString().contains('已在离线队列中')) {
+          if (errText.contains('已在离线队列中')) {
             duplicated++;
-            Logger.warnWithTag(
-              _logTag,
-              'batch enqueue duplicated source=$source track=$trackId title="${song.title}"',
-            );
           } else {
             failed++;
-            Logger.errorWithTag(
-              _logTag,
-              'batch enqueue failed source=$source track=$trackId title="${song.title}"',
-              e,
-            );
             if (failedDetails.length < 3) {
               failedDetails.add('${song.title}: $errText');
             }
@@ -295,16 +318,17 @@ class _ExplorePageState extends ConsumerState<ExplorePage> {
       if (mounted) {
         setState(() {
           _isBatchDownloading = false;
+          _selectedSongIds.clear();
         });
       }
     }
 
     Logger.infoWithTag(
       _logTag,
-      'batch enqueue end page=$_previewPage success=$success duplicated=$duplicated failed=$failed',
+      'batch enqueue end success=$success duplicated=$duplicated failed=$failed',
     );
     final detail = failedDetails.isEmpty ? '' : '\n${failedDetails.join('\n')}';
-    _showSnackBar('本页下载完成：成功 $success，已存在 $duplicated，失败 $failed$detail');
+    _showSnackBar('批量下载完成：成功 $success，已存在 $duplicated，失败 $failed$detail');
   }
 
   void _showSnackBar(String message) {
@@ -317,22 +341,18 @@ class _ExplorePageState extends ConsumerState<ExplorePage> {
   @override
   Widget build(BuildContext context) {
     final query = _query.trim();
-    final previewSource = ref.watch(explorePreviewSourceProvider);
-    final previewMode = ref.watch(explorePreviewModeProvider);
+    final searchMode = ref.watch(exploreSearchModeProvider);
+    final searchType = ref.watch(exploreSearchTypeProvider);
+    final remoteSource = ref.watch(exploreRemoteSourceProvider);
 
-    final localSearchAsync = query.isEmpty
-        ? null
-        : ref.watch(searchProvider(query));
-    final previewQuery = query.isEmpty
-        ? null
-        : _buildPreviewQuery(
-            query: query,
-            source: previewSource,
-            mode: previewMode,
-          );
-    final previewSongsAsync = previewQuery == null
-        ? null
-        : ref.watch(explorePreviewSongsProvider(previewQuery));
+    // Local search
+    final localSearchAsync =
+        (searchMode == ExploreSearchMode.local && query.isNotEmpty)
+        ? ref.watch(searchProvider(query))
+        : null;
+
+    // Remote search state
+    final remoteState = ref.watch(exploreRemoteSearchProvider);
 
     return Scaffold(
       appBar: AppBar(
@@ -343,39 +363,127 @@ class _ExplorePageState extends ConsumerState<ExplorePage> {
         title: const Text('探索'),
         actions: [
           IconButton(
-            tooltip: '刷新搜索结果',
-            onPressed: query.isEmpty
-                ? null
-                : () => _refreshSearchResults(query, previewQuery),
+            tooltip: '刷新',
+            onPressed: query.isEmpty ? null : _refreshSearchResults,
             icon: const Icon(Icons.refresh),
           ),
           PopupMenuButton<String>(
-            initialValue: previewSource,
-            tooltip: '试听源',
+            tooltip: '菜单',
             onSelected: (value) {
-              ref.read(explorePreviewSourceProvider.notifier).state = value;
-              setState(() {
-                _previewPage = 1;
-              });
+              if (value == 'local') {
+                ref.read(exploreSearchModeProvider.notifier).state =
+                    ExploreSearchMode.local;
+                ref.read(exploreRemoteSearchProvider.notifier).reset();
+                setState(() {
+                  _selectedSongIds.clear();
+                });
+                if (_query.isNotEmpty) {
+                  // Trigger local search rebuild
+                  setState(() {});
+                }
+              } else if (value == 'remote') {
+                ref.read(exploreSearchModeProvider.notifier).state =
+                    ExploreSearchMode.remote;
+                setState(() {
+                  _selectedSongIds.clear();
+                });
+                if (_query.isNotEmpty) {
+                  final source = ref.read(exploreRemoteSourceProvider);
+                  final type = ref.read(exploreSearchTypeProvider);
+                  ref
+                      .read(exploreRemoteSearchProvider.notifier)
+                      .search(keyword: _query, source: source, type: type);
+                }
+              } else if (value.startsWith('source:')) {
+                final source = value.substring(7);
+                ref.read(exploreRemoteSourceProvider.notifier).state = source;
+                ref.read(exploreSearchModeProvider.notifier).state =
+                    ExploreSearchMode.remote;
+                setState(() {
+                  _selectedSongIds.clear();
+                });
+                if (_query.isNotEmpty) {
+                  final type = ref.read(exploreSearchTypeProvider);
+                  ref
+                      .read(exploreRemoteSearchProvider.notifier)
+                      .search(keyword: _query, source: source, type: type);
+                }
+              }
             },
-            itemBuilder: (context) => const [
-              PopupMenuItem(value: 'netease', child: Text('试听源: netease')),
-              PopupMenuItem(value: 'kuwo', child: Text('试听源: kuwo')),
-              PopupMenuItem(value: 'joox', child: Text('试听源: joox')),
-              PopupMenuItem(value: 'bilibili', child: Text('试听源: bilibili')),
+            itemBuilder: (context) => [
+              PopupMenuItem(
+                value: 'local',
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.library_music,
+                      size: 20,
+                      color: searchMode == ExploreSearchMode.local
+                          ? Theme.of(context).colorScheme.primary
+                          : null,
+                    ),
+                    const SizedBox(width: 8),
+                    const Text('搜索音乐库'),
+                  ],
+                ),
+              ),
+              PopupMenuItem(
+                value: 'remote',
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.cloud_outlined,
+                      size: 20,
+                      color: searchMode == ExploreSearchMode.remote
+                          ? Theme.of(context).colorScheme.primary
+                          : null,
+                    ),
+                    const SizedBox(width: 8),
+                    const Text('搜索远程源'),
+                  ],
+                ),
+              ),
+              const PopupMenuDivider(),
+              const PopupMenuItem(
+                enabled: false,
+                child: Text(
+                  '切换远程源',
+                  style: TextStyle(fontWeight: FontWeight.w600),
+                ),
+              ),
+              ...['netease', 'kuwo', 'joox', 'bilibili'].map(
+                (s) => PopupMenuItem(
+                  value: 'source:$s',
+                  child: Row(
+                    children: [
+                      if (remoteSource == s)
+                        Icon(
+                          Icons.check,
+                          size: 18,
+                          color: Theme.of(context).colorScheme.primary,
+                        )
+                      else
+                        const SizedBox(width: 18),
+                      const SizedBox(width: 8),
+                      Text(s),
+                    ],
+                  ),
+                ),
+              ),
             ],
           ),
         ],
       ),
       body: Column(
         children: [
+          // ── Search bar ──
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
             child: TextField(
               controller: _searchController,
               textInputAction: TextInputAction.search,
               decoration: InputDecoration(
-                hintText: '搜索歌曲（音乐库 + 试听）',
+                hintText: _hintText(),
                 prefixIcon: const Icon(Icons.search),
                 suffixIcon: _searchController.text.isEmpty
                     ? null
@@ -385,8 +493,11 @@ class _ExplorePageState extends ConsumerState<ExplorePage> {
                           _searchController.clear();
                           setState(() {
                             _query = '';
-                            _previewPage = 1;
+                            _selectedSongIds.clear();
                           });
+                          ref
+                              .read(exploreRemoteSearchProvider.notifier)
+                              .reset();
                         },
                       ),
                 border: const OutlineInputBorder(),
@@ -395,297 +506,317 @@ class _ExplorePageState extends ConsumerState<ExplorePage> {
               onSubmitted: _submitQuery,
             ),
           ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-            child: Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: ExplorePreviewSearchMode.values.map((mode) {
-                final selected = mode == previewMode;
-                return ChoiceChip(
-                  label: Text(_modeLabel(mode)),
-                  selected: selected,
-                  onSelected: (_) {
-                    ref.read(explorePreviewModeProvider.notifier).state = mode;
-                    setState(() {
-                      _previewPage = 1;
-                    });
-                  },
-                );
-              }).toList(),
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-            child: Align(
-              alignment: Alignment.centerLeft,
-              child: Text(
-                previewMode == ExplorePreviewSearchMode.album
-                    ? '专辑模式使用 source_album 搜索，每页 30 条'
-                    : '每页 30 条，支持刷新与分页',
-                style: Theme.of(context).textTheme.bodySmall,
-              ),
-            ),
-          ),
-          if (query.isEmpty)
-            const Expanded(child: Center(child: Text('输入关键词，探索音乐库与试听歌曲')))
-          else
-            Expanded(
-              child: ListView(
-                children: [
-                  _SectionTitle(icon: Icons.library_music, title: '音乐库（正常歌曲）'),
-                  if (localSearchAsync == null)
-                    const SizedBox.shrink()
-                  else
-                    localSearchAsync.when(
-                      skipLoadingOnReload: false,
-                      skipLoadingOnRefresh: false,
-                      data: (result) {
-                        if (result.songs.isEmpty) {
-                          return const ListTile(title: Text('音乐库暂无匹配歌曲'));
-                        }
-                        return Column(
-                          children: result.songs.map((song) {
-                            return ListTile(
-                              leading: ClipRRect(
-                                borderRadius: BorderRadius.circular(6),
-                                child: CoverArtImage(
-                                  coverArtId: song.coverArt,
-                                  size: 50,
-                                ),
-                              ),
-                              title: Text(
-                                song.title,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                              subtitle: Text(
-                                '${song.artist ?? '未知歌手'}${song.album == null ? '' : ' · ${song.album}'}',
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                              trailing: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  _badge(context, '正常'),
-                                  const SizedBox(width: 8),
-                                  Text(song.durationString),
-                                ],
-                              ),
-                              onTap: () {
-                                final songs = result.songs;
-                                ref
-                                    .read(playerProvider.notifier)
-                                    .playQueue(
-                                      songs,
-                                      startIndex: songs.indexOf(song),
-                                    );
-                              },
-                            );
-                          }).toList(),
-                        );
-                      },
-                      loading: () => const Padding(
-                        padding: EdgeInsets.all(16),
-                        child: Center(child: CircularProgressIndicator()),
-                      ),
-                      error: (error, _) =>
-                          const ListTile(title: Text('音乐库搜索失败，请检查网络')),
-                    ),
-                  const SizedBox(height: 8),
-                  _SectionTitle(icon: Icons.headphones, title: '在线试听'),
-                  if (previewSongsAsync == null)
-                    const SizedBox.shrink()
-                  else
-                    previewSongsAsync.when(
-                      skipLoadingOnReload: false,
-                      skipLoadingOnRefresh: false,
-                      data: (songs) {
-                        final canPrev = _previewPage > 1;
-                        final canNext = songs.length >= explorePreviewPageSize;
 
-                        return Column(
-                          children: [
-                            Padding(
-                              padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    '模式: ${_modeLabel(previewMode)} · 源: $previewSource · 第 $_previewPage 页',
-                                    style: Theme.of(
-                                      context,
-                                    ).textTheme.bodySmall,
-                                  ),
-                                  const SizedBox(height: 8),
-                                  Wrap(
-                                    spacing: 8,
-                                    runSpacing: 8,
-                                    children: [
-                                      OutlinedButton.icon(
-                                        onPressed: () => _refreshSearchResults(
-                                          query,
-                                          previewQuery,
-                                        ),
-                                        icon: const Icon(Icons.refresh),
-                                        label: const Text('刷新'),
-                                      ),
-                                      FilledButton.icon(
-                                        onPressed: _isBatchDownloading
-                                            ? null
-                                            : () => _enqueueCurrentPageSongs(
-                                                songs,
-                                              ),
-                                        icon: _isBatchDownloading
-                                            ? const SizedBox(
-                                                width: 14,
-                                                height: 14,
-                                                child:
-                                                    CircularProgressIndicator(
-                                                      strokeWidth: 2,
-                                                    ),
-                                              )
-                                            : const Icon(
-                                                Icons
-                                                    .download_for_offline_outlined,
-                                              ),
-                                        label: Text(
-                                          _isBatchDownloading
-                                              ? '下载中...'
-                                              : '下载本页全部',
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ],
-                              ),
-                            ),
-                            if (songs.isEmpty)
-                              const ListTile(title: Text('试听源暂无匹配歌曲'))
-                            else
-                              Column(
-                                children: songs.map((song) {
-                                  final isResolving =
-                                      _resolvingSongId == song.id;
-                                  return ListTile(
-                                    leading:
-                                        song.previewCoverUrl != null &&
-                                            song.previewCoverUrl!.isNotEmpty
-                                        ? CircleAvatar(
-                                            backgroundImage: NetworkImage(
-                                              song.previewCoverUrl!,
-                                            ),
-                                          )
-                                        : const CircleAvatar(
-                                            child: Icon(Icons.music_note),
-                                          ),
-                                    title: Text(
-                                      song.title,
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                    subtitle: Text(
-                                      '${song.artist ?? '未知歌手'}${song.album == null ? '' : ' · ${song.album}'}',
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                    trailing: isResolving
-                                        ? const SizedBox(
-                                            width: 20,
-                                            height: 20,
-                                            child: CircularProgressIndicator(
-                                              strokeWidth: 2,
-                                            ),
-                                          )
-                                        : Row(
-                                            mainAxisSize: MainAxisSize.min,
-                                            children: [
-                                              _badge(context, '试听'),
-                                              IconButton(
-                                                icon: const Icon(
-                                                  Icons.download_outlined,
-                                                ),
-                                                tooltip: '添加到离线下载队列',
-                                                onPressed: () {
-                                                  _enqueuePreview(song);
-                                                },
-                                              ),
-                                            ],
-                                          ),
-                                    onTap: () => _playPreview(song),
-                                  );
-                                }).toList(),
-                              ),
-                            Padding(
-                              padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-                              child: Row(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  IconButton(
-                                    tooltip: '上一页',
-                                    onPressed: canPrev
-                                        ? () {
-                                            setState(() {
-                                              _previewPage--;
-                                            });
-                                          }
-                                        : null,
-                                    icon: const Icon(Icons.chevron_left),
-                                  ),
-                                  Text(
-                                    '第 $_previewPage 页 · 本页 ${songs.length} 首',
-                                  ),
-                                  IconButton(
-                                    tooltip: '下一页',
-                                    onPressed: canNext
-                                        ? () {
-                                            setState(() {
-                                              _previewPage++;
-                                            });
-                                          }
-                                        : null,
-                                    icon: const Icon(Icons.chevron_right),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ],
-                        );
-                      },
-                      loading: () => Padding(
-                        padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: const [
-                            Text('加载试听结果中...'),
-                            SizedBox(height: 12),
-                            Center(child: CircularProgressIndicator()),
-                          ],
-                        ),
-                      ),
-                      error: (error, _) => Padding(
-                        padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text('试听搜索失败，请检查网络'),
-                            const SizedBox(height: 8),
-                            OutlinedButton.icon(
-                              onPressed: () =>
-                                  _refreshSearchResults(query, previewQuery),
-                              icon: const Icon(Icons.refresh),
-                              label: const Text('重试'),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  const SizedBox(height: 24),
-                ],
+          // ── Mode indicator ──
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 4),
+            child: Row(
+              children: [
+                Icon(
+                  searchMode == ExploreSearchMode.local
+                      ? Icons.library_music
+                      : Icons.cloud_outlined,
+                  size: 16,
+                  color: Theme.of(context).colorScheme.primary,
+                ),
+                const SizedBox(width: 6),
+                Text(
+                  searchMode == ExploreSearchMode.local
+                      ? '音乐库搜索'
+                      : '远程搜索 · $remoteSource',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: Theme.of(context).colorScheme.primary,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          // ── Search type chips (remote mode only) ──
+          if (searchMode == ExploreSearchMode.remote)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+              child: Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: ExploreSearchType.values
+                    .where((t) => t != ExploreSearchType.playlist) // 暂时隐藏歌单ID
+                    .map((type) {
+                      final selected = type == searchType;
+                      return ChoiceChip(
+                        label: Text(_searchTypeLabel(type)),
+                        selected: selected,
+                        onSelected: (_) {
+                          ref.read(exploreSearchTypeProvider.notifier).state =
+                              type;
+                          if (type == ExploreSearchType.playlist) {
+                            // Playlist only supports netease
+                            ref
+                                    .read(exploreRemoteSourceProvider.notifier)
+                                    .state =
+                                'netease';
+                          }
+                          setState(() {
+                            _selectedSongIds.clear();
+                          });
+                          // Re-search if there's a query
+                          if (_query.isNotEmpty) {
+                            final source = ref.read(
+                              exploreRemoteSourceProvider,
+                            );
+                            ref
+                                .read(exploreRemoteSearchProvider.notifier)
+                                .search(
+                                  keyword: _query,
+                                  source: source,
+                                  type: type,
+                                );
+                          }
+                        },
+                      );
+                    })
+                    .toList(),
               ),
             ),
+
+          // ── Body ──
+          if (query.isEmpty)
+            const Expanded(child: Center(child: Text('输入关键词，探索音乐')))
+          else if (searchMode == ExploreSearchMode.local)
+            Expanded(child: _buildLocalResults(localSearchAsync))
+          else
+            Expanded(child: _buildRemoteResults(remoteState)),
         ],
       ),
+
+      // ── Floating batch download bar ──
+      bottomNavigationBar: _isSelectionMode
+          ? SafeArea(
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 8,
+                ),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                  border: Border(
+                    top: BorderSide(
+                      color: Theme.of(context).colorScheme.outlineVariant,
+                    ),
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    TextButton(
+                      onPressed: () {
+                        setState(() {
+                          _selectedSongIds.clear();
+                        });
+                      },
+                      child: const Text('取消选择'),
+                    ),
+                    const Spacer(),
+                    Text('已选 ${_selectedSongIds.length} 首'),
+                    const SizedBox(width: 12),
+                    FilledButton.icon(
+                      onPressed: _isBatchDownloading
+                          ? null
+                          : () {
+                              final remoteState = ref.read(
+                                exploreRemoteSearchProvider,
+                              );
+                              _enqueueSelectedSongs(remoteState.songs);
+                            },
+                      icon: _isBatchDownloading
+                          ? const SizedBox(
+                              width: 14,
+                              height: 14,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(Icons.download_for_offline_outlined),
+                      label: Text(_isBatchDownloading ? '下载中...' : '下载选中'),
+                    ),
+                  ],
+                ),
+              ),
+            )
+          : null,
+    );
+  }
+
+  // ── Local search results ──
+  Widget _buildLocalResults(AsyncValue<SearchResult>? localSearchAsync) {
+    if (localSearchAsync == null) {
+      return const Center(child: Text('音乐库暂无匹配歌曲'));
+    }
+    return localSearchAsync.when(
+      skipLoadingOnReload: false,
+      skipLoadingOnRefresh: false,
+      data: (result) {
+        if (result.songs.isEmpty) {
+          return const Center(child: Text('音乐库暂无匹配歌曲'));
+        }
+        return ListView.builder(
+          itemCount: result.songs.length,
+          itemBuilder: (context, index) {
+            final song = result.songs[index];
+            return ListTile(
+              leading: ClipRRect(
+                borderRadius: BorderRadius.circular(6),
+                child: CoverArtImage(coverArtId: song.coverArt, size: 50),
+              ),
+              title: Text(
+                song.title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+              subtitle: Text(
+                '${song.artist ?? '未知歌手'}${song.album == null ? '' : ' · ${song.album}'}',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+              trailing: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  _badge(context, '音乐库'),
+                  const SizedBox(width: 8),
+                  Text(song.durationString),
+                ],
+              ),
+              onTap: () {
+                final songs = result.songs;
+                ref
+                    .read(playerProvider.notifier)
+                    .playQueue(songs, startIndex: songs.indexOf(song));
+              },
+            );
+          },
+        );
+      },
+      loading: () => const Center(child: CircularProgressIndicator()),
+      error: (error, _) => const Center(child: Text('音乐库搜索失败，请检查网络')),
+    );
+  }
+
+  // ── Remote search results with infinite scroll ──
+  Widget _buildRemoteResults(ExploreRemoteState remoteState) {
+    if (remoteState.songs.isEmpty &&
+        !remoteState.isLoading &&
+        remoteState.error == null) {
+      return const Center(child: Text('远程源暂无匹配歌曲'));
+    }
+
+    final itemCount =
+        remoteState.songs.length +
+        (remoteState.isLoading || remoteState.error != null ? 1 : 0);
+
+    return ListView.builder(
+      controller: _scrollController,
+      itemCount: itemCount,
+      itemBuilder: (context, index) {
+        // Footer: loading indicator or error
+        if (index >= remoteState.songs.length) {
+          if (remoteState.error != null) {
+            return Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                children: [
+                  Text(
+                    remoteState.error!,
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.error,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  OutlinedButton.icon(
+                    onPressed: () {
+                      ref
+                          .read(exploreRemoteSearchProvider.notifier)
+                          .loadNextPage();
+                    },
+                    icon: const Icon(Icons.refresh),
+                    label: const Text('重试'),
+                  ),
+                ],
+              ),
+            );
+          }
+          return const Padding(
+            padding: EdgeInsets.all(24),
+            child: Center(child: CircularProgressIndicator()),
+          );
+        }
+
+        final song = remoteState.songs[index];
+        final isResolving = _resolvingSongId == song.id;
+        final isSelected = _selectedSongIds.contains(song.id);
+
+        return ListTile(
+          selected: isSelected,
+          selectedTileColor: Theme.of(
+            context,
+          ).colorScheme.primaryContainer.withValues(alpha: 0.3),
+          leading:
+              song.previewCoverUrl != null && song.previewCoverUrl!.isNotEmpty
+              ? CircleAvatar(
+                  backgroundImage: NetworkImage(song.previewCoverUrl!),
+                )
+              : const CircleAvatar(child: Icon(Icons.music_note)),
+          title: Text(song.title, maxLines: 1, overflow: TextOverflow.ellipsis),
+          subtitle: Text(
+            '${song.artist ?? '未知歌手'}${song.album == null ? '' : ' · ${song.album}'}',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+          trailing: _isSelectionMode
+              ? Checkbox(
+                  value: isSelected,
+                  onChanged: (val) {
+                    setState(() {
+                      if (val == true) {
+                        _selectedSongIds.add(song.id);
+                      } else {
+                        _selectedSongIds.remove(song.id);
+                      }
+                    });
+                  },
+                )
+              : isResolving
+              ? const SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    _badge(context, '试听'),
+                    IconButton(
+                      icon: const Icon(Icons.download_outlined),
+                      tooltip: '添加到离线下载队列',
+                      onPressed: () => _enqueuePreview(song),
+                    ),
+                  ],
+                ),
+          onTap: _isSelectionMode
+              ? () {
+                  setState(() {
+                    if (isSelected) {
+                      _selectedSongIds.remove(song.id);
+                    } else {
+                      _selectedSongIds.add(song.id);
+                    }
+                  });
+                }
+              : () => _playPreview(song),
+          onLongPress: () {
+            setState(() {
+              _selectedSongIds.add(song.id);
+            });
+          },
+        );
+      },
     );
   }
 
@@ -701,32 +832,6 @@ class _ExplorePageState extends ConsumerState<ExplorePage> {
         style: Theme.of(context).textTheme.bodySmall?.copyWith(
           color: Theme.of(context).colorScheme.onPrimaryContainer,
         ),
-      ),
-    );
-  }
-}
-
-class _SectionTitle extends StatelessWidget {
-  final IconData icon;
-  final String title;
-
-  const _SectionTitle({required this.icon, required this.title});
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 10, 16, 6),
-      child: Row(
-        children: [
-          Icon(icon, size: 20, color: Theme.of(context).colorScheme.primary),
-          const SizedBox(width: 8),
-          Text(
-            title,
-            style: Theme.of(
-              context,
-            ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
-          ),
-        ],
       ),
     );
   }

@@ -124,6 +124,64 @@ class GdMusicApiClient {
     return songs;
   }
 
+  /// Fetch songs from a NetEase Cloud Music playlist by its ID.
+  /// Only supports source=netease.
+  Future<List<Song>> searchPlaylist({required String playlistId}) async {
+    final pid = playlistId.trim();
+    if (pid.isEmpty) return const [];
+    Logger.infoWithTag(_logTag, 'searchPlaylist start playlistId=$pid');
+
+    final response = await _dio.get(
+      '/api.php',
+      queryParameters: {'types': 'playlist', 'id': pid},
+    );
+
+    final data = response.data;
+    if (data is! List) {
+      Logger.warnWithTag(
+        _logTag,
+        'searchPlaylist unexpected response type=${data.runtimeType}',
+      );
+      return const [];
+    }
+
+    final songs = data
+        .whereType<Map>()
+        .map((raw) {
+          final map = raw.cast<String, dynamic>();
+          final trackId = (map['id'] ?? '').toString().trim();
+          if (trackId.isEmpty) return null;
+
+          final lyricId = (map['lyric_id'] ?? map['id'] ?? '')
+              .toString()
+              .trim();
+          final picId = (map['pic_id'] ?? '').toString().trim();
+          final title = (map['name'] ?? '').toString().trim();
+          final artist = _parseArtist(map['artist']);
+          final album = (map['album'] ?? '').toString();
+
+          return Song(
+            id: 'gd_netease_$trackId',
+            title: title.isEmpty ? '未知歌曲' : title,
+            artist: artist,
+            album: album.isEmpty ? null : album,
+            isPreview: true,
+            previewSource: 'netease',
+            previewTrackId: trackId,
+            previewLyricId: lyricId.isEmpty ? null : lyricId,
+            previewPicId: picId.isEmpty ? null : picId,
+          );
+        })
+        .whereType<Song>()
+        .toList();
+
+    Logger.infoWithTag(
+      _logTag,
+      'searchPlaylist done playlistId=$pid result=${songs.length}',
+    );
+    return songs;
+  }
+
   Future<GdSongUrlResult> resolveSongUrl({
     required String source,
     required String trackId,

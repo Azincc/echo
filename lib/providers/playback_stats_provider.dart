@@ -314,13 +314,12 @@ Future<_CacheStats> _buildCacheStats(Ref ref) async {
   final activeLibraryId = ref.watch(activeLibraryProvider)?.id;
   final normalizedLibraryId = _normalizeOptional(activeLibraryId);
   final cacheRepository = ref.watch(audioCacheRepositoryProvider);
+  final cacheService = ref.watch(audioCacheServiceProvider);
   final allEntries = await cacheRepository.getAllEntries();
   final scopedEntries = _scopeCacheEntries(allEntries, normalizedLibraryId);
 
-  final totalBytes = scopedEntries.fold<int>(
-    0,
-    (sum, entry) => sum + entry.fileSize,
-  );
+  // Use disk-scanned size to match cache management page
+  final totalBytes = await cacheService.getAudioCacheSize();
   final totalPlayCount = scopedEntries.fold<int>(
     0,
     (sum, entry) => sum + entry.playCount,

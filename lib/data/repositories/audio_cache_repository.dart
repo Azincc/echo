@@ -179,6 +179,16 @@ class AudioCacheRepository {
     )..where((t) => t.libraryId.equals(libraryId))).go();
   }
 
+  /// 获取所有完整条目，按最近播放时间升序排列（纯 LRU 淘汰用）
+  Future<List<AudioCacheEntry>> getAllEntriesByLRU() async {
+    final rows =
+        await (_db.select(_db.audioCacheEntries)
+              ..where((t) => t.isComplete.equals(true))
+              ..orderBy([(t) => OrderingTerm.asc(t.lastPlayedAt)]))
+            .get();
+    return rows.map(_rowToEntry).toList();
+  }
+
   /// 获取所有缓存条目
   Future<List<AudioCacheEntry>> getAllEntries() async {
     final rows = await _db.select(_db.audioCacheEntries).get();

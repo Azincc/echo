@@ -114,18 +114,113 @@ class AudioCacheService {
 
   /// 检查并执行缓存淘汰
   Future<void> evictIfNeeded() async {
-    var totalSize = await _repository.getTotalCacheSize();
+    // 使用磁盘实际大小判断是否超限
+    var totalSize = await getAudioCacheSize();
     if (totalSize <= maxCacheSizeBytes) return;
 
-    final targetSize = (maxCacheSizeBytes * 0.8).toInt();
-    final evictable = await _repository.getEvictablEntries(
-      protectionThreshold: protectionThreshold,
+    Logger.infoWithTag(
+      _tag,
+      'eviction triggered: diskSize=$totalSize limit=$maxCacheSizeBytes',
     );
 
-    // 获取下载目录路径，用于保护已下载文件不被淘汰
+    final targetSize = (maxCacheSizeBytes * 0.8).toInt();
     final downloadDirPath = await _getDownloadDirPath();
 
-    for (final entry in evictable) {
+    // Phase 0: 清理孤立文件（磁盘上存在但 DB 中没有记录的文件）
+    totalSize = await _cleanOrphanFiles(totalSize);
+
+    if (totalSize <= targetSize) {
+      Logger.infoWithTag(_tag, 'orphan cleanup sufficient');
+      return;
+    }
+
+    // Phase 1: 先淘汰低频条目（playCount < protectionThreshold）
+    final lowFreqEntries = await _repository.getEvictablEntries(
+      protectionThreshold: protectionThreshold,
+    );
+    totalSize = await _evictEntries(
+      lowFreqEntries,
+      totalSize,
+      targetSize,
+      downloadDirPath,
+    );
+
+    // Phase 2: 如果仍然超限，降级到纯 LRU（所有完整条目按最后播放时间排序）
+    if (totalSize > targetSize) {
+      Logger.infoWithTag(
+        _tag,
+        'phase 1 insufficient, falling back to pure LRU eviction',
+      );
+      final allEntries = await _repository.getAllEntriesByLRU();
+      totalSize = await _evictEntries(
+        allEntries,
+        totalSize,
+        targetSize,
+        downloadDirPath,
+      );
+    }
+
+    Logger.infoWithTag(
+      _tag,
+      'eviction complete: diskSize=$totalSize target=$targetSize',
+    );
+  }
+
+  /// 清理孤立文件：删除磁盘上存在但 DB 中没有记录的缓存文件
+  Future<int> _cleanOrphanFiles(int currentSize) async {
+    try {
+      final cacheDir = await getAudioCacheDir();
+      if (!await cacheDir.exists()) return currentSize;
+
+      // 获取 DB 中所有已注册的文件路径
+      final allEntries = await _repository.getAllEntries();
+      final registeredPaths = allEntries.map((e) => e.filePath).toSet();
+
+      var cleaned = 0;
+      var cleanedBytes = 0;
+
+      await for (final entity in cacheDir.list(
+        recursive: true,
+        followLinks: false,
+      )) {
+        if (entity is! File) continue;
+        if (registeredPaths.contains(entity.path)) continue;
+
+        try {
+          final size = await entity.length();
+          await entity.delete();
+          cleanedBytes += size;
+          cleaned++;
+        } catch (e) {
+          Logger.warnWithTag(
+            _tag,
+            'failed to delete orphan: ${entity.path}',
+            e,
+          );
+        }
+      }
+
+      if (cleaned > 0) {
+        Logger.infoWithTag(
+          _tag,
+          'orphan cleanup: deleted $cleaned files, freed $cleanedBytes bytes',
+        );
+      }
+      return currentSize - cleanedBytes;
+    } catch (e) {
+      Logger.warnWithTag(_tag, 'orphan cleanup failed', e);
+      return currentSize;
+    }
+  }
+
+  /// 从列表中逐个淘汰条目，直到 totalSize <= targetSize
+  Future<int> _evictEntries(
+    List<AudioCacheEntry> entries,
+    int totalSize,
+    int targetSize,
+    String? downloadDirPath,
+  ) async {
+    for (final entry in entries) {
       if (totalSize <= targetSize) break;
 
       // 跳过已下载文件（路径在下载目录中的不淘汰）
@@ -154,6 +249,7 @@ class AudioCacheService {
 
       Logger.info('Evicted cache: ${entry.songId} (${entry.quality.name})');
     }
+    return totalSize;
   }
 
   /// 获取下载目录路径（用于淘汰保护）

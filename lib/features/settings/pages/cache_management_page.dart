@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../providers/audio_cache_provider.dart';
+import '../../../providers/download_provider.dart';
+import '../../download/pages/download_manager_page.dart';
 
 /// 缓存管理页面
 class CacheManagementPage extends ConsumerWidget {
@@ -19,6 +21,8 @@ class CacheManagementPage extends ConsumerWidget {
           _buildImageCacheSection(context, ref),
           const SizedBox(height: 12),
           _buildLyricsCacheSection(context, ref),
+          const SizedBox(height: 12),
+          _buildDownloadSection(context, ref),
         ],
       ),
     );
@@ -289,6 +293,74 @@ class CacheManagementPage extends ConsumerWidget {
                   await ref.read(audioCacheServiceProvider).clearLyricsCache();
                   ref.invalidate(lyricsCacheCountProvider);
                 },
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+  // ---------------------------------------------------------------------------
+  // 已下载歌曲
+  // ---------------------------------------------------------------------------
+
+  Widget _buildDownloadSection(BuildContext context, WidgetRef ref) {
+    final downloadedAsync = ref.watch(downloadedSongsProvider);
+
+    return Card(
+      margin: EdgeInsets.zero,
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(
+                  Icons.download_done_outlined,
+                  size: 20,
+                  color: Theme.of(context).colorScheme.primary,
+                ),
+                const SizedBox(width: 8),
+                const Text(
+                  '已下载歌曲',
+                  style: TextStyle(fontWeight: FontWeight.w600, fontSize: 15),
+                ),
+                const Spacer(),
+                downloadedAsync.when(
+                  data: (songs) => Text(
+                    '${songs.length} 首',
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                  loading: () => const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ),
+                  error: (_, __) => const Text(
+                    '获取失败',
+                    style: TextStyle(fontSize: 13, color: Colors.red),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => const DownloadManagerPage(),
+                    ),
+                  );
+                },
+                icon: const Icon(Icons.folder_open, size: 18),
+                label: const Text('管理下载'),
               ),
             ),
           ],

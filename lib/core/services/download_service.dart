@@ -1,16 +1,20 @@
 import 'dart:async';
 import 'dart:io';
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import '../../core/constants/api_constants.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as p;
 import 'package:uuid/uuid.dart';
+import '../../data/models/audio_quality.dart';
 import '../../data/models/download_task.dart';
 import '../../data/repositories/cover_repository.dart';
 import '../../data/models/song.dart';
 import '../../data/repositories/download_repository.dart';
 import '../../data/sources/subsonic_api_client.dart';
 import '../utils/logger.dart';
+import 'audio_cache_service.dart';
+import 'storage_permission_service.dart';
 
 /// 下载服务 — 队列管理 + 并发控制
 class DownloadService {
@@ -19,6 +23,7 @@ class DownloadService {
   final SubsonicApiClient _apiClient;
   final DownloadRepository _repository;
   final CoverRepository _coverRepository;
+  final AudioCacheService _cacheService;
   final int maxConcurrent;
 
   final _activeDownloads = <String, CancelToken>{};
@@ -31,11 +36,13 @@ class DownloadService {
     required SubsonicApiClient apiClient,
     required DownloadRepository repository,
     required CoverRepository coverRepository,
+    required AudioCacheService cacheService,
     this.maxConcurrent = 3,
   }) : _dio = dio,
        _apiClient = apiClient,
        _repository = repository,
-       _coverRepository = coverRepository;
+       _coverRepository = coverRepository,
+       _cacheService = cacheService;
 
   /// 下载进度 Stream
   Stream<Map<String, double>> get progressStream => _progressController.stream;
@@ -44,7 +51,16 @@ class DownloadService {
   int get activeCount => _activeDownloads.length;
 
   /// 添加下载任务（单曲）
+  /// 如果歌曲已缓存，直接将缓存文件复制为下载文件，无需重新下载
   Future<void> enqueue(Song song, {required String libraryId}) async {
+    // Android 下载到公共目录前先检查权限
+    if (!kIsWeb && Platform.isAndroid) {
+      final granted = await StoragePermissionService.ensureStoragePermission();
+      if (!granted) {
+        throw Exception('需要存储权限才能下载音乐');
+      }
+    }
+
     // 检查是否已存在
     final existing = await _repository.getTaskBySongId(song.id, libraryId);
     if (existing != null) {
@@ -61,6 +77,17 @@ class DownloadService {
       await _repository.deleteTask(existing.id);
     }
 
+    // 检查是否已有缓存文件 → 直接复制为下载文件
+    final cachedPath = await _cacheService.getCachedPath(
+      songId: song.id,
+      libraryId: libraryId,
+      quality: AudioQualityLevel.original,
+    );
+    if (cachedPath != null && File(cachedPath).existsSync()) {
+      await _promoteCacheToDownload(song, libraryId, cachedPath);
+      return;
+    }
+
     final task = DownloadTask(
       id: const Uuid().v4(),
       libraryId: libraryId,
@@ -71,11 +98,66 @@ class DownloadService {
       coverArt: song.coverArt,
       duration: song.duration,
       suffix: song.suffix,
+      bitRate: song.bitRate,
+      contentType: song.contentType,
       createdAt: DateTime.now().millisecondsSinceEpoch,
     );
 
     await _repository.createTask(task);
     _processQueue();
+  }
+
+  /// 将已缓存文件提升为下载文件（复制到下载目录 + 创建任务记录）
+  Future<void> _promoteCacheToDownload(
+    Song song,
+    String libraryId,
+    String cachedPath,
+  ) async {
+    final suffix = song.suffix ?? p.extension(cachedPath).replaceAll('.', '');
+    final savePath = await _getSavePath(
+      libraryId,
+      song.id,
+      suffix.isNotEmpty ? suffix : 'cache',
+    );
+
+    // 确保目录存在
+    final dir = Directory(p.dirname(savePath));
+    if (!await dir.exists()) {
+      await dir.create(recursive: true);
+    }
+
+    // 复制缓存文件到下载目录
+    final cacheFile = File(cachedPath);
+    await cacheFile.copy(savePath);
+    final fileSize = await File(savePath).length();
+
+    // 创建已完成的下载任务记录
+    final task = DownloadTask(
+      id: const Uuid().v4(),
+      libraryId: libraryId,
+      songId: song.id,
+      title: song.title,
+      artist: song.artist,
+      album: song.album,
+      coverArt: song.coverArt,
+      duration: song.duration,
+      suffix: suffix,
+      bitRate: song.bitRate,
+      contentType: song.contentType,
+      filePath: savePath,
+      fileSize: fileSize,
+      status: DownloadTaskStatus.completed,
+      progress: 1.0,
+      createdAt: DateTime.now().millisecondsSinceEpoch,
+      completedAt: DateTime.now().millisecondsSinceEpoch,
+    );
+    await _repository.createTask(task);
+
+    Logger.infoWithTag(
+      _logTag,
+      'promoted cache→download title="${song.title}" songId=${song.id} '
+      'from=$cachedPath to=$savePath size=$fileSize',
+    );
   }
 
   /// 批量添加（专辑/歌单）
@@ -258,6 +340,27 @@ class DownloadService {
         completedAt: DateTime.now().millisecondsSinceEpoch,
       );
 
+      // 下载完成 → 注册到缓存系统，避免重复缓存
+      try {
+        await _cacheService.registerCache(
+          songId: task.songId,
+          libraryId: task.libraryId,
+          filePath: savePath,
+          fileSize: fileSize,
+          quality: AudioQualityLevel.original,
+        );
+        Logger.infoWithTag(
+          _logTag,
+          'registered download as cache songId=${task.songId}',
+        );
+      } catch (e) {
+        Logger.warnWithTag(
+          _logTag,
+          'failed to register download as cache songId=${task.songId}',
+          e,
+        );
+      }
+
       Logger.infoWithTag(
         _logTag,
         'downloaded title="${task.title}" songId=${task.songId} file=$savePath cover=${resolvedCoverRef ?? "-"}',
@@ -288,13 +391,36 @@ class DownloadService {
   }
 
   /// 获取文件保存路径
+  /// Android: /storage/emulated/0/Music/Echoes/{libraryId}/{songId}.suffix
+  /// iOS: Documents/echo_downloads/{libraryId}/{songId}.suffix
   Future<String> _getSavePath(
     String libraryId,
     String songId,
     String suffix,
   ) async {
+    if (!kIsWeb && Platform.isAndroid) {
+      // Android: 使用公共 Music 目录
+      const musicDir = '/storage/emulated/0/Music';
+      return p.join(musicDir, 'Echoes', libraryId, '$songId.$suffix');
+    }
+    // iOS / 其他平台: 使用应用私有 Documents 目录
     final appDir = await getApplicationDocumentsDirectory();
     return p.join(appDir.path, 'echo_downloads', libraryId, '$songId.$suffix');
+  }
+
+  /// 获取下载根目录
+  Future<Directory> _getDownloadRootDir() async {
+    if (!kIsWeb && Platform.isAndroid) {
+      return Directory('/storage/emulated/0/Music/Echoes');
+    }
+    final appDir = await getApplicationDocumentsDirectory();
+    return Directory(p.join(appDir.path, 'echo_downloads'));
+  }
+
+  /// 获取下载目录路径（供 UI 展示）
+  Future<String> getDownloadDir() async {
+    final dir = await _getDownloadRootDir();
+    return dir.path;
   }
 
   /// 为历史已完成任务补齐封面缓存（可在列表渲染时触发）
@@ -450,6 +576,163 @@ class DownloadService {
       Logger.warnWithTag(_logTag, 'cover inspect failed url=$coverUrl', e);
       return false;
     }
+  }
+
+  // ---------------------------------------------------------------------------
+  // 本地文件扫描
+  // ---------------------------------------------------------------------------
+
+  /// 扫描本地下载文件，修复 DB 与文件的不一致
+  /// 返回 (正常, 缺失, 孤立) 文件数
+  Future<({int valid, int missing, int orphan})> scanLocalFiles() async {
+    final rootDir = await _getDownloadRootDir();
+    final allTasks = await _repository.getAllTasks();
+    final completedTasks = allTasks
+        .where((t) => t.status == DownloadTaskStatus.completed)
+        .toList();
+
+    int valid = 0;
+    int missing = 0;
+
+    // 检查 DB 中已完成任务的文件是否存在
+    for (final task in completedTasks) {
+      if (task.filePath != null && File(task.filePath!).existsSync()) {
+        valid++;
+      } else {
+        missing++;
+        // 标记为失败
+        await _repository.updateTask(
+          taskId: task.id,
+          status: DownloadTaskStatus.failed,
+          errorMessage: '本地文件已被删除',
+        );
+        Logger.infoWithTag(
+          _logTag,
+          'scan: file missing songId=${task.songId} path=${task.filePath}',
+        );
+      }
+    }
+
+    // 扫描磁盘上的孤立文件（需排除正在下载的任务路径）
+    int orphan = 0;
+    if (await rootDir.exists()) {
+      final knownPaths = allTasks
+          .where((t) => t.filePath != null)
+          .map((t) => p.normalize(t.filePath!))
+          .toSet();
+
+      await for (final entity in rootDir.list(recursive: true)) {
+        if (entity is File) {
+          final normalized = p.normalize(entity.path);
+          if (!knownPaths.contains(normalized)) {
+            orphan++;
+          }
+        }
+      }
+    }
+
+    Logger.infoWithTag(
+      _logTag,
+      'scan complete valid=$valid missing=$missing orphan=$orphan',
+    );
+    return (valid: valid, missing: missing, orphan: orphan);
+  }
+
+  /// 清理孤立文件（磁盘上存在但 DB 无记录的文件）
+  Future<int> cleanOrphanFiles() async {
+    final rootDir = await _getDownloadRootDir();
+    if (!await rootDir.exists()) return 0;
+
+    final allTasks = await _repository.getAllTasks();
+    // 包含所有任务的路径（包括正在下载的），避免误删下载中的文件
+    final knownPaths = allTasks
+        .where((t) => t.filePath != null)
+        .map((t) => p.normalize(t.filePath!))
+        .toSet();
+
+    int cleaned = 0;
+    await for (final entity in rootDir.list(recursive: true)) {
+      if (entity is File) {
+        final normalized = p.normalize(entity.path);
+        if (!knownPaths.contains(normalized)) {
+          try {
+            await entity.delete();
+            cleaned++;
+          } catch (e) {
+            Logger.warnWithTag(
+              _logTag,
+              'failed to delete orphan: $normalized',
+              e,
+            );
+          }
+        }
+      }
+    }
+
+    Logger.infoWithTag(_logTag, 'cleaned $cleaned orphan files');
+    return cleaned;
+  }
+
+  /// 获取下载统计
+  Future<({int totalFiles, int totalSizeBytes, int missingFiles})>
+  getDownloadStats() async {
+    final allTasks = await _repository.getAllTasks();
+    final completedTasks = allTasks
+        .where((t) => t.status == DownloadTaskStatus.completed)
+        .toList();
+
+    int totalFiles = 0;
+    int totalSizeBytes = 0;
+    int missingFiles = 0;
+
+    for (final task in completedTasks) {
+      if (task.filePath != null && File(task.filePath!).existsSync()) {
+        totalFiles++;
+        totalSizeBytes += task.fileSize ?? 0;
+      } else {
+        missingFiles++;
+      }
+    }
+
+    return (
+      totalFiles: totalFiles,
+      totalSizeBytes: totalSizeBytes,
+      missingFiles: missingFiles,
+    );
+  }
+
+  // ---------------------------------------------------------------------------
+  // 播放器联动
+  // ---------------------------------------------------------------------------
+
+  /// 获取所有已下载且文件完整的任务（供播放器使用）
+  Future<List<DownloadTask>> getDownloadedTasks({String? libraryId}) async {
+    final tasks = libraryId != null
+        ? await _repository.getTasksByLibrary(libraryId)
+        : await _repository.getAllTasks();
+
+    return tasks.where((t) {
+      if (t.status != DownloadTaskStatus.completed) return false;
+      if (t.filePath == null) return false;
+      return File(t.filePath!).existsSync();
+    }).toList();
+  }
+
+  /// 将 DownloadTask 转换为 Song 模型（供播放器使用）
+  static Song taskToSong(DownloadTask task) {
+    return Song(
+      id: task.songId,
+      title: task.title,
+      artist: task.artist ?? '',
+      album: task.album,
+      coverArt: task.coverArt,
+      duration: task.duration,
+      suffix: task.suffix,
+      bitRate: task.bitRate,
+      contentType: task.contentType,
+      size: task.fileSize,
+      path: task.filePath,
+    );
   }
 
   void dispose() {

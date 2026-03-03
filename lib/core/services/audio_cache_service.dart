@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/painting.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as p;
@@ -121,8 +122,21 @@ class AudioCacheService {
       protectionThreshold: protectionThreshold,
     );
 
+    // 获取下载目录路径，用于保护已下载文件不被淘汰
+    final downloadDirPath = await _getDownloadDirPath();
+
     for (final entry in evictable) {
       if (totalSize <= targetSize) break;
+
+      // 跳过已下载文件（路径在下载目录中的不淘汰）
+      if (downloadDirPath != null &&
+          entry.filePath.startsWith(downloadDirPath)) {
+        Logger.infoWithTag(
+          _tag,
+          'skip evict (downloaded): ${entry.songId} path=${entry.filePath}',
+        );
+        continue;
+      }
 
       // 删除文件
       try {
@@ -139,6 +153,19 @@ class AudioCacheService {
       totalSize -= entry.fileSize;
 
       Logger.info('Evicted cache: ${entry.songId} (${entry.quality.name})');
+    }
+  }
+
+  /// 获取下载目录路径（用于淘汰保护）
+  Future<String?> _getDownloadDirPath() async {
+    try {
+      if (!kIsWeb && Platform.isAndroid) {
+        return '/storage/emulated/0/Music/Echoes';
+      }
+      final appDir = await getApplicationDocumentsDirectory();
+      return p.join(appDir.path, 'echo_downloads');
+    } catch (e) {
+      return null;
     }
   }
 

@@ -11,6 +11,8 @@ class DownloadTasks extends Table {
   TextColumn get coverArt => text().nullable()();
   IntColumn get duration => integer().nullable()();
   TextColumn get suffix => text().nullable()();
+  IntColumn get bitRate => integer().nullable()();
+  TextColumn get contentType => text().nullable()();
   TextColumn get filePath => text().nullable()();
   IntColumn get fileSize => integer().nullable()();
   TextColumn get status => text().withDefault(const Constant('pending'))();

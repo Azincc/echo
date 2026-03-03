@@ -300,6 +300,24 @@ class MusicRepository {
       rethrow;
     }
   }
+
+  /// 获取单曲详情
+  Future<Song?> getSong(String songId) async {
+    try {
+      final response = await _apiClient.get(
+        ApiConstants.getSong,
+        queryParameters: {'id': songId},
+      );
+
+      final songData = response['song'];
+      if (songData == null) return null;
+
+      return Song.fromJson(songData as Map<String, dynamic>);
+    } catch (e) {
+      Logger.error('Failed to get song: $songId', e);
+      return null;
+    }
+  }
 }
 
 /// 专辑详情（包含歌曲列表）

@@ -9,6 +9,8 @@ class DownloadTask {
   final String? coverArt;
   final int? duration;
   final String? suffix;
+  final int? bitRate;
+  final String? contentType;
   final String? filePath;
   final int? fileSize;
   final DownloadTaskStatus status;
@@ -27,6 +29,8 @@ class DownloadTask {
     this.coverArt,
     this.duration,
     this.suffix,
+    this.bitRate,
+    this.contentType,
     this.filePath,
     this.fileSize,
     this.status = DownloadTaskStatus.pending,
@@ -39,6 +43,8 @@ class DownloadTask {
   DownloadTask copyWith({
     String? filePath,
     int? fileSize,
+    int? bitRate,
+    String? contentType,
     DownloadTaskStatus? status,
     double? progress,
     String? errorMessage,
@@ -54,6 +60,8 @@ class DownloadTask {
       coverArt: coverArt,
       duration: duration,
       suffix: suffix,
+      bitRate: bitRate ?? this.bitRate,
+      contentType: contentType ?? this.contentType,
       filePath: filePath ?? this.filePath,
       fileSize: fileSize ?? this.fileSize,
       status: status ?? this.status,

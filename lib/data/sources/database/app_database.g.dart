@@ -2543,6 +2543,28 @@ class $DownloadTasksTable extends DownloadTasks
     type: DriftSqlType.string,
     requiredDuringInsert: false,
   );
+  static const VerificationMeta _bitRateMeta = const VerificationMeta(
+    'bitRate',
+  );
+  @override
+  late final GeneratedColumn<int> bitRate = GeneratedColumn<int>(
+    'bit_rate',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _contentTypeMeta = const VerificationMeta(
+    'contentType',
+  );
+  @override
+  late final GeneratedColumn<String> contentType = GeneratedColumn<String>(
+    'content_type',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
   static const VerificationMeta _filePathMeta = const VerificationMeta(
     'filePath',
   );
@@ -2631,6 +2653,8 @@ class $DownloadTasksTable extends DownloadTasks
     coverArt,
     duration,
     suffix,
+    bitRate,
+    contentType,
     filePath,
     fileSize,
     status,
@@ -2708,6 +2732,21 @@ class $DownloadTasksTable extends DownloadTasks
       context.handle(
         _suffixMeta,
         suffix.isAcceptableOrUnknown(data['suffix']!, _suffixMeta),
+      );
+    }
+    if (data.containsKey('bit_rate')) {
+      context.handle(
+        _bitRateMeta,
+        bitRate.isAcceptableOrUnknown(data['bit_rate']!, _bitRateMeta),
+      );
+    }
+    if (data.containsKey('content_type')) {
+      context.handle(
+        _contentTypeMeta,
+        contentType.isAcceptableOrUnknown(
+          data['content_type']!,
+          _contentTypeMeta,
+        ),
       );
     }
     if (data.containsKey('file_path')) {
@@ -2809,6 +2848,14 @@ class $DownloadTasksTable extends DownloadTasks
         DriftSqlType.string,
         data['${effectivePrefix}suffix'],
       ),
+      bitRate: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}bit_rate'],
+      ),
+      contentType: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}content_type'],
+      ),
       filePath: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}file_path'],
@@ -2857,6 +2904,8 @@ class DownloadTaskData extends DataClass
   final String? coverArt;
   final int? duration;
   final String? suffix;
+  final int? bitRate;
+  final String? contentType;
   final String? filePath;
   final int? fileSize;
   final String status;
@@ -2874,6 +2923,8 @@ class DownloadTaskData extends DataClass
     this.coverArt,
     this.duration,
     this.suffix,
+    this.bitRate,
+    this.contentType,
     this.filePath,
     this.fileSize,
     required this.status,
@@ -2903,6 +2954,12 @@ class DownloadTaskData extends DataClass
     }
     if (!nullToAbsent || suffix != null) {
       map['suffix'] = Variable<String>(suffix);
+    }
+    if (!nullToAbsent || bitRate != null) {
+      map['bit_rate'] = Variable<int>(bitRate);
+    }
+    if (!nullToAbsent || contentType != null) {
+      map['content_type'] = Variable<String>(contentType);
     }
     if (!nullToAbsent || filePath != null) {
       map['file_path'] = Variable<String>(filePath);
@@ -2943,6 +3000,12 @@ class DownloadTaskData extends DataClass
       suffix: suffix == null && nullToAbsent
           ? const Value.absent()
           : Value(suffix),
+      bitRate: bitRate == null && nullToAbsent
+          ? const Value.absent()
+          : Value(bitRate),
+      contentType: contentType == null && nullToAbsent
+          ? const Value.absent()
+          : Value(contentType),
       filePath: filePath == null && nullToAbsent
           ? const Value.absent()
           : Value(filePath),
@@ -2976,6 +3039,8 @@ class DownloadTaskData extends DataClass
       coverArt: serializer.fromJson<String?>(json['coverArt']),
       duration: serializer.fromJson<int?>(json['duration']),
       suffix: serializer.fromJson<String?>(json['suffix']),
+      bitRate: serializer.fromJson<int?>(json['bitRate']),
+      contentType: serializer.fromJson<String?>(json['contentType']),
       filePath: serializer.fromJson<String?>(json['filePath']),
       fileSize: serializer.fromJson<int?>(json['fileSize']),
       status: serializer.fromJson<String>(json['status']),
@@ -2998,6 +3063,8 @@ class DownloadTaskData extends DataClass
       'coverArt': serializer.toJson<String?>(coverArt),
       'duration': serializer.toJson<int?>(duration),
       'suffix': serializer.toJson<String?>(suffix),
+      'bitRate': serializer.toJson<int?>(bitRate),
+      'contentType': serializer.toJson<String?>(contentType),
       'filePath': serializer.toJson<String?>(filePath),
       'fileSize': serializer.toJson<int?>(fileSize),
       'status': serializer.toJson<String>(status),
@@ -3018,6 +3085,8 @@ class DownloadTaskData extends DataClass
     Value<String?> coverArt = const Value.absent(),
     Value<int?> duration = const Value.absent(),
     Value<String?> suffix = const Value.absent(),
+    Value<int?> bitRate = const Value.absent(),
+    Value<String?> contentType = const Value.absent(),
     Value<String?> filePath = const Value.absent(),
     Value<int?> fileSize = const Value.absent(),
     String? status,
@@ -3035,6 +3104,8 @@ class DownloadTaskData extends DataClass
     coverArt: coverArt.present ? coverArt.value : this.coverArt,
     duration: duration.present ? duration.value : this.duration,
     suffix: suffix.present ? suffix.value : this.suffix,
+    bitRate: bitRate.present ? bitRate.value : this.bitRate,
+    contentType: contentType.present ? contentType.value : this.contentType,
     filePath: filePath.present ? filePath.value : this.filePath,
     fileSize: fileSize.present ? fileSize.value : this.fileSize,
     status: status ?? this.status,
@@ -3054,6 +3125,10 @@ class DownloadTaskData extends DataClass
       coverArt: data.coverArt.present ? data.coverArt.value : this.coverArt,
       duration: data.duration.present ? data.duration.value : this.duration,
       suffix: data.suffix.present ? data.suffix.value : this.suffix,
+      bitRate: data.bitRate.present ? data.bitRate.value : this.bitRate,
+      contentType: data.contentType.present
+          ? data.contentType.value
+          : this.contentType,
       filePath: data.filePath.present ? data.filePath.value : this.filePath,
       fileSize: data.fileSize.present ? data.fileSize.value : this.fileSize,
       status: data.status.present ? data.status.value : this.status,
@@ -3080,6 +3155,8 @@ class DownloadTaskData extends DataClass
           ..write('coverArt: $coverArt, ')
           ..write('duration: $duration, ')
           ..write('suffix: $suffix, ')
+          ..write('bitRate: $bitRate, ')
+          ..write('contentType: $contentType, ')
           ..write('filePath: $filePath, ')
           ..write('fileSize: $fileSize, ')
           ..write('status: $status, ')
@@ -3102,6 +3179,8 @@ class DownloadTaskData extends DataClass
     coverArt,
     duration,
     suffix,
+    bitRate,
+    contentType,
     filePath,
     fileSize,
     status,
@@ -3123,6 +3202,8 @@ class DownloadTaskData extends DataClass
           other.coverArt == this.coverArt &&
           other.duration == this.duration &&
           other.suffix == this.suffix &&
+          other.bitRate == this.bitRate &&
+          other.contentType == this.contentType &&
           other.filePath == this.filePath &&
           other.fileSize == this.fileSize &&
           other.status == this.status &&
@@ -3142,6 +3223,8 @@ class DownloadTasksCompanion extends UpdateCompanion<DownloadTaskData> {
   final Value<String?> coverArt;
   final Value<int?> duration;
   final Value<String?> suffix;
+  final Value<int?> bitRate;
+  final Value<String?> contentType;
   final Value<String?> filePath;
   final Value<int?> fileSize;
   final Value<String> status;
@@ -3160,6 +3243,8 @@ class DownloadTasksCompanion extends UpdateCompanion<DownloadTaskData> {
     this.coverArt = const Value.absent(),
     this.duration = const Value.absent(),
     this.suffix = const Value.absent(),
+    this.bitRate = const Value.absent(),
+    this.contentType = const Value.absent(),
     this.filePath = const Value.absent(),
     this.fileSize = const Value.absent(),
     this.status = const Value.absent(),
@@ -3179,6 +3264,8 @@ class DownloadTasksCompanion extends UpdateCompanion<DownloadTaskData> {
     this.coverArt = const Value.absent(),
     this.duration = const Value.absent(),
     this.suffix = const Value.absent(),
+    this.bitRate = const Value.absent(),
+    this.contentType = const Value.absent(),
     this.filePath = const Value.absent(),
     this.fileSize = const Value.absent(),
     this.status = const Value.absent(),
@@ -3202,6 +3289,8 @@ class DownloadTasksCompanion extends UpdateCompanion<DownloadTaskData> {
     Expression<String>? coverArt,
     Expression<int>? duration,
     Expression<String>? suffix,
+    Expression<int>? bitRate,
+    Expression<String>? contentType,
     Expression<String>? filePath,
     Expression<int>? fileSize,
     Expression<String>? status,
@@ -3221,6 +3310,8 @@ class DownloadTasksCompanion extends UpdateCompanion<DownloadTaskData> {
       if (coverArt != null) 'cover_art': coverArt,
       if (duration != null) 'duration': duration,
       if (suffix != null) 'suffix': suffix,
+      if (bitRate != null) 'bit_rate': bitRate,
+      if (contentType != null) 'content_type': contentType,
       if (filePath != null) 'file_path': filePath,
       if (fileSize != null) 'file_size': fileSize,
       if (status != null) 'status': status,
@@ -3242,6 +3333,8 @@ class DownloadTasksCompanion extends UpdateCompanion<DownloadTaskData> {
     Value<String?>? coverArt,
     Value<int?>? duration,
     Value<String?>? suffix,
+    Value<int?>? bitRate,
+    Value<String?>? contentType,
     Value<String?>? filePath,
     Value<int?>? fileSize,
     Value<String>? status,
@@ -3261,6 +3354,8 @@ class DownloadTasksCompanion extends UpdateCompanion<DownloadTaskData> {
       coverArt: coverArt ?? this.coverArt,
       duration: duration ?? this.duration,
       suffix: suffix ?? this.suffix,
+      bitRate: bitRate ?? this.bitRate,
+      contentType: contentType ?? this.contentType,
       filePath: filePath ?? this.filePath,
       fileSize: fileSize ?? this.fileSize,
       status: status ?? this.status,
@@ -3302,6 +3397,12 @@ class DownloadTasksCompanion extends UpdateCompanion<DownloadTaskData> {
     if (suffix.present) {
       map['suffix'] = Variable<String>(suffix.value);
     }
+    if (bitRate.present) {
+      map['bit_rate'] = Variable<int>(bitRate.value);
+    }
+    if (contentType.present) {
+      map['content_type'] = Variable<String>(contentType.value);
+    }
     if (filePath.present) {
       map['file_path'] = Variable<String>(filePath.value);
     }
@@ -3341,6 +3442,8 @@ class DownloadTasksCompanion extends UpdateCompanion<DownloadTaskData> {
           ..write('coverArt: $coverArt, ')
           ..write('duration: $duration, ')
           ..write('suffix: $suffix, ')
+          ..write('bitRate: $bitRate, ')
+          ..write('contentType: $contentType, ')
           ..write('filePath: $filePath, ')
           ..write('fileSize: $fileSize, ')
           ..write('status: $status, ')
@@ -5555,6 +5658,8 @@ typedef $$DownloadTasksTableCreateCompanionBuilder =
       Value<String?> coverArt,
       Value<int?> duration,
       Value<String?> suffix,
+      Value<int?> bitRate,
+      Value<String?> contentType,
       Value<String?> filePath,
       Value<int?> fileSize,
       Value<String> status,
@@ -5575,6 +5680,8 @@ typedef $$DownloadTasksTableUpdateCompanionBuilder =
       Value<String?> coverArt,
       Value<int?> duration,
       Value<String?> suffix,
+      Value<int?> bitRate,
+      Value<String?> contentType,
       Value<String?> filePath,
       Value<int?> fileSize,
       Value<String> status,
@@ -5636,6 +5743,16 @@ class $$DownloadTasksTableFilterComposer
 
   ColumnFilters<String> get suffix => $composableBuilder(
     column: $table.suffix,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get bitRate => $composableBuilder(
+    column: $table.bitRate,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get contentType => $composableBuilder(
+    column: $table.contentType,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -5729,6 +5846,16 @@ class $$DownloadTasksTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<int> get bitRate => $composableBuilder(
+    column: $table.bitRate,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get contentType => $composableBuilder(
+    column: $table.contentType,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<String> get filePath => $composableBuilder(
     column: $table.filePath,
     builder: (column) => ColumnOrderings(column),
@@ -5801,6 +5928,14 @@ class $$DownloadTasksTableAnnotationComposer
   GeneratedColumn<String> get suffix =>
       $composableBuilder(column: $table.suffix, builder: (column) => column);
 
+  GeneratedColumn<int> get bitRate =>
+      $composableBuilder(column: $table.bitRate, builder: (column) => column);
+
+  GeneratedColumn<String> get contentType => $composableBuilder(
+    column: $table.contentType,
+    builder: (column) => column,
+  );
+
   GeneratedColumn<String> get filePath =>
       $composableBuilder(column: $table.filePath, builder: (column) => column);
 
@@ -5871,6 +6006,8 @@ class $$DownloadTasksTableTableManager
                 Value<String?> coverArt = const Value.absent(),
                 Value<int?> duration = const Value.absent(),
                 Value<String?> suffix = const Value.absent(),
+                Value<int?> bitRate = const Value.absent(),
+                Value<String?> contentType = const Value.absent(),
                 Value<String?> filePath = const Value.absent(),
                 Value<int?> fileSize = const Value.absent(),
                 Value<String> status = const Value.absent(),
@@ -5889,6 +6026,8 @@ class $$DownloadTasksTableTableManager
                 coverArt: coverArt,
                 duration: duration,
                 suffix: suffix,
+                bitRate: bitRate,
+                contentType: contentType,
                 filePath: filePath,
                 fileSize: fileSize,
                 status: status,
@@ -5909,6 +6048,8 @@ class $$DownloadTasksTableTableManager
                 Value<String?> coverArt = const Value.absent(),
                 Value<int?> duration = const Value.absent(),
                 Value<String?> suffix = const Value.absent(),
+                Value<int?> bitRate = const Value.absent(),
+                Value<String?> contentType = const Value.absent(),
                 Value<String?> filePath = const Value.absent(),
                 Value<int?> fileSize = const Value.absent(),
                 Value<String> status = const Value.absent(),
@@ -5927,6 +6068,8 @@ class $$DownloadTasksTableTableManager
                 coverArt: coverArt,
                 duration: duration,
                 suffix: suffix,
+                bitRate: bitRate,
+                contentType: contentType,
                 filePath: filePath,
                 fileSize: fileSize,
                 status: status,

@@ -1,11 +1,9 @@
-import 'dart:io' show Platform;
-import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
-import 'package:permission_handler/permission_handler.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'core/utils/logger.dart';
 import 'core/theme/app_theme.dart';
+
 import 'features/auth/pages/login_page.dart';
 import 'providers/auth_provider.dart';
 import 'providers/theme_provider.dart';
@@ -66,11 +64,10 @@ final routerProvider = Provider<GoRouter>((ref) {
 
   return GoRouter(
     navigatorKey: rootNavigatorKey,
-    initialLocation: '/splash',
+    initialLocation: '/home',
     redirect: (context, state) {
       final authState = ref.read(authStateProvider);
       final isGoingToLogin = state.matchedLocation == '/login';
-      final isGoingToSplash = state.matchedLocation == '/splash';
       final isAddingLibrary = state.uri.queryParameters['add'] == 'true';
 
       // 如果已认证且正在去登录页，且不是为了添加新库，重定向到主页
@@ -78,16 +75,14 @@ final routerProvider = Provider<GoRouter>((ref) {
         return '/home';
       }
 
-      // 如果未认证且不在登录页和启动页，重定向到登录页
-      if (!authState.isAuthenticated && !isGoingToLogin && !isGoingToSplash) {
+      // 如果未认证且不在登录页，重定向到登录页
+      if (!authState.isAuthenticated && !isGoingToLogin) {
         return '/login';
       }
 
       return null;
     },
     routes: [
-      // 启动页
-      GoRoute(path: '/splash', builder: (context, state) => const SplashPage()),
       // 登录页
       GoRoute(path: '/login', builder: (context, state) => const LoginPage()),
       // Library Edit
@@ -143,78 +138,3 @@ final routerProvider = Provider<GoRouter>((ref) {
     ],
   );
 });
-
-/// 启动页 - 检查登录状态并自动跳转
-class SplashPage extends ConsumerStatefulWidget {
-  const SplashPage({super.key});
-
-  @override
-  ConsumerState<SplashPage> createState() => _SplashPageState();
-}
-
-class _SplashPageState extends ConsumerState<SplashPage> {
-  @override
-  void initState() {
-    super.initState();
-    _checkAuthAndNavigate();
-  }
-
-  Future<void> _checkAuthAndNavigate() async {
-    Logger.infoWithTag('SPLASH', 'startup auth check begin');
-    // 请求通知权限 (Android 13+)
-    if (!kIsWeb && Platform.isAndroid) {
-      await Permission.notification.request();
-    }
-
-    // 等待认证状态加载
-    await Future.delayed(const Duration(milliseconds: 500));
-
-    if (!mounted) return;
-
-    final authState = ref.read(authStateProvider);
-
-    if (!mounted) return;
-
-    if (authState.isAuthenticated) {
-      if (mounted) context.go('/home');
-      Logger.infoWithTag('SPLASH', 'startup auth check result: go /home');
-    } else {
-      if (mounted) context.go('/login');
-      Logger.infoWithTag('SPLASH', 'startup auth check result: go /login');
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              Icons.music_note,
-              size: 80,
-              color: Theme.of(context).colorScheme.primary,
-            ),
-            const SizedBox(height: 24),
-            Text(
-              'Echoes 回响',
-              style: Theme.of(
-                context,
-              ).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              '正在初始化...',
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: Theme.of(context).colorScheme.onSurfaceVariant,
-              ),
-            ),
-            const SizedBox(height: 24),
-            const CircularProgressIndicator(),
-          ],
-        ),
-      ),
-    );
-  }
-}

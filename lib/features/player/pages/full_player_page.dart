@@ -31,6 +31,7 @@ class FullPlayerPage extends ConsumerStatefulWidget {
 class _FullPlayerPageState extends ConsumerState<FullPlayerPage>
     with TickerProviderStateMixin {
   bool _showLyrics = false;
+  bool _showBitRate = false;
   bool _isClosingRoute = false;
 
   /// Palette colours are deferred until the route animation (Hero flight)
@@ -737,6 +738,29 @@ class _FullPlayerPageState extends ConsumerState<FullPlayerPage>
     );
   }
 
+  /// 格式化采样率：44100 → 44.1kHz, 96000 → 96kHz
+  String _formatSamplingRate(int rate) {
+    final kHz = rate / 1000;
+    if (kHz == kHz.truncateToDouble()) {
+      return '${kHz.toInt()}kHz';
+    }
+    return '${kHz.toStringAsFixed(1)}kHz';
+  }
+
+  /// 构建音频规格文本（位深/采样率）
+  String _buildAudioSpecText(Song? song) {
+    final bitDepth = song?.bitDepth;
+    final samplingRate = song?.samplingRate;
+    if (bitDepth != null && samplingRate != null && samplingRate > 0) {
+      return '${bitDepth}bit/${_formatSamplingRate(samplingRate)}';
+    } else if (bitDepth != null) {
+      return '${bitDepth}bit';
+    } else if (samplingRate != null && samplingRate > 0) {
+      return _formatSamplingRate(samplingRate);
+    }
+    return '';
+  }
+
   Widget _buildQualityIndicator(WidgetRef ref) {
     final playerState = ref.watch(playerProvider);
     final song = playerState.currentSong;
@@ -746,28 +770,46 @@ class _FullPlayerPageState extends ConsumerState<FullPlayerPage>
               ? ((song?.bitRate ?? 0) ~/ 1000)
               : (song?.bitRate ?? 0));
     final bitRateText = rawBitRate > 0 ? '${rawBitRate}Kbps' : '未知码率';
+    final audioSpecText = _buildAudioSpecText(song);
 
     if (song?.isPreview == true) {
       final qualityLabel = song?.previewQualityLabel?.trim();
-      final text =
-          '试听·${qualityLabel == null || qualityLabel.isEmpty ? '未知音质' : qualityLabel}·$bitRateText';
-      return Row(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(
-            Icons.headphones,
-            size: 12,
-            color: Colors.white.withValues(alpha: 0.76),
+      final parts = <String>[
+        '试听',
+        qualityLabel == null || qualityLabel.isEmpty ? '未知音质' : qualityLabel,
+      ];
+      if (_showBitRate) {
+        parts.add(bitRateText);
+      }
+      if (audioSpecText.isNotEmpty) {
+        parts.add(audioSpecText);
+      }
+      final text = parts.join('·');
+      return GestureDetector(
+        onTap: () => setState(() => _showBitRate = !_showBitRate),
+        behavior: HitTestBehavior.opaque,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                Icons.headphones,
+                size: 12,
+                color: Colors.white.withValues(alpha: 0.76),
+              ),
+              const SizedBox(width: 4),
+              Text(
+                text,
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  fontSize: 10,
+                  color: Colors.white.withValues(alpha: 0.76),
+                ),
+              ),
+            ],
           ),
-          const SizedBox(width: 4),
-          Text(
-            text,
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-              fontSize: 10,
-              color: Colors.white.withValues(alpha: 0.76),
-            ),
-          ),
-        ],
+        ),
       );
     }
 
@@ -782,18 +824,18 @@ class _FullPlayerPageState extends ConsumerState<FullPlayerPage>
       AudioQualityLevel.dataSaver => '流量节省',
     };
 
-    String text;
     IconData icon;
     Color? color;
+    final parts = <String>[];
 
     switch (source) {
       case PlaybackSource.downloaded:
-        text = '本地已下载·$qualityLabel·$bitRateText';
+        parts.add('本地已下载');
         icon = Icons.offline_pin;
         color = Colors.green;
         break;
       case PlaybackSource.cached:
-        text = '本地缓存·$qualityLabel·$bitRateText';
+        parts.add('本地缓存');
         icon = Icons.check_circle_outline;
         color = Colors.blue;
         break;
@@ -804,7 +846,7 @@ class _FullPlayerPageState extends ConsumerState<FullPlayerPage>
           NetworkType.none => '无网络',
           null => '未知网络',
         };
-        text = '$netName·$qualityLabel·$bitRateText';
+        parts.add(netName);
         icon = networkType == NetworkType.none
             ? Icons.offline_pin
             : Icons.cloud_queue;
@@ -812,23 +854,40 @@ class _FullPlayerPageState extends ConsumerState<FullPlayerPage>
         break;
     }
 
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        Icon(
-          icon,
-          size: 12,
-          color: color ?? Colors.white.withValues(alpha: 0.76),
+    parts.add(qualityLabel);
+    if (_showBitRate) {
+      parts.add(bitRateText);
+    }
+    if (audioSpecText.isNotEmpty) {
+      parts.add(audioSpecText);
+    }
+    final text = parts.join('·');
+
+    return GestureDetector(
+      onTap: () => setState(() => _showBitRate = !_showBitRate),
+      behavior: HitTestBehavior.opaque,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              icon,
+              size: 12,
+              color: color ?? Colors.white.withValues(alpha: 0.76),
+            ),
+            const SizedBox(width: 4),
+            Text(
+              text,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                fontSize: 10,
+                color: color ?? Colors.white.withValues(alpha: 0.76),
+              ),
+            ),
+          ],
         ),
-        const SizedBox(width: 4),
-        Text(
-          text,
-          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-            fontSize: 10,
-            color: color ?? Colors.white.withValues(alpha: 0.76),
-          ),
-        ),
-      ],
+      ),
     );
   }
 

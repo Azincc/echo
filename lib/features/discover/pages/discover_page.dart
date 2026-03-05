@@ -135,11 +135,18 @@ class SectionHeader extends StatelessWidget {
 }
 
 /// 随机歌曲区块
-class RandomSongsSection extends ConsumerWidget {
+class RandomSongsSection extends ConsumerStatefulWidget {
   const RandomSongsSection({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<RandomSongsSection> createState() => _RandomSongsSectionState();
+}
+
+class _RandomSongsSectionState extends ConsumerState<RandomSongsSection> {
+  bool _expanded = false;
+
+  @override
+  Widget build(BuildContext context) {
     final randomSongsAsync = ref.watch(randomSongsProvider);
     final loadFailed = ref.watch(randomSongsLoadFailedProvider);
     final colorScheme = Theme.of(context).colorScheme;
@@ -147,9 +154,6 @@ class RandomSongsSection extends ConsumerWidget {
     final titleColor = isDarkMode ? Colors.white : colorScheme.onSurface;
     final subtitleColor = isDarkMode
         ? Colors.white.withValues(alpha: 0.78)
-        : colorScheme.onSurfaceVariant;
-    final trailingIconColor = isDarkMode
-        ? Colors.white.withValues(alpha: 0.72)
         : colorScheme.onSurfaceVariant;
 
     return randomSongsAsync.when(
@@ -163,55 +167,96 @@ class RandomSongsSection extends ConsumerWidget {
           );
         }
 
-        return ListView.builder(
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          itemCount: songs.length > 6 ? 6 : songs.length,
-          itemBuilder: (context, index) {
-            final song = songs[index];
-            return ListTile(
-              contentPadding: EdgeInsets.zero,
-              leading: ClipRRect(
-                borderRadius: BorderRadius.circular(8),
-                child: CoverArtImage(
-                  coverArtId: song.coverArt,
-                  size: 56, // 增大图片尺寸
+        final displayCount = _expanded
+            ? songs.length
+            : (songs.length > 6 ? 6 : songs.length);
+
+        return Column(
+          children: [
+            GridView.builder(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: 2,
+                childAspectRatio: 2.8,
+                crossAxisSpacing: 12,
+                mainAxisSpacing: 8,
+              ),
+              itemCount: displayCount,
+              itemBuilder: (context, index) {
+                final song = songs[index];
+                return InkWell(
+                  borderRadius: BorderRadius.circular(8),
+                  onTap: () {
+                    ref
+                        .read(playerProvider.notifier)
+                        .playQueue(songs, startIndex: index);
+                  },
+                  onLongPress: () {
+                    showSongOptionsSheet(context: context, song: song);
+                  },
+                  child: Row(
+                    children: [
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(6),
+                        child: CoverArtImage(
+                          coverArtId: song.coverArt,
+                          size: 48,
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              song.title,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontWeight: FontWeight.w500,
+                                fontSize: 13,
+                                color: titleColor,
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              song.artist ?? 'Unknown Artist',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: subtitleColor,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              },
+            ),
+            if (songs.length > 6)
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: TextButton.icon(
+                  onPressed: () {
+                    setState(() {
+                      _expanded = !_expanded;
+                    });
+                  },
+                  icon: Icon(
+                    _expanded
+                        ? Icons.keyboard_arrow_up
+                        : Icons.keyboard_arrow_down,
+                    size: 18,
+                  ),
+                  label: Text(_expanded ? '收起' : '更多歌曲'),
                 ),
               ),
-              title: Text(
-                song.title,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  fontWeight: FontWeight.w500,
-                  color: titleColor,
-                ),
-              ),
-              subtitle: Text(
-                song.artist ?? 'Unknown Artist',
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: Theme.of(
-                  context,
-                ).textTheme.bodySmall?.copyWith(color: subtitleColor),
-              ),
-              onTap: () {
-                // 播放歌曲
-                ref
-                    .read(playerProvider.notifier)
-                    .playQueue(songs, startIndex: index);
-              },
-              onLongPress: () {
-                showSongOptionsSheet(context: context, song: song);
-              },
-              trailing: IconButton(
-                icon: Icon(Icons.more_vert, color: trailingIconColor),
-                onPressed: () {
-                  showSongOptionsSheet(context: context, song: song);
-                },
-              ),
-            );
-          },
+          ],
         );
       },
       loading: () => const Center(

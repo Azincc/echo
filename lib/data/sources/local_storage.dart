@@ -16,6 +16,20 @@ class LocalStorage {
   static const String _keyMobileCacheSavedBytesByLibrary =
       'mobile_cache_saved_bytes_by_library_v1';
   static const String _keyMaxCacheSizeBytes = 'max_cache_size_bytes';
+  static const String _keyHasLaunchedBefore = 'has_launched_before';
+
+  /// 是否曾经启动过（用于判断是否显示开屏动画）
+  static Future<bool> hasLaunchedBefore() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getBool(_keyHasLaunchedBefore) ?? false;
+  }
+
+  /// 标记已完成首次启动
+  static Future<void> setHasLaunchedBefore() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_keyHasLaunchedBefore, true);
+    Logger.infoWithTag(_logTag, 'hasLaunchedBefore set to true');
+  }
 
   /// 保存服务器配置
   static Future<void> saveServerConfig(ServerConfig config) async {

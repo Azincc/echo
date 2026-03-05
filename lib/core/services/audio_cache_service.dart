@@ -94,8 +94,8 @@ class AudioCacheService {
 
     await _repository.registerCache(entry);
 
-    // 检查并执行淘汰
-    await evictIfNeeded();
+    // 检查并执行淘汰（保护刚缓存的歌曲）
+    await evictIfNeeded(activeSongIds: {songId});
   }
 
   /// 获取缓存文件路径（用于 LockCachingAudioSource 的 cacheFile）
@@ -113,14 +113,18 @@ class AudioCacheService {
   }
 
   /// 检查并执行缓存淘汰
-  Future<void> evictIfNeeded() async {
+  ///
+  /// [activeSongIds] 当前正在播放或正在缓存的歌曲 ID 集合，
+  /// 这些歌曲的缓存文件不会被淘汰，以避免竞态条件。
+  Future<void> evictIfNeeded({Set<String>? activeSongIds}) async {
     // 使用磁盘实际大小判断是否超限
     var totalSize = await getAudioCacheSize();
     if (totalSize <= maxCacheSizeBytes) return;
 
     Logger.infoWithTag(
       _tag,
-      'eviction triggered: diskSize=$totalSize limit=$maxCacheSizeBytes',
+      'eviction triggered: diskSize=$totalSize limit=$maxCacheSizeBytes'
+      '${activeSongIds != null ? ' activeSongs=${activeSongIds.length}' : ''}',
     );
 
     final targetSize = (maxCacheSizeBytes * 0.8).toInt();
@@ -143,6 +147,7 @@ class AudioCacheService {
       totalSize,
       targetSize,
       downloadDirPath,
+      activeSongIds,
     );
 
     // Phase 2: 如果仍然超限，降级到纯 LRU（所有完整条目按最后播放时间排序）
@@ -157,6 +162,7 @@ class AudioCacheService {
         totalSize,
         targetSize,
         downloadDirPath,
+        activeSongIds,
       );
     }
 
@@ -185,6 +191,16 @@ class AudioCacheService {
       )) {
         if (entity is! File) continue;
         if (registeredPaths.contains(entity.path)) continue;
+
+        // 跳过 .part 临时文件 — just_audio 的 LockCachingAudioSource
+        // 正在写入这些文件，下载完成后会自动 rename 为 .cache
+        if (entity.path.endsWith('.part')) {
+          Logger.debugWithTag(
+            _tag,
+            'skip orphan (active .part): ${entity.path}',
+          );
+          continue;
+        }
 
         try {
           final size = await entity.length();
@@ -219,9 +235,16 @@ class AudioCacheService {
     int totalSize,
     int targetSize,
     String? downloadDirPath,
+    Set<String>? activeSongIds,
   ) async {
     for (final entry in entries) {
       if (totalSize <= targetSize) break;
+
+      // 跳过正在播放/缓存的歌曲
+      if (activeSongIds != null && activeSongIds.contains(entry.songId)) {
+        Logger.infoWithTag(_tag, 'skip evict (active): ${entry.songId}');
+        continue;
+      }
 
       // 跳过已下载文件（路径在下载目录中的不淘汰）
       if (downloadDirPath != null &&

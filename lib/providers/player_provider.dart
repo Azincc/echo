@@ -442,6 +442,9 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
         currentBitRateKbps: 0,
       );
 
+      // 异步获取完整歌曲元数据（补充位深/采样率等字段）
+      unawaited(_enrichSongMetadata(song.id, debugSession));
+
       // 更新通知栏媒体信息
       _updateMediaItem(song);
 
@@ -1094,6 +1097,43 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
     );
 
     _audioHandler?.updateMediaItem(mediaItem);
+  }
+
+  /// 异步补充歌曲元数据（位深/采样率/声道数），不阻塞播放流程。
+  Future<void> _enrichSongMetadata(String songId, int session) async {
+    try {
+      final fullSong = await _musicRepository.getSong(songId);
+      if (fullSong == null) return;
+      // 会话已切换 → 丢弃
+      if (!mounted || _playDebugSession != session) return;
+      final current = state.currentSong;
+      if (current == null || current.id != songId) return;
+      // 仅在缺失时补充
+      final needsUpdate =
+          current.bitDepth == null ||
+          current.samplingRate == null ||
+          current.channelCount == null;
+      if (!needsUpdate) return;
+      final enriched = current.copyWith(
+        bitDepth: current.bitDepth ?? fullSong.bitDepth,
+        samplingRate: current.samplingRate ?? fullSong.samplingRate,
+        channelCount: current.channelCount ?? fullSong.channelCount,
+      );
+      if (mounted && state.currentSong?.id == songId) {
+        state = state.copyWith(currentSong: enriched);
+        // 同步更新队列中的歌曲对象
+        final idx = state.currentIndex;
+        if (idx >= 0 &&
+            idx < state.queue.length &&
+            state.queue[idx].id == songId) {
+          final updatedQueue = List<Song>.from(state.queue);
+          updatedQueue[idx] = enriched;
+          state = state.copyWith(queue: updatedQueue);
+        }
+      }
+    } catch (e) {
+      Logger.debug('Failed to enrich song metadata for $songId: $e');
+    }
   }
 
   /// 启动播放但不阻塞当前流程。

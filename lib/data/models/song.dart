@@ -15,6 +15,9 @@ class Song {
   final String? suffix;
   final int? duration; // 秒
   final int? bitRate;
+  final int? bitDepth;
+  final int? samplingRate;
+  final int? channelCount;
   final String? path;
   final bool? isVideo;
   final int? playCount;
@@ -48,6 +51,9 @@ class Song {
     this.suffix,
     this.duration,
     this.bitRate,
+    this.bitDepth,
+    this.samplingRate,
+    this.channelCount,
     this.path,
     this.isVideo,
     this.playCount,
@@ -82,6 +88,9 @@ class Song {
     String? suffix,
     int? duration,
     int? bitRate,
+    int? bitDepth,
+    int? samplingRate,
+    int? channelCount,
     String? path,
     bool? isVideo,
     int? playCount,
@@ -115,6 +124,9 @@ class Song {
       suffix: suffix ?? this.suffix,
       duration: duration ?? this.duration,
       bitRate: bitRate ?? this.bitRate,
+      bitDepth: bitDepth ?? this.bitDepth,
+      samplingRate: samplingRate ?? this.samplingRate,
+      channelCount: channelCount ?? this.channelCount,
       path: path ?? this.path,
       isVideo: isVideo ?? this.isVideo,
       playCount: playCount ?? this.playCount,
@@ -153,6 +165,9 @@ class Song {
       suffix: json['suffix'] as String?,
       duration: json['duration'] as int?,
       bitRate: json['bitRate'] as int?,
+      bitDepth: json['bitDepth'] as int?,
+      samplingRate: json['samplingRate'] as int?,
+      channelCount: json['channelCount'] as int?,
       path: json['path'] as String?,
       isVideo: json['isVideo'] as bool?,
       playCount: json['playCount'] as int?,
@@ -196,6 +211,9 @@ class Song {
       'suffix': suffix,
       'duration': duration,
       'bitRate': bitRate,
+      'bitDepth': bitDepth,
+      'samplingRate': samplingRate,
+      'channelCount': channelCount,
       'path': path,
       'isVideo': isVideo,
       'playCount': playCount,

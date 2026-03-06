@@ -10,6 +10,7 @@ import '../../../widgets/cover_art_image.dart';
 import '../widgets/album_options_sheet.dart';
 import 'album_detail_page.dart';
 import '../../../widgets/error_placeholder.dart';
+import '../../../widgets/skeleton_templates.dart';
 
 /// 专辑列表页 - A-Z 分组 Grid (通过 List 模拟)
 class AlbumListPage extends ConsumerWidget {
@@ -135,7 +136,10 @@ class AlbumListPage extends ConsumerWidget {
             ),
           );
         },
-        loading: () => const Center(child: CircularProgressIndicator()),
+        loading: () => const Padding(
+          padding: EdgeInsets.all(16),
+          child: AlbumGridSkeleton(),
+        ),
         error: (error, stack) =>
             const ErrorPlaceholder(message: '专辑列表加载失败，请检查网络后重试'),
       ),

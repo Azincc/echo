@@ -13,6 +13,7 @@ import '../../../providers/player_provider.dart';
 import '../../../data/repositories/music_repository.dart';
 import '../../../widgets/cover_art_image.dart';
 import '../../../widgets/main_scaffold.dart';
+import '../../../widgets/skeleton_templates.dart';
 
 class ExplorePage extends ConsumerStatefulWidget {
   const ExplorePage({super.key});
@@ -338,6 +339,41 @@ class _ExplorePageState extends ConsumerState<ExplorePage> {
     ).showSnackBar(SnackBar(content: Text(message)));
   }
 
+  Future<void> _downloadAllOnPage() async {
+    final remoteState = ref.read(exploreRemoteSearchProvider);
+    final songs = remoteState.songs;
+    if (songs.isEmpty) {
+      _showSnackBar('当前页面没有歌曲');
+      return;
+    }
+
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('下载本页所有歌曲'),
+        content: Text('确认将本页 ${songs.length} 首歌曲全部加入离线下载队列？'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('全部下载'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm != true) return;
+
+    // Reuse the batch download logic
+    setState(() {
+      _selectedSongIds.addAll(songs.map((s) => s.id));
+    });
+    await _enqueueSelectedSongs(songs);
+  }
+
   @override
   Widget build(BuildContext context) {
     final query = _query.trim();
@@ -362,6 +398,23 @@ class _ExplorePageState extends ConsumerState<ExplorePage> {
         ),
         title: const Text('探索'),
         actions: [
+          // ── Download all on page (remote mode with results) ──
+          if (searchMode == ExploreSearchMode.remote)
+            Builder(
+              builder: (context) {
+                final hasResults = ref
+                    .watch(exploreRemoteSearchProvider)
+                    .songs
+                    .isNotEmpty;
+                return IconButton(
+                  tooltip: '下载本页所有',
+                  onPressed: hasResults && !_isBatchDownloading
+                      ? _downloadAllOnPage
+                      : null,
+                  icon: const Icon(Icons.download_for_offline_outlined),
+                );
+              },
+            ),
           IconButton(
             tooltip: '刷新',
             onPressed: query.isEmpty ? null : _refreshSearchResults,
@@ -694,7 +747,7 @@ class _ExplorePageState extends ConsumerState<ExplorePage> {
           },
         );
       },
-      loading: () => const Center(child: CircularProgressIndicator()),
+      loading: () => const ListTileSkeleton(count: 5),
       error: (error, _) => const Center(child: Text('音乐库搜索失败，请检查网络')),
     );
   }

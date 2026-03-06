@@ -10,6 +10,7 @@ import '../widgets/album_options_sheet.dart';
 import 'album_detail_page.dart';
 import 'artist_detail_page.dart';
 import '../../../widgets/error_placeholder.dart';
+import '../../../widgets/skeleton_templates.dart';
 
 enum StarredTab { songs, albums, artists }
 
@@ -50,7 +51,7 @@ class StarredPage extends ConsumerWidget {
               _buildArtistsTab(context, ref, starred),
             ],
           ),
-          loading: () => const Center(child: CircularProgressIndicator()),
+          loading: () => const ListTileSkeleton(count: 6),
           error: (error, stack) => ErrorPlaceholder(
             message: '收藏加载失败，请检查网络后重试',
             onRetry: () => ref.invalidate(starredProvider),

@@ -16,6 +16,7 @@ import 'playlist_detail_page.dart';
 import 'song_list_page.dart';
 import 'starred_page.dart';
 import '../widgets/playlist_manage_dialogs.dart';
+import '../../../widgets/skeleton_templates.dart';
 import '../widgets/playlist_options_sheet.dart';
 
 /// 我的页面 - Tab 2
@@ -391,10 +392,7 @@ class LibraryPage extends ConsumerWidget {
                 }).toList(),
               );
             },
-            loading: () => const Padding(
-              padding: EdgeInsets.all(24),
-              child: Center(child: CircularProgressIndicator()),
-            ),
+            loading: () => const ListTileSkeleton(count: 3, hasIcon: true),
             error: (error, stack) => Padding(
               padding: const EdgeInsets.all(24),
               child: Center(child: Text('加载失败: $error')),

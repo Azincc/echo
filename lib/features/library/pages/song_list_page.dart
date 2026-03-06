@@ -13,6 +13,7 @@ import '../../../utils/pinyin_helper.dart';
 import '../../../widgets/cover_art_image.dart';
 import '../../player/widgets/song_options_sheet.dart';
 import '../../../widgets/error_placeholder.dart';
+import '../../../widgets/skeleton_templates.dart';
 
 class SongListPage extends ConsumerStatefulWidget {
   const SongListPage({super.key});
@@ -182,7 +183,7 @@ class _SongListPageState extends ConsumerState<SongListPage> {
             ),
           );
         },
-        loading: () => const Center(child: CircularProgressIndicator()),
+        loading: () => const ListTileSkeleton(count: 10),
         error: (err, stack) =>
             const ErrorPlaceholder(message: '歌曲加载失败，请检查网络后重试'),
       ),

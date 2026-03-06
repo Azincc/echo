@@ -7,6 +7,7 @@ import '../../library/pages/album_detail_page.dart';
 import '../../library/pages/artist_detail_page.dart';
 import '../../player/widgets/song_options_sheet.dart';
 import '../../../widgets/error_placeholder.dart';
+import '../../../widgets/skeleton_templates.dart';
 
 /// 搜索页面
 class SearchPage extends ConsumerStatefulWidget {
@@ -242,7 +243,7 @@ class _SearchPageState extends ConsumerState<SearchPage> {
                   ],
                 );
               },
-              loading: () => const Center(child: CircularProgressIndicator()),
+              loading: () => const ListTileSkeleton(count: 5),
               error: (error, stack) =>
                   const ErrorPlaceholder(message: '搜索失败，请检查网络后重试'),
             ),

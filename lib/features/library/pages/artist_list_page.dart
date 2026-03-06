@@ -9,6 +9,7 @@ import '../../../utils/pinyin_helper.dart';
 import '../../../widgets/cover_art_image.dart';
 import 'artist_detail_page.dart';
 import '../../../widgets/error_placeholder.dart';
+import '../../../widgets/skeleton_templates.dart';
 
 /// 歌手列表页 - A-Z 排序
 class ArtistListPage extends ConsumerStatefulWidget {
@@ -134,7 +135,7 @@ class _ArtistListPageState extends ConsumerState<ArtistListPage> {
             ),
           );
         },
-        loading: () => const Center(child: CircularProgressIndicator()),
+        loading: () => const ListTileSkeleton(count: 8, isCircleAvatar: true),
         error: (error, stack) =>
             const ErrorPlaceholder(message: '歌手列表加载失败，请检查网络后重试'),
       ),

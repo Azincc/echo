@@ -5,6 +5,7 @@ import '../../../widgets/cover_art_image.dart';
 import '../widgets/album_options_sheet.dart';
 import 'album_detail_page.dart';
 import '../../../widgets/error_placeholder.dart';
+import '../../../widgets/skeleton_templates.dart';
 
 /// 歌手详情页
 class ArtistDetailPage extends ConsumerWidget {
@@ -200,7 +201,7 @@ class ArtistDetailPage extends ConsumerWidget {
             ],
           );
         },
-        loading: () => const Center(child: CircularProgressIndicator()),
+        loading: () => const ArtistDetailSkeleton(),
         error: (error, stack) =>
             const ErrorPlaceholder(message: '歌手详情加载失败，请检查网络后重试'),
       ),

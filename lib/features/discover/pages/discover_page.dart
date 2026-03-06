@@ -9,6 +9,7 @@ import '../../library/pages/album_detail_page.dart';
 import '../../player/widgets/song_options_sheet.dart';
 import 'search_page.dart';
 import '../../../widgets/error_placeholder.dart';
+import '../../../widgets/skeleton_templates.dart';
 
 /// 音乐流首页 - Tab 1
 class DiscoverPage extends ConsumerStatefulWidget {
@@ -259,12 +260,7 @@ class _RandomSongsSectionState extends ConsumerState<RandomSongsSection> {
           ],
         );
       },
-      loading: () => const Center(
-        child: Padding(
-          padding: EdgeInsets.all(24),
-          child: CircularProgressIndicator(),
-        ),
-      ),
+      loading: () => const SongGridSkeleton(),
       error: (error, stack) =>
           const ErrorPlaceholder(message: '随机歌曲加载失败，请检查网络后重试'),
     );
@@ -303,12 +299,7 @@ class RecentAlbumsSection extends ConsumerWidget {
           ),
         );
       },
-      loading: () => const Center(
-        child: Padding(
-          padding: EdgeInsets.all(24),
-          child: CircularProgressIndicator(),
-        ),
-      ),
+      loading: () => const AlbumCarouselSkeleton(),
       error: (error, stack) =>
           const ErrorPlaceholder(message: '最近播放加载失败，请检查网络后重试'),
     );
@@ -351,12 +342,7 @@ class FrequentAlbumsSection extends ConsumerWidget {
           },
         );
       },
-      loading: () => const Center(
-        child: Padding(
-          padding: EdgeInsets.all(24),
-          child: CircularProgressIndicator(),
-        ),
-      ),
+      loading: () => const AlbumGridSkeleton(),
       error: (error, stack) =>
           const ErrorPlaceholder(message: '常听专辑加载失败，请检查网络后重试'),
     );
@@ -395,12 +381,7 @@ class NewestAlbumsSection extends ConsumerWidget {
           ),
         );
       },
-      loading: () => const Center(
-        child: Padding(
-          padding: EdgeInsets.all(24),
-          child: CircularProgressIndicator(),
-        ),
-      ),
+      loading: () => const AlbumCarouselSkeleton(),
       error: (error, stack) =>
           const ErrorPlaceholder(message: '最近入库加载失败，请检查网络后重试'),
     );

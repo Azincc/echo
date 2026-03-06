@@ -12,6 +12,7 @@ import '../../player/widgets/song_options_sheet.dart';
 import '../widgets/album_options_sheet.dart';
 import 'package:marquee/marquee.dart';
 import '../../../widgets/error_placeholder.dart';
+import '../../../widgets/skeleton_templates.dart';
 
 /// 专辑详情页
 class AlbumDetailPage extends ConsumerWidget {
@@ -368,7 +369,7 @@ class AlbumDetailPage extends ConsumerWidget {
             ],
           );
         },
-        loading: () => const Center(child: CircularProgressIndicator()),
+        loading: () => const AlbumDetailSkeleton(),
         error: (error, stack) =>
             const ErrorPlaceholder(message: '专辑加载失败，请检查网络后重试'),
       ),

@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'dart:io';
 import '../providers/api_provider.dart';
+import 'shimmer_loading.dart';
 
 /// 封面图组件 - 从服务端获取封面
 class CoverArtImage extends ConsumerWidget {
@@ -93,23 +94,21 @@ class CoverArtImage extends ConsumerWidget {
 
   /// 构建占位符
   Widget _buildPlaceholder(BuildContext context, {bool isLoading = false}) {
+    final bgColor = Theme.of(context).colorScheme.surfaceContainerHighest;
+    if (isLoading) {
+      return ShimmerEffect(
+        child: Container(width: size, height: size, color: bgColor),
+      );
+    }
     return Container(
       width: size,
       height: size,
-      color: Theme.of(context).colorScheme.surfaceContainerHighest,
-      child: isLoading
-          ? const Center(
-              child: SizedBox(
-                width: 24,
-                height: 24,
-                child: CircularProgressIndicator(strokeWidth: 2),
-              ),
-            )
-          : Icon(
-              Icons.music_note,
-              size: _getIconSize(),
-              color: Theme.of(context).colorScheme.onSurfaceVariant,
-            ),
+      color: bgColor,
+      child: Icon(
+        Icons.music_note,
+        size: _getIconSize(),
+        color: Theme.of(context).colorScheme.onSurfaceVariant,
+      ),
     );
   }
 

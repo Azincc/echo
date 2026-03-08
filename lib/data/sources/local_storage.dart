@@ -17,6 +17,7 @@ class LocalStorage {
       'mobile_cache_saved_bytes_by_library_v1';
   static const String _keyMaxCacheSizeBytes = 'max_cache_size_bytes';
   static const String _keyHasLaunchedBefore = 'has_launched_before';
+  static const String _keyCrossfadeDurationMs = 'crossfade_duration_ms';
 
   /// 是否曾经启动过（用于判断是否显示开屏动画）
   static Future<bool> hasLaunchedBefore() async {
@@ -281,5 +282,20 @@ class LocalStorage {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setInt(_keyMaxCacheSizeBytes, bytes);
     Logger.infoWithTag(_logTag, 'maxCacheSize saved: $bytes');
+  }
+
+  /// 读取淡入淡出时长（毫秒，0 = 关闭）
+  static Future<int> getCrossfadeDurationMs() async {
+    final prefs = await SharedPreferences.getInstance();
+    final value = prefs.getInt(_keyCrossfadeDurationMs) ?? 0;
+    Logger.debugWithTag(_logTag, 'crossfadeDurationMs loaded: $value');
+    return value;
+  }
+
+  /// 保存淡入淡出时长（毫秒）
+  static Future<void> setCrossfadeDurationMs(int ms) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt(_keyCrossfadeDurationMs, ms);
+    Logger.infoWithTag(_logTag, 'crossfadeDurationMs saved: $ms');
   }
 }

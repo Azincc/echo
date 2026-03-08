@@ -13,6 +13,8 @@ import 'features/explore/pages/explore_page.dart';
 import 'features/library/pages/library_page.dart';
 import 'features/library/pages/edit_library_page.dart';
 
+import 'dart:io';
+
 /// 应用主入口 Widget
 class App extends ConsumerWidget {
   const App({super.key});
@@ -23,12 +25,36 @@ class App extends ConsumerWidget {
     final themeSettings = ref.watch(themeSettingsProvider);
 
     return MaterialApp.router(
-      title: 'Echoes 回响',
+      title: 'Echoes',
       theme: AppTheme.light(seedColor: themeSettings.seedColor),
       darkTheme: AppTheme.dark(seedColor: themeSettings.seedColor),
       themeMode: themeSettings.mode,
       routerConfig: router,
       debugShowCheckedModeBanner: false,
+      builder: (context, child) {
+        final mediaQueryData = MediaQuery.of(context);
+        final isWindows = Platform.isWindows;
+
+        // Apply a global UI scale down specifically for Windows if needed
+        return MediaQuery(
+          data: mediaQueryData.copyWith(
+            textScaler: isWindows
+                ? TextScaler.linear(
+                    mediaQueryData.textScaler.scale(1.0) * 0.85,
+                  ) // Downscale text by 15%
+                : mediaQueryData.textScaler,
+          ),
+          child: Theme(
+            data: Theme.of(context).copyWith(
+              visualDensity: isWindows
+                  ? VisualDensity
+                        .compact // Use compact density to reduce element sizes
+                  : null,
+            ),
+            child: child!,
+          ),
+        );
+      },
     );
   }
 }
@@ -51,10 +77,14 @@ final routerProvider = Provider<GoRouter>((ref) {
   // 监听认证状态变化
   ref.listen<AuthState>(authStateProvider, (previous, next) {
     // 当认证状态变化时，刷新路由
-    if (previous?.isAuthenticated != next.isAuthenticated) {
+    final wasAuth = previous?.isAuthenticated ?? false;
+    final wasInit = previous?.isInitializing ?? true;
+
+    // 认证状态变化 OR 初始化完成 → 执行路由跳转
+    if (wasAuth != next.isAuthenticated || (wasInit && !next.isInitializing)) {
       Logger.infoWithTag(
         'ROUTER',
-        'auth changed: ${previous?.isAuthenticated ?? false} -> ${next.isAuthenticated}',
+        'auth changed: auth=$wasAuth->${next.isAuthenticated} init=$wasInit->${next.isInitializing}',
       );
       rootNavigatorKey.currentState?.context.go(
         next.isAuthenticated ? '/home' : '/login',
@@ -69,6 +99,11 @@ final routerProvider = Provider<GoRouter>((ref) {
       final authState = ref.read(authStateProvider);
       final isGoingToLogin = state.matchedLocation == '/login';
       final isAddingLibrary = state.uri.queryParameters['add'] == 'true';
+
+      // 初始化中，不做任何重定向，保持在 /home
+      if (authState.isInitializing) {
+        return null;
+      }
 
       // 如果已认证且正在去登录页，且不是为了添加新库，重定向到主页
       if (authState.isAuthenticated && isGoingToLogin && !isAddingLibrary) {

@@ -176,10 +176,8 @@ final frequentAlbumsProvider = FutureProvider<List<Album>>((ref) async {
   }
 });
 
-/// 最新专辑 Provider
-final newestAlbumsProvider = FutureProvider.autoDispose<List<Album>>((
-  ref,
-) async {
+/// 最新专辑 Provider（保持数据，不自动释放）
+final newestAlbumsProvider = FutureProvider<List<Album>>((ref) async {
   final repository = ref.watch(musicRepositoryProvider);
   final cache = ref.watch(metadataCacheRepositoryProvider);
   final libraryId = ref.watch(activeLibraryProvider)?.id;

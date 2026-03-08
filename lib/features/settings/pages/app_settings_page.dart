@@ -18,6 +18,7 @@ import 'cache_management_page.dart';
 import 'cover_providers_page.dart';
 import 'lyrics_providers_page.dart';
 import 'theme_settings_page.dart';
+import '../../../providers/crossfade_provider.dart';
 
 /// 全屏设置页
 class AppSettingsPage extends ConsumerStatefulWidget {
@@ -298,6 +299,47 @@ class _AppSettingsPageState extends ConsumerState<AppSettingsPage> {
                 MaterialPageRoute(
                   builder: (context) => const AudioQualityPage(),
                 ),
+              );
+            },
+          ),
+          Consumer(
+            builder: (context, ref, _) {
+              final crossfadeMs = ref.watch(crossfadeDurationMsProvider);
+              final label = crossfadeMs <= 0
+                  ? '关闭'
+                  : '${(crossfadeMs / 1000).toStringAsFixed(1)} 秒';
+              return Column(
+                children: [
+                  ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: const Icon(Icons.swap_horiz_outlined),
+                    title: const Text('切歌淡入淡出'),
+                    subtitle: Text(label, style: const TextStyle(fontSize: 12)),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: Row(
+                      children: [
+                        const Text('关闭', style: TextStyle(fontSize: 12)),
+                        Expanded(
+                          child: Slider(
+                            value: crossfadeMs.toDouble(),
+                            min: 0,
+                            max: 3000,
+                            divisions: 6,
+                            label: label,
+                            onChanged: (value) {
+                              ref
+                                  .read(crossfadeDurationMsProvider.notifier)
+                                  .setDuration(value.round());
+                            },
+                          ),
+                        ),
+                        const Text('3 秒', style: TextStyle(fontSize: 12)),
+                      ],
+                    ),
+                  ),
+                ],
               );
             },
           ),

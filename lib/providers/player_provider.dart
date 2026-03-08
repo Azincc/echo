@@ -22,6 +22,7 @@ import 'api_provider.dart';
 import 'audio_quality_provider.dart';
 import 'download_provider.dart';
 import 'audio_cache_provider.dart';
+import 'crossfade_provider.dart';
 import '../providers/auth_provider.dart';
 
 /// 播放来源
@@ -177,6 +178,7 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
   bool _syntheticPositionFallbackActive = false;
   int _playDebugSession = 0;
   bool _loggedDurationUnavailableForSong = false;
+  Timer? _fadeTimer;
 
   /// 动态获取最新的 API client
   SubsonicApiClient get _apiClient => _ref.read(subsonicApiClientProvider);
@@ -193,8 +195,11 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
   void _init() async {
     AudioPlayer player;
 
-    // 初始化 AudioService（仅在移动平台）
+    // 初始化 AudioService（仅在移动平台，桌面端不支持且可能干扰播放）
+    final isDesktop =
+        !kIsWeb && (Platform.isWindows || Platform.isLinux || Platform.isMacOS);
     try {
+      if (isDesktop) throw UnsupportedError('Desktop platform');
       _audioHandler = await initAudioService();
       player = _audioHandler!.audioPlayer;
       Logger.info('AudioService initialized');
@@ -207,7 +212,7 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
         previous();
       };
     } catch (e) {
-      Logger.warn('AudioService not available (web platform): $e');
+      Logger.warn('AudioService not available: $e');
       player = AudioPlayer(
         audioLoadConfiguration: const AudioLoadConfiguration(
           androidLoadControl: AndroidLoadControl(
@@ -412,6 +417,10 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
         'suffix=${song.suffix} durationSec=${song.duration} '
         'queue=${playQueue.length} index=$playIndex',
       );
+
+      // 淡出当前歌曲（如果启用了淡入淡出）
+      await _fadeOut(debugSession);
+
       _downloadProgressSubscription?.cancel();
       _downloadProgressSubscription = null;
       _clearPendingSeek();
@@ -1138,7 +1147,7 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
 
   /// 启动播放但不阻塞当前流程。
   /// just_audio 的 play() Future 会在暂停/结束时才完成，不能在切歌流程里 await。
-  void _startPlayback() {
+  void _startPlayback({bool fadeIn = true}) {
     final player = _audioPlayer;
     if (player == null) return;
     unawaited(
@@ -1146,6 +1155,100 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
         Logger.warn('Failed to start playback', error);
       }),
     );
+    if (fadeIn) {
+      _fadeIn();
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // 淡入淡出
+  // ---------------------------------------------------------------------------
+
+  /// 取消正在进行的淡入淡出动画并将音量恢复为 1.0
+  void _cancelFade() {
+    _fadeTimer?.cancel();
+    _fadeTimer = null;
+    _audioPlayer?.setVolume(1.0);
+  }
+
+  /// 淡出当前正在播放的歌曲。
+  /// 如果用户未启用淡入淡出或当前未在播放，则立即返回。
+  Future<void> _fadeOut(int session) async {
+    _cancelFade();
+    final durationMs = _ref.read(crossfadeDurationMsProvider);
+    if (durationMs <= 0) return;
+    final player = _audioPlayer;
+    if (player == null || !player.playing) return;
+
+    // 淡出只使用一半时长，另一半留给淡入
+    final fadeMs = durationMs ~/ 2;
+    const stepMs = 20;
+    final steps = (fadeMs / stepMs).ceil().clamp(1, 500);
+    final volumeStep = 1.0 / steps;
+    var currentVolume = 1.0;
+
+    _playDbg('sid=$session fadeOut start durationMs=$fadeMs steps=$steps');
+
+    final completer = Completer<void>();
+    _fadeTimer = Timer.periodic(const Duration(milliseconds: stepMs), (timer) {
+      // 会话已变（用户快速切歌）→ 立即中止
+      if (_playDebugSession != session) {
+        timer.cancel();
+        _fadeTimer = null;
+        player.setVolume(0.0);
+        if (!completer.isCompleted) completer.complete();
+        return;
+      }
+      currentVolume = (currentVolume - volumeStep).clamp(0.0, 1.0);
+      player.setVolume(currentVolume);
+      if (currentVolume <= 0.0) {
+        timer.cancel();
+        _fadeTimer = null;
+        _playDbg('sid=$session fadeOut complete');
+        if (!completer.isCompleted) completer.complete();
+      }
+    });
+
+    return completer.future;
+  }
+
+  /// 淡入新歌曲：从 0.0 渐变到 1.0
+  void _fadeIn() {
+    _cancelFade();
+    final durationMs = _ref.read(crossfadeDurationMsProvider);
+    if (durationMs <= 0) {
+      _audioPlayer?.setVolume(1.0);
+      return;
+    }
+    final player = _audioPlayer;
+    if (player == null) return;
+
+    // 淡入使用另一半时长
+    final fadeMs = durationMs ~/ 2;
+    const stepMs = 20;
+    final steps = (fadeMs / stepMs).ceil().clamp(1, 500);
+    final volumeStep = 1.0 / steps;
+    var currentVolume = 0.0;
+    player.setVolume(0.0);
+
+    final session = _playDebugSession;
+    _playDbg('sid=$session fadeIn start durationMs=$fadeMs steps=$steps');
+
+    _fadeTimer = Timer.periodic(const Duration(milliseconds: stepMs), (timer) {
+      if (_playDebugSession != session) {
+        timer.cancel();
+        _fadeTimer = null;
+        player.setVolume(1.0);
+        return;
+      }
+      currentVolume = (currentVolume + volumeStep).clamp(0.0, 1.0);
+      player.setVolume(currentVolume);
+      if (currentVolume >= 1.0) {
+        timer.cancel();
+        _fadeTimer = null;
+        _playDbg('sid=$session fadeIn complete');
+      }
+    });
   }
 
   /// 播放队列
@@ -1240,24 +1343,62 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
   /// 播放/暂停
   Future<void> togglePlayPause() async {
     if (state.isPlaying) {
-      await _audioPlayer?.pause();
-      await _audioHandler?.pause();
+      await pause();
     } else {
-      await _audioPlayer?.play();
-      await _audioHandler?.play();
+      await play();
     }
   }
 
-  /// 暂停
+  /// 暂停（带淡出）
   Future<void> pause() async {
+    final durationMs = _ref.read(crossfadeDurationMsProvider);
+    if (durationMs > 0 && state.isPlaying) {
+      await _fadeOutForPause();
+    }
     await _audioPlayer?.pause();
     await _audioHandler?.pause();
   }
 
-  /// 播放
+  /// 播放（带淡入）
   Future<void> play() async {
+    final durationMs = _ref.read(crossfadeDurationMsProvider);
+    if (durationMs > 0) {
+      _cancelFade();
+      _audioPlayer?.setVolume(0.0);
+    }
     await _audioPlayer?.play();
     await _audioHandler?.play();
+    if (durationMs > 0) {
+      _fadeIn();
+    }
+  }
+
+  /// 暂停前的淡出：音量降到 0 后返回，由 pause() 执行实际暂停。
+  Future<void> _fadeOutForPause() async {
+    _cancelFade();
+    final durationMs = _ref.read(crossfadeDurationMsProvider);
+    if (durationMs <= 0) return;
+    final player = _audioPlayer;
+    if (player == null || !player.playing) return;
+
+    final fadeMs = durationMs ~/ 2;
+    const stepMs = 20;
+    final steps = (fadeMs / stepMs).ceil().clamp(1, 500);
+    final volumeStep = 1.0 / steps;
+    var currentVolume = 1.0;
+
+    final completer = Completer<void>();
+    _fadeTimer = Timer.periodic(const Duration(milliseconds: stepMs), (timer) {
+      currentVolume = (currentVolume - volumeStep).clamp(0.0, 1.0);
+      player.setVolume(currentVolume);
+      if (currentVolume <= 0.0) {
+        timer.cancel();
+        _fadeTimer = null;
+        if (!completer.isCompleted) completer.complete();
+      }
+    });
+
+    return completer.future;
   }
 
   /// 上一首
@@ -2593,6 +2734,7 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
   @override
   void dispose() {
     _positionPollTimer?.cancel();
+    _fadeTimer?.cancel();
     _downloadProgressSubscription?.cancel();
     // Check if initialized/assigned before disposing
     // Since it was 'late', we can't check.

@@ -4,6 +4,8 @@
 
 list(APPEND FLUTTER_PLUGIN_LIST
   connectivity_plus
+  just_audio_windows
+  media_kit_libs_windows_audio
   permission_handler_windows
   share_plus
   sqlite3_flutter_libs

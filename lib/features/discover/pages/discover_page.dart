@@ -67,6 +67,7 @@ class _DiscoverPageState extends ConsumerState<DiscoverPage> {
           ref.invalidate(frequentAlbumsProvider);
         },
         child: ListView(
+          cacheExtent: 1500, // 保持更多离屏内容，避免频繁重建
           padding: const EdgeInsets.all(16),
           children: [
             // 随机推荐

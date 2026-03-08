@@ -33,13 +33,14 @@ final authStateProvider = StateNotifierProvider<AuthNotifier, AuthState>((ref) {
 class AuthState {
   final bool isAuthenticated;
   final bool isLoading;
-  // Replaced ServerConfig with MusicLibrary
+  final bool isInitializing;
   final MusicLibrary? currentLibrary;
   final String? errorMessage;
 
   AuthState({
     this.isAuthenticated = false,
     this.isLoading = false,
+    this.isInitializing = true,
     this.currentLibrary,
     this.errorMessage,
   });
@@ -47,12 +48,14 @@ class AuthState {
   AuthState copyWith({
     bool? isAuthenticated,
     bool? isLoading,
+    bool? isInitializing,
     MusicLibrary? currentLibrary,
     String? errorMessage,
   }) {
     return AuthState(
       isAuthenticated: isAuthenticated ?? this.isAuthenticated,
       isLoading: isLoading ?? this.isLoading,
+      isInitializing: isInitializing ?? this.isInitializing,
       currentLibrary: currentLibrary ?? this.currentLibrary,
       errorMessage: errorMessage,
     );
@@ -89,6 +92,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
         state = state.copyWith(
           isAuthenticated: true,
           isLoading: false,
+          isInitializing: false,
           currentLibrary: active,
         );
         Logger.infoWithTag(
@@ -96,11 +100,19 @@ class AuthNotifier extends StateNotifier<AuthState> {
           'auth state init success, active library=${active.name}',
         );
       } catch (_) {
-        state = state.copyWith(isLoading: false, isAuthenticated: false);
+        state = state.copyWith(
+          isLoading: false,
+          isInitializing: false,
+          isAuthenticated: false,
+        );
         Logger.warnWithTag('AUTH', 'auth state init: no active library');
       }
     } catch (e, stackTrace) {
-      state = state.copyWith(isLoading: false, isAuthenticated: false);
+      state = state.copyWith(
+        isLoading: false,
+        isInitializing: false,
+        isAuthenticated: false,
+      );
       Logger.errorWithTag('AUTH', 'auth state init failed', e, stackTrace);
     }
   }

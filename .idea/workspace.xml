@@ -5,18 +5,25 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="5b69f946-7f9d-4fe4-a71a-1e52a91bf237" name="更改" comment="主题功能">
+      <change beforePath="$PROJECT_DIR$/.idea/libraries/Dart_Packages.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/libraries/Dart_Packages.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/COMPILE_FIX.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/EMBED_SERVICE_INTEGRATION_COMPLETE.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/EMBED_SERVICE_MIGRATION.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/REMAINING_STEPS.md" beforeDir="false" />
       <change beforePath="$PROJECT_DIR$/lib/app.dart" beforeDir="false" afterPath="$PROJECT_DIR$/lib/app.dart" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/lib/core/services/audio_cache_service.dart" beforeDir="false" afterPath="$PROJECT_DIR$/lib/core/services/audio_cache_service.dart" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/lib/data/models/song.dart" beforeDir="false" afterPath="$PROJECT_DIR$/lib/data/models/song.dart" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/lib/core/theme/app_theme.dart" beforeDir="false" afterPath="$PROJECT_DIR$/lib/core/theme/app_theme.dart" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/lib/data/sources/local_storage.dart" beforeDir="false" afterPath="$PROJECT_DIR$/lib/data/sources/local_storage.dart" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/lib/features/discover/pages/discover_page.dart" beforeDir="false" afterPath="$PROJECT_DIR$/lib/features/discover/pages/discover_page.dart" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/lib/features/player/pages/full_player_page.dart" beforeDir="false" afterPath="$PROJECT_DIR$/lib/features/player/pages/full_player_page.dart" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/lib/features/settings/pages/app_settings_page.dart" beforeDir="false" afterPath="$PROJECT_DIR$/lib/features/settings/pages/app_settings_page.dart" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/lib/main.dart" beforeDir="false" afterPath="$PROJECT_DIR$/lib/main.dart" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/lib/providers/auth_provider.dart" beforeDir="false" afterPath="$PROJECT_DIR$/lib/providers/auth_provider.dart" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/lib/providers/music_provider.dart" beforeDir="false" afterPath="$PROJECT_DIR$/lib/providers/music_provider.dart" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/lib/providers/player_provider.dart" beforeDir="false" afterPath="$PROJECT_DIR$/lib/providers/player_provider.dart" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/linux/flutter/generated_plugin_registrant.cc" beforeDir="false" afterPath="$PROJECT_DIR$/linux/flutter/generated_plugin_registrant.cc" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/linux/flutter/generated_plugins.cmake" beforeDir="false" afterPath="$PROJECT_DIR$/linux/flutter/generated_plugins.cmake" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pubspec.lock" beforeDir="false" afterPath="$PROJECT_DIR$/pubspec.lock" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pubspec.yaml" beforeDir="false" afterPath="$PROJECT_DIR$/pubspec.yaml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/windows/flutter/generated_plugin_registrant.cc" beforeDir="false" afterPath="$PROJECT_DIR$/windows/flutter/generated_plugin_registrant.cc" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/windows/flutter/generated_plugins.cmake" beforeDir="false" afterPath="$PROJECT_DIR$/windows/flutter/generated_plugins.cmake" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/windows/runner/Runner.rc" beforeDir="false" afterPath="$PROJECT_DIR$/windows/runner/Runner.rc" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/windows/runner/main.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/windows/runner/main.cpp" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -130,7 +137,9 @@
       <workItem from="1772542351145" duration="5359000" />
       <workItem from="1772612527200" duration="1719000" />
       <workItem from="1772688803876" duration="2722000" />
-      <workItem from="1772708691123" duration="2367000" />
+      <workItem from="1772708691123" duration="5562000" />
+      <workItem from="1772784893410" duration="7398000" />
+      <workItem from="1772931487766" duration="1672000" />
     </task>
     <task id="LOCAL-00001" summary="添加github打包action">
       <option name="closed" value="true" />

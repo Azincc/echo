@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'package:azlistview/azlistview.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -16,7 +17,10 @@ import '../../../widgets/skeleton_templates.dart';
 class AlbumListPage extends ConsumerWidget {
   const AlbumListPage({super.key});
 
-  List<AzItem<List<Album>>> _buildAlbumRows(List<Album> albums) {
+  List<AzItem<List<Album>>> _buildAlbumRows(
+    List<Album> albums,
+    int itemsPerRow,
+  ) {
     final azAlbumRows = <AzItem<List<Album>>>[];
     // 1. Convert to AzItems temporarily to sort and extract tags
     List<AzItem<Album>> tempItems = albums.map((album) {
@@ -33,13 +37,15 @@ class AlbumListPage extends ConsumerWidget {
       grouped.putIfAbsent(item.tag, () => []).add(item.data);
     }
 
-    // 3. Chunk into rows (2 items per row)
+    // 3. Chunk into rows (dynamically calculated)
     grouped.forEach((tag, groupAlbums) {
-      for (int i = 0; i < groupAlbums.length; i += 2) {
-        // Take 2 items
+      for (int i = 0; i < groupAlbums.length; i += itemsPerRow) {
+        // Take items
         final chunk = groupAlbums.sublist(
           i,
-          i + 2 > groupAlbums.length ? groupAlbums.length : i + 2,
+          i + itemsPerRow > groupAlbums.length
+              ? groupAlbums.length
+              : i + itemsPerRow,
         );
 
         // Create AzItem for the row
@@ -61,6 +67,10 @@ class AlbumListPage extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final albumsAsync = ref.watch(allAlbumsProvider);
     final loadFailed = ref.watch(allAlbumsLoadFailedProvider);
+    final screenWidth = MediaQuery.of(context).size.width;
+    final effectiveWidth = math.min(1400.0, screenWidth);
+    int itemsPerRow = (effectiveWidth / 180).floor();
+    if (itemsPerRow < 2) itemsPerRow = 2;
 
     return Scaffold(
       appBar: AppBar(title: const Text('所有专辑')),
@@ -70,69 +80,80 @@ class AlbumListPage extends ConsumerWidget {
             return Center(child: Text(loadFailed ? '网络异常，专辑加载失败' : '暂无专辑'));
           }
 
-          final azAlbumRows = _buildAlbumRows(albums);
+          final azAlbumRows = _buildAlbumRows(albums, itemsPerRow);
 
-          return AzListView(
-            data: azAlbumRows,
-            itemCount: azAlbumRows.length,
-            itemBuilder: (context, index) {
-              final item = azAlbumRows[index];
-              final rowAlbums = item.data;
+          return Align(
+            alignment: Alignment.topCenter,
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 1400),
+              child: AzListView(
+                data: azAlbumRows,
+                itemCount: azAlbumRows.length,
+                itemBuilder: (context, index) {
+                  final item = azAlbumRows[index];
+                  final rowAlbums = item.data;
 
-              // Build row
-              return Column(
-                children: [
-                  if (item.isShowSuspension)
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 8,
-                      ),
-                      color: Theme.of(
-                        context,
-                      ).colorScheme.surfaceContainerHighest,
-                      alignment: Alignment.centerLeft,
-                      child: Text(
-                        item.getSuspensionTag(),
-                        style: Theme.of(context).textTheme.labelLarge,
-                      ),
-                    ),
-                  Padding(
-                    padding: const EdgeInsets.only(
-                      left: 16,
-                      right: 40, // Extra padding for IndexBar
-                      top: 6,
-                      bottom: 6,
-                    ),
-                    child: Row(
-                      children: [
-                        for (int i = 0; i < rowAlbums.length; i++) ...[
-                          Expanded(
-                            child: _buildAlbumItem(context, ref, rowAlbums[i]),
+                  // Build row
+                  return Column(
+                    children: [
+                      if (item.isShowSuspension)
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 8,
                           ),
-                          if (i < rowAlbums.length - 1 || rowAlbums.length == 1)
-                            const SizedBox(width: 12),
-                        ],
-                        // If only 1 item, add Spacer to keep alignment
-                        if (rowAlbums.length == 1)
-                          const Expanded(child: SizedBox()),
-                      ],
-                    ),
+                          color: Theme.of(
+                            context,
+                          ).colorScheme.surfaceContainerHighest,
+                          alignment: Alignment.centerLeft,
+                          child: Text(
+                            item.getSuspensionTag(),
+                            style: Theme.of(context).textTheme.labelLarge,
+                          ),
+                        ),
+                      Padding(
+                        padding: const EdgeInsets.only(
+                          left: 16,
+                          right: 40, // Extra padding for IndexBar
+                          top: 6,
+                          bottom: 6,
+                        ),
+                        child: Row(
+                          children: [
+                            for (int i = 0; i < rowAlbums.length; i++) ...[
+                              Expanded(
+                                child: _buildAlbumItem(
+                                  context,
+                                  ref,
+                                  rowAlbums[i],
+                                ),
+                              ),
+                              if (i < rowAlbums.length - 1 ||
+                                  rowAlbums.length == 1)
+                                const SizedBox(width: 12),
+                            ],
+                            // If only 1 item, add Spacer to keep alignment
+                            if (rowAlbums.length == 1)
+                              const Expanded(child: SizedBox()),
+                          ],
+                        ),
+                      ),
+                    ],
+                  );
+                },
+                indexBarData: SuspensionUtil.getTagIndexList(azAlbumRows),
+                indexBarOptions: const IndexBarOptions(
+                  needRebuild: true,
+                  ignoreDragCancel: true,
+                  downTextStyle: TextStyle(fontSize: 12, color: Colors.white),
+                  downItemDecoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: Colors.green,
                   ),
-                ],
-              );
-            },
-            indexBarData: SuspensionUtil.getTagIndexList(azAlbumRows),
-            indexBarOptions: const IndexBarOptions(
-              needRebuild: true,
-              ignoreDragCancel: true,
-              downTextStyle: TextStyle(fontSize: 12, color: Colors.white),
-              downItemDecoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: Colors.green,
+                  indexHintAlignment: Alignment.centerRight,
+                  indexHintOffset: Offset(-20, 0),
+                ),
               ),
-              indexHintAlignment: Alignment.centerRight,
-              indexHintOffset: Offset(-20, 0),
             ),
           );
         },

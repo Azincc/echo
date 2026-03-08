@@ -56,82 +56,88 @@ class _ArtistListPageState extends ConsumerState<ArtistListPage> {
             _processArtists(artists);
           }
 
-          return AzListView(
-            data: _azArtists,
-            itemCount: _azArtists.length,
-            itemBuilder: (context, index) {
-              final item = _azArtists[index];
-              final artist = item.data;
+          return Align(
+            alignment: Alignment.topCenter,
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 1400),
+              child: AzListView(
+                data: _azArtists,
+                itemCount: _azArtists.length,
+                itemBuilder: (context, index) {
+                  final item = _azArtists[index];
+                  final artist = item.data;
 
-              // Suspension Header (Sticky Header) not explicitly needed if valid tags automatically show up?
-              // AzListView usually handles it if we provide suspensionWidget.
-              // But default item builder is just the item.
-              // If we want the section header, we should provide it.
+                  // Suspension Header (Sticky Header) not explicitly needed if valid tags automatically show up?
+                  // AzListView usually handles it if we provide suspensionWidget.
+                  // But default item builder is just the item.
+                  // If we want the section header, we should provide it.
 
-              return Column(
-                children: [
-                  // Optional: Section Header if isShowSuspension is true
-                  if (item.isShowSuspension)
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 8,
-                      ),
-                      color: Theme.of(
-                        context,
-                      ).colorScheme.surfaceContainerHighest,
-                      alignment: Alignment.centerLeft,
-                      child: Text(
-                        item.getSuspensionTag(),
-                        style: Theme.of(context).textTheme.labelLarge,
-                      ),
-                    ),
-                  ListTile(
-                    leading: CircleAvatar(
-                      child: CoverArtImage(
-                        coverArtId: artist.coverArt,
-                        size: 40,
-                      ),
-                    ),
-                    title: Text(artist.name),
-                    subtitle: artist.albumCount != null
-                        ? Text('${artist.albumCount} 张专辑')
-                        : null,
-                    trailing: const Icon(Icons.chevron_right),
-                    onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) =>
-                              ArtistDetailPage(artistId: artist.id),
+                  return Column(
+                    children: [
+                      // Optional: Section Header if isShowSuspension is true
+                      if (item.isShowSuspension)
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 8,
+                          ),
+                          color: Theme.of(
+                            context,
+                          ).colorScheme.surfaceContainerHighest,
+                          alignment: Alignment.centerLeft,
+                          child: Text(
+                            item.getSuspensionTag(),
+                            style: Theme.of(context).textTheme.labelLarge,
+                          ),
                         ),
-                      );
-                    },
+                      ListTile(
+                        leading: CircleAvatar(
+                          child: CoverArtImage(
+                            coverArtId: artist.coverArt,
+                            size: 40,
+                          ),
+                        ),
+                        title: Text(artist.name),
+                        subtitle: artist.albumCount != null
+                            ? Text('${artist.albumCount} 张专辑')
+                            : null,
+                        trailing: const Icon(Icons.chevron_right),
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) =>
+                                  ArtistDetailPage(artistId: artist.id),
+                            ),
+                          );
+                        },
+                      ),
+                    ],
+                  );
+                },
+                // Index Bar setup
+                indexBarData: SuspensionUtil.getTagIndexList(_azArtists),
+                indexBarOptions: IndexBarOptions(
+                  needRebuild: true,
+                  ignoreDragCancel: true,
+                  downTextStyle: TextStyle(fontSize: 12, color: Colors.white),
+                  downItemDecoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: Colors.green,
                   ),
-                ],
-              );
-            },
-            // Index Bar setup
-            indexBarData: SuspensionUtil.getTagIndexList(_azArtists),
-            indexBarOptions: IndexBarOptions(
-              needRebuild: true,
-              ignoreDragCancel: true,
-              downTextStyle: TextStyle(fontSize: 12, color: Colors.white),
-              downItemDecoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: Colors.green,
+                  indexHintWidth: 120 / 2,
+                  indexHintHeight: 100 / 2,
+                  indexHintDecoration: BoxDecoration(
+                    image: null,
+                    color: Colors.grey[700],
+                    shape: BoxShape.rectangle,
+                    borderRadius: BorderRadius.circular(5.0),
+                  ),
+                  indexHintAlignment: Alignment.centerRight,
+                  indexHintChildAlignment: Alignment(-0.25, 0.0),
+                  indexHintOffset: Offset(-20, 0),
+                ),
               ),
-              indexHintWidth: 120 / 2,
-              indexHintHeight: 100 / 2,
-              indexHintDecoration: BoxDecoration(
-                image: null,
-                color: Colors.grey[700],
-                shape: BoxShape.rectangle,
-                borderRadius: BorderRadius.circular(5.0),
-              ),
-              indexHintAlignment: Alignment.centerRight,
-              indexHintChildAlignment: Alignment(-0.25, 0.0),
-              indexHintOffset: Offset(-20, 0),
             ),
           );
         },

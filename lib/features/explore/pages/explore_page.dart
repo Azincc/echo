@@ -527,120 +527,132 @@ class _ExplorePageState extends ConsumerState<ExplorePage> {
           ),
         ],
       ),
-      body: Column(
-        children: [
-          // ── Search bar ──
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-            child: TextField(
-              controller: _searchController,
-              textInputAction: TextInputAction.search,
-              decoration: InputDecoration(
-                hintText: _hintText(),
-                prefixIcon: const Icon(Icons.search),
-                suffixIcon: _searchController.text.isEmpty
-                    ? null
-                    : IconButton(
-                        icon: const Icon(Icons.clear),
-                        onPressed: () {
-                          _searchController.clear();
-                          setState(() {
-                            _query = '';
-                            _selectedSongIds.clear();
-                          });
-                          ref
-                              .read(exploreRemoteSearchProvider.notifier)
-                              .reset();
-                        },
-                      ),
-                border: const OutlineInputBorder(),
-              ),
-              onChanged: (_) => setState(() {}),
-              onSubmitted: _submitQuery,
-            ),
-          ),
-
-          // ── Mode indicator ──
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 4),
-            child: Row(
-              children: [
-                Icon(
-                  searchMode == ExploreSearchMode.local
-                      ? Icons.library_music
-                      : Icons.cloud_outlined,
-                  size: 16,
-                  color: Theme.of(context).colorScheme.primary,
+      body: Align(
+        alignment: Alignment.topCenter,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 1400),
+          child: Column(
+            children: [
+              // ── Search bar ──
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+                child: TextField(
+                  controller: _searchController,
+                  textInputAction: TextInputAction.search,
+                  decoration: InputDecoration(
+                    hintText: _hintText(),
+                    prefixIcon: const Icon(Icons.search),
+                    suffixIcon: _searchController.text.isEmpty
+                        ? null
+                        : IconButton(
+                            icon: const Icon(Icons.clear),
+                            onPressed: () {
+                              _searchController.clear();
+                              setState(() {
+                                _query = '';
+                                _selectedSongIds.clear();
+                              });
+                              ref
+                                  .read(exploreRemoteSearchProvider.notifier)
+                                  .reset();
+                            },
+                          ),
+                    border: const OutlineInputBorder(),
+                  ),
+                  onChanged: (_) => setState(() {}),
+                  onSubmitted: _submitQuery,
                 ),
-                const SizedBox(width: 6),
-                Text(
-                  searchMode == ExploreSearchMode.local
-                      ? '音乐库搜索'
-                      : '远程搜索 · $remoteSource',
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: Theme.of(context).colorScheme.primary,
-                    fontWeight: FontWeight.w500,
+              ),
+
+              // ── Mode indicator ──
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 4),
+                child: Row(
+                  children: [
+                    Icon(
+                      searchMode == ExploreSearchMode.local
+                          ? Icons.library_music
+                          : Icons.cloud_outlined,
+                      size: 16,
+                      color: Theme.of(context).colorScheme.primary,
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      searchMode == ExploreSearchMode.local
+                          ? '音乐库搜索'
+                          : '远程搜索 · $remoteSource',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: Theme.of(context).colorScheme.primary,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+              // ── Search type chips (remote mode only) ──
+              if (searchMode == ExploreSearchMode.remote)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                  child: Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: ExploreSearchType.values
+                        .where(
+                          (t) => t != ExploreSearchType.playlist,
+                        ) // 暂时隐藏歌单ID
+                        .map((type) {
+                          final selected = type == searchType;
+                          return ChoiceChip(
+                            label: Text(_searchTypeLabel(type)),
+                            selected: selected,
+                            onSelected: (_) {
+                              ref
+                                      .read(exploreSearchTypeProvider.notifier)
+                                      .state =
+                                  type;
+                              if (type == ExploreSearchType.playlist) {
+                                // Playlist only supports netease
+                                ref
+                                        .read(
+                                          exploreRemoteSourceProvider.notifier,
+                                        )
+                                        .state =
+                                    'netease';
+                              }
+                              setState(() {
+                                _selectedSongIds.clear();
+                              });
+                              // Re-search if there's a query
+                              if (_query.isNotEmpty) {
+                                final source = ref.read(
+                                  exploreRemoteSourceProvider,
+                                );
+                                ref
+                                    .read(exploreRemoteSearchProvider.notifier)
+                                    .search(
+                                      keyword: _query,
+                                      source: source,
+                                      type: type,
+                                    );
+                              }
+                            },
+                          );
+                        })
+                        .toList(),
                   ),
                 ),
-              ],
-            ),
+
+              // ── Body ──
+              if (query.isEmpty)
+                const Expanded(child: Center(child: Text('输入关键词，探索音乐')))
+              else if (searchMode == ExploreSearchMode.local)
+                Expanded(child: _buildLocalResults(localSearchAsync))
+              else
+                Expanded(child: _buildRemoteResults(remoteState)),
+            ],
           ),
-
-          // ── Search type chips (remote mode only) ──
-          if (searchMode == ExploreSearchMode.remote)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-              child: Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: ExploreSearchType.values
-                    .where((t) => t != ExploreSearchType.playlist) // 暂时隐藏歌单ID
-                    .map((type) {
-                      final selected = type == searchType;
-                      return ChoiceChip(
-                        label: Text(_searchTypeLabel(type)),
-                        selected: selected,
-                        onSelected: (_) {
-                          ref.read(exploreSearchTypeProvider.notifier).state =
-                              type;
-                          if (type == ExploreSearchType.playlist) {
-                            // Playlist only supports netease
-                            ref
-                                    .read(exploreRemoteSourceProvider.notifier)
-                                    .state =
-                                'netease';
-                          }
-                          setState(() {
-                            _selectedSongIds.clear();
-                          });
-                          // Re-search if there's a query
-                          if (_query.isNotEmpty) {
-                            final source = ref.read(
-                              exploreRemoteSourceProvider,
-                            );
-                            ref
-                                .read(exploreRemoteSearchProvider.notifier)
-                                .search(
-                                  keyword: _query,
-                                  source: source,
-                                  type: type,
-                                );
-                          }
-                        },
-                      );
-                    })
-                    .toList(),
-              ),
-            ),
-
-          // ── Body ──
-          if (query.isEmpty)
-            const Expanded(child: Center(child: Text('输入关键词，探索音乐')))
-          else if (searchMode == ExploreSearchMode.local)
-            Expanded(child: _buildLocalResults(localSearchAsync))
-          else
-            Expanded(child: _buildRemoteResults(remoteState)),
-        ],
+        ),
       ),
 
       // ── Floating batch download bar ──

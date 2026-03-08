@@ -44,12 +44,18 @@ class StarredPage extends ConsumerWidget {
           ),
         ),
         body: starredAsync.when(
-          data: (starred) => TabBarView(
-            children: [
-              _buildSongsTab(context, ref, starred),
-              _buildAlbumsTab(context, ref, starred),
-              _buildArtistsTab(context, ref, starred),
-            ],
+          data: (starred) => Align(
+            alignment: Alignment.topCenter,
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 1400),
+              child: TabBarView(
+                children: [
+                  _buildSongsTab(context, ref, starred),
+                  _buildAlbumsTab(context, ref, starred),
+                  _buildArtistsTab(context, ref, starred),
+                ],
+              ),
+            ),
           ),
           loading: () => const ListTileSkeleton(count: 6),
           error: (error, stack) => ErrorPlaceholder(
@@ -151,8 +157,8 @@ class StarredPage extends ConsumerWidget {
       child: GridView.builder(
         physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
-        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-          crossAxisCount: 2,
+        gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+          maxCrossAxisExtent: 180,
           childAspectRatio: 0.75,
           crossAxisSpacing: 12,
           mainAxisSpacing: 12,

@@ -57,148 +57,161 @@ class ArtistDetailPage extends ConsumerWidget {
           final artist = artistDetail.artist;
           final albums = artistDetail.albums;
 
-          return CustomScrollView(
-            slivers: [
-              SliverToBoxAdapter(
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    children: [
-                      CircleAvatar(
-                        radius: 60,
-                        child: CoverArtImage(
-                          coverArtId: artist.coverArt,
-                          size: 120,
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Flexible(
-                            child: Text(
-                              artist.name,
-                              textAlign: TextAlign.center,
-                              style: Theme.of(context).textTheme.headlineSmall
-                                  ?.copyWith(fontWeight: FontWeight.bold),
-                            ),
-                          ),
-                          IconButton(
-                            tooltip: artist.starred ? '取消收藏歌手' : '收藏歌手',
-                            onPressed: () => _toggleArtistStarred(
-                              context,
-                              ref,
-                              artist.id,
-                              artist.starred,
-                            ),
-                            icon: Icon(
-                              artist.starred
-                                  ? Icons.favorite
-                                  : Icons.favorite_border,
-                              color: artist.starred ? Colors.red : null,
-                            ),
-                          ),
-                        ],
-                      ),
-                      if (artist.albumCount != null)
-                        Text(
-                          '${artist.albumCount} 张专辑',
-                          style: Theme.of(context).textTheme.bodyMedium
-                              ?.copyWith(
-                                color: Theme.of(
-                                  context,
-                                ).colorScheme.onSurfaceVariant,
-                              ),
-                        ),
-                    ],
-                  ),
-                ),
-              ),
-              SliverPadding(
-                padding: const EdgeInsets.all(16),
-                sliver: SliverGrid(
-                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: 2,
-                    childAspectRatio: 0.7,
-                    crossAxisSpacing: 12,
-                    mainAxisSpacing: 12,
-                  ),
-                  delegate: SliverChildBuilderDelegate((context, index) {
-                    final album = albums[index];
-                    return InkWell(
-                      onTap: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) =>
-                                AlbumDetailPage(albumId: album.id),
-                          ),
-                        );
-                      },
-                      onLongPress: () {
-                        showAlbumOptionsSheet(
-                          context: context,
-                          ref: ref,
-                          album: album,
-                        );
-                      },
+          return Align(
+            alignment: Alignment.topCenter,
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 1400),
+              child: CustomScrollView(
+                slivers: [
+                  SliverToBoxAdapter(
+                    child: Padding(
+                      padding: const EdgeInsets.all(16),
                       child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          AspectRatio(
-                            aspectRatio: 1.0,
-                            child: Stack(
-                              children: [
-                                Positioned.fill(
-                                  child: ClipRRect(
-                                    borderRadius: BorderRadius.circular(8),
-                                    child: CoverArtImage(
-                                      coverArtId: album.coverArt,
-                                      fit: BoxFit.cover,
-                                    ),
-                                  ),
-                                ),
-                                if (album.starred)
-                                  Positioned(
-                                    left: 6,
-                                    bottom: 6,
-                                    child: Container(
-                                      padding: const EdgeInsets.all(4),
-                                      decoration: BoxDecoration(
-                                        color: Colors.black.withValues(
-                                          alpha: 0.35,
-                                        ),
-                                        borderRadius: BorderRadius.circular(10),
-                                      ),
-                                      child: const Icon(
-                                        Icons.favorite,
-                                        size: 14,
-                                        color: Colors.red,
-                                      ),
-                                    ),
-                                  ),
-                              ],
+                          CircleAvatar(
+                            radius: 60,
+                            child: CoverArtImage(
+                              coverArtId: artist.coverArt,
+                              size: 120,
                             ),
                           ),
-                          const SizedBox(height: 8),
-                          Text(
-                            album.name,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(fontWeight: FontWeight.w500),
+                          const SizedBox(height: 16),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Flexible(
+                                child: Text(
+                                  artist.name,
+                                  textAlign: TextAlign.center,
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .headlineSmall
+                                      ?.copyWith(fontWeight: FontWeight.bold),
+                                ),
+                              ),
+                              IconButton(
+                                tooltip: artist.starred ? '取消收藏歌手' : '收藏歌手',
+                                onPressed: () => _toggleArtistStarred(
+                                  context,
+                                  ref,
+                                  artist.id,
+                                  artist.starred,
+                                ),
+                                icon: Icon(
+                                  artist.starred
+                                      ? Icons.favorite
+                                      : Icons.favorite_border,
+                                  color: artist.starred ? Colors.red : null,
+                                ),
+                              ),
+                            ],
                           ),
-                          if (album.year != null)
+                          if (artist.albumCount != null)
                             Text(
-                              album.year.toString(),
-                              style: Theme.of(context).textTheme.bodySmall,
+                              '${artist.albumCount} 张专辑',
+                              style: Theme.of(context).textTheme.bodyMedium
+                                  ?.copyWith(
+                                    color: Theme.of(
+                                      context,
+                                    ).colorScheme.onSurfaceVariant,
+                                  ),
                             ),
                         ],
                       ),
-                    );
-                  }, childCount: albums.length),
-                ),
+                    ),
+                  ),
+                  SliverPadding(
+                    padding: const EdgeInsets.all(16),
+                    sliver: SliverGrid(
+                      gridDelegate:
+                          const SliverGridDelegateWithMaxCrossAxisExtent(
+                            maxCrossAxisExtent: 180,
+                            childAspectRatio: 0.7,
+                            crossAxisSpacing: 12,
+                            mainAxisSpacing: 12,
+                          ),
+                      delegate: SliverChildBuilderDelegate((context, index) {
+                        final album = albums[index];
+                        return InkWell(
+                          onTap: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) =>
+                                    AlbumDetailPage(albumId: album.id),
+                              ),
+                            );
+                          },
+                          onLongPress: () {
+                            showAlbumOptionsSheet(
+                              context: context,
+                              ref: ref,
+                              album: album,
+                            );
+                          },
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              AspectRatio(
+                                aspectRatio: 1.0,
+                                child: Stack(
+                                  children: [
+                                    Positioned.fill(
+                                      child: ClipRRect(
+                                        borderRadius: BorderRadius.circular(8),
+                                        child: CoverArtImage(
+                                          coverArtId: album.coverArt,
+                                          fit: BoxFit.cover,
+                                        ),
+                                      ),
+                                    ),
+                                    if (album.starred)
+                                      Positioned(
+                                        left: 6,
+                                        bottom: 6,
+                                        child: Container(
+                                          padding: const EdgeInsets.all(4),
+                                          decoration: BoxDecoration(
+                                            color: Colors.black.withValues(
+                                              alpha: 0.35,
+                                            ),
+                                            borderRadius: BorderRadius.circular(
+                                              10,
+                                            ),
+                                          ),
+                                          child: const Icon(
+                                            Icons.favorite,
+                                            size: 14,
+                                            color: Colors.red,
+                                          ),
+                                        ),
+                                      ),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                              Text(
+                                album.name,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                              if (album.year != null)
+                                Text(
+                                  album.year.toString(),
+                                  style: Theme.of(context).textTheme.bodySmall,
+                                ),
+                            ],
+                          ),
+                        );
+                      }, childCount: albums.length),
+                    ),
+                  ),
+                ],
               ),
-            ],
+            ),
           );
         },
         loading: () => const ArtistDetailSkeleton(),

@@ -215,71 +215,82 @@ class PlaylistDetailPage extends ConsumerWidget {
 
           final songs = playlist.songs ?? [];
 
-          return CustomScrollView(
-            slivers: [
-              SliverToBoxAdapter(
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        playlist.name,
-                        style: Theme.of(context).textTheme.headlineSmall
-                            ?.copyWith(fontWeight: FontWeight.bold),
+          return Align(
+            alignment: Alignment.topCenter,
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 1400),
+              child: CustomScrollView(
+                slivers: [
+                  SliverToBoxAdapter(
+                    child: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            playlist.name,
+                            style: Theme.of(context).textTheme.headlineSmall
+                                ?.copyWith(fontWeight: FontWeight.bold),
+                          ),
+                          const SizedBox(height: 8),
+                          if (playlist.comment != null &&
+                              playlist.comment!.isNotEmpty)
+                            Text(
+                              playlist.comment!,
+                              style: Theme.of(context).textTheme.bodyMedium,
+                            ),
+                          const SizedBox(height: 8),
+                          Text(
+                            '${playlist.songCount} 首 · ${playlist.durationString}',
+                            style: Theme.of(context).textTheme.bodyMedium
+                                ?.copyWith(
+                                  color: Theme.of(
+                                    context,
+                                  ).colorScheme.onSurfaceVariant,
+                                ),
+                          ),
+                          const SizedBox(height: 16),
+                          FilledButton.icon(
+                            onPressed: songs.isEmpty
+                                ? null
+                                : () {
+                                    // 播放全部
+                                    ref
+                                        .read(playerProvider.notifier)
+                                        .playQueue(songs);
+                                  },
+                            icon: const Icon(Icons.play_arrow),
+                            label: const Text('播放全部'),
+                          ),
+                        ],
                       ),
-                      const SizedBox(height: 8),
-                      if (playlist.comment != null &&
-                          playlist.comment!.isNotEmpty)
-                        Text(
-                          playlist.comment!,
-                          style: Theme.of(context).textTheme.bodyMedium,
-                        ),
-                      const SizedBox(height: 8),
-                      Text(
-                        '${playlist.songCount} 首 · ${playlist.durationString}',
-                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: Theme.of(context).colorScheme.onSurfaceVariant,
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                      FilledButton.icon(
-                        onPressed: songs.isEmpty
-                            ? null
-                            : () {
-                                // 播放全部
-                                ref
-                                    .read(playerProvider.notifier)
-                                    .playQueue(songs);
-                              },
-                        icon: const Icon(Icons.play_arrow),
-                        label: const Text('播放全部'),
-                      ),
-                    ],
+                    ),
                   ),
-                ),
+                  SliverList(
+                    delegate: SliverChildBuilderDelegate((context, index) {
+                      final song = songs[index];
+                      return ListTile(
+                        leading: CircleAvatar(child: Text('${index + 1}')),
+                        title: Text(song.title),
+                        subtitle: song.artist != null
+                            ? Text(song.artist!)
+                            : null,
+                        trailing: Text(song.durationString),
+                        onTap: () {
+                          // 播放歌曲
+                          ref
+                              .read(playerProvider.notifier)
+                              .playQueue(songs, startIndex: index);
+                        },
+                        onLongPress: () {
+                          _showSongContextMenu(context, ref, song);
+                        },
+                      );
+                    }, childCount: songs.length),
+                  ),
+                ],
               ),
-              SliverList(
-                delegate: SliverChildBuilderDelegate((context, index) {
-                  final song = songs[index];
-                  return ListTile(
-                    leading: CircleAvatar(child: Text('${index + 1}')),
-                    title: Text(song.title),
-                    subtitle: song.artist != null ? Text(song.artist!) : null,
-                    trailing: Text(song.durationString),
-                    onTap: () {
-                      // 播放歌曲
-                      ref
-                          .read(playerProvider.notifier)
-                          .playQueue(songs, startIndex: index);
-                    },
-                    onLongPress: () {
-                      _showSongContextMenu(context, ref, song);
-                    },
-                  );
-                }, childCount: songs.length),
-              ),
-            ],
+            ),
           );
         },
         loading: () => const PlaylistDetailSkeleton(),

@@ -128,58 +128,64 @@ class _SongListPageState extends ConsumerState<SongListPage> {
             _processSongs(songs, signature);
           }
 
-          return AzListView(
-            data: _azSongs,
-            itemCount: _azSongs.length,
-            itemPositionsListener: _itemPositionsListener,
-            itemBuilder: (context, index) {
-              final item = _azSongs[index];
-              final song = item.data;
-              final shouldLoadCover =
-                  index >= _coverLoadStart && index <= _coverLoadEnd;
+          return Align(
+            alignment: Alignment.topCenter,
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 1400),
+              child: AzListView(
+                data: _azSongs,
+                itemCount: _azSongs.length,
+                itemPositionsListener: _itemPositionsListener,
+                itemBuilder: (context, index) {
+                  final item = _azSongs[index];
+                  final song = item.data;
+                  final shouldLoadCover =
+                      index >= _coverLoadStart && index <= _coverLoadEnd;
 
-              return ListTile(
-                title: Text(song.title),
-                subtitle: Text(song.artist ?? '未知歌手'),
-                leading: ClipRRect(
-                  borderRadius: BorderRadius.circular(6),
-                  child: CoverArtImage(
-                    coverArtId: shouldLoadCover ? song.coverArt : null,
-                    size: _tileLeadingSize,
+                  return ListTile(
+                    title: Text(song.title),
+                    subtitle: Text(song.artist ?? '未知歌手'),
+                    leading: ClipRRect(
+                      borderRadius: BorderRadius.circular(6),
+                      child: CoverArtImage(
+                        coverArtId: shouldLoadCover ? song.coverArt : null,
+                        size: _tileLeadingSize,
+                      ),
+                    ),
+                    onTap: () {
+                      final queue = _azSongs.map((e) => e.data).toList();
+                      ref
+                          .read(playerProvider.notifier)
+                          .playQueue(queue, startIndex: index);
+                    },
+                    onLongPress: () {
+                      showSongOptionsSheet(context: context, song: song);
+                    },
+                  );
+                },
+                // Index Bar setup
+                indexBarData: SuspensionUtil.getTagIndexList(_azSongs),
+                indexBarOptions: IndexBarOptions(
+                  needRebuild: true,
+                  ignoreDragCancel: true,
+                  downTextStyle: TextStyle(fontSize: 12, color: Colors.white),
+                  downItemDecoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: Colors.green,
                   ),
+                  indexHintWidth: 120 / 2,
+                  indexHintHeight: 100 / 2,
+                  indexHintDecoration: BoxDecoration(
+                    image: null,
+                    color: Colors.grey[700],
+                    shape: BoxShape.rectangle,
+                    borderRadius: BorderRadius.circular(5.0),
+                  ),
+                  indexHintAlignment: Alignment.centerRight,
+                  indexHintChildAlignment: Alignment(-0.25, 0.0),
+                  indexHintOffset: Offset(-20, 0),
                 ),
-                onTap: () {
-                  final queue = _azSongs.map((e) => e.data).toList();
-                  ref
-                      .read(playerProvider.notifier)
-                      .playQueue(queue, startIndex: index);
-                },
-                onLongPress: () {
-                  showSongOptionsSheet(context: context, song: song);
-                },
-              );
-            },
-            // Index Bar setup
-            indexBarData: SuspensionUtil.getTagIndexList(_azSongs),
-            indexBarOptions: IndexBarOptions(
-              needRebuild: true,
-              ignoreDragCancel: true,
-              downTextStyle: TextStyle(fontSize: 12, color: Colors.white),
-              downItemDecoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: Colors.green,
               ),
-              indexHintWidth: 120 / 2,
-              indexHintHeight: 100 / 2,
-              indexHintDecoration: BoxDecoration(
-                image: null,
-                color: Colors.grey[700],
-                shape: BoxShape.rectangle,
-                borderRadius: BorderRadius.circular(5.0),
-              ),
-              indexHintAlignment: Alignment.centerRight,
-              indexHintChildAlignment: Alignment(-0.25, 0.0),
-              indexHintOffset: Offset(-20, 0),
             ),
           );
         },

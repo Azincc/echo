@@ -66,33 +66,39 @@ class _DiscoverPageState extends ConsumerState<DiscoverPage> {
           ref.invalidate(recentAlbumsProvider);
           ref.invalidate(frequentAlbumsProvider);
         },
-        child: ListView(
-          cacheExtent: 1500, // 保持更多离屏内容，避免频繁重建
-          padding: const EdgeInsets.all(16),
-          children: [
-            // 随机推荐
-            const SectionHeader(title: '随机推荐', icon: Icons.shuffle),
-            const SizedBox(height: 12),
-            const RandomSongsSection(),
-            const SizedBox(height: 24),
+        child: Align(
+          alignment: Alignment.topCenter,
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 1400),
+            child: ListView(
+              cacheExtent: 1500, // 保持更多离屏内容，避免频繁重建
+              padding: const EdgeInsets.all(16),
+              children: [
+                // 随机推荐
+                const SectionHeader(title: '随机推荐', icon: Icons.shuffle),
+                const SizedBox(height: 12),
+                const RandomSongsSection(),
+                const SizedBox(height: 24),
 
-            // 最近入库的专辑
-            const SectionHeader(title: '最近入库', icon: Icons.library_add),
-            const SizedBox(height: 12),
-            const NewestAlbumsSection(),
-            const SizedBox(height: 24),
+                // 最近入库的专辑
+                const SectionHeader(title: '最近入库', icon: Icons.library_add),
+                const SizedBox(height: 12),
+                const NewestAlbumsSection(),
+                const SizedBox(height: 24),
 
-            // 最近播放的专辑
-            const SectionHeader(title: '最近播放', icon: Icons.history),
-            const SizedBox(height: 12),
-            const RecentAlbumsSection(),
-            const SizedBox(height: 24),
+                // 最近播放的专辑
+                const SectionHeader(title: '最近播放', icon: Icons.history),
+                const SizedBox(height: 12),
+                const RecentAlbumsSection(),
+                const SizedBox(height: 24),
 
-            // 常听的专辑
-            const SectionHeader(title: '经常听的专辑', icon: Icons.whatshot),
-            const SizedBox(height: 12),
-            const FrequentAlbumsSection(),
-          ],
+                // 常听的专辑
+                const SectionHeader(title: '经常听的专辑', icon: Icons.whatshot),
+                const SizedBox(height: 12),
+                const FrequentAlbumsSection(),
+              ],
+            ),
+          ),
         ),
       ),
     );
@@ -178,9 +184,10 @@ class _RandomSongsSectionState extends ConsumerState<RandomSongsSection> {
             GridView.builder(
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 2,
-                childAspectRatio: 2.8,
+              gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+                maxCrossAxisExtent: 350,
+                mainAxisExtent:
+                    64, // Fixed height instead of scaling based on width
                 crossAxisSpacing: 12,
                 mainAxisSpacing: 8,
               ),
@@ -330,8 +337,8 @@ class FrequentAlbumsSection extends ConsumerWidget {
         return GridView.builder(
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
-          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: 2,
+          gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+            maxCrossAxisExtent: 180,
             childAspectRatio: 0.75, // 调整比例以容纳文字
             crossAxisSpacing: 12,
             mainAxisSpacing: 12,

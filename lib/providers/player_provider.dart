@@ -4,15 +4,14 @@ import 'dart:io' show File, Platform;
 import 'package:audio_service/audio_service.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:just_audio/just_audio.dart';
+import 'package:just_audio/just_audio.dart' hide PlayerState;
 import '../data/models/song.dart';
 import '../data/models/audio_quality.dart';
 import '../data/models/server_address.dart';
 import '../data/sources/subsonic_api_client.dart';
 import '../data/sources/local_storage.dart';
 import '../data/repositories/music_repository.dart';
-import '../core/constants/api_constants.dart';
-import '../core/network/connectivity_monitor.dart';
+
 import '../core/utils/logger.dart';
 import '../core/utils/network_error_notifier.dart';
 import '../core/services/audio_handler_service.dart';
@@ -25,113 +24,15 @@ import 'audio_cache_provider.dart';
 import 'crossfade_provider.dart';
 import '../providers/auth_provider.dart';
 
-/// 播放来源
-enum PlaybackSource {
-  downloaded, // 已下载的本地文件
-  cached, // 缓存的本地文件
-  stream, // 在线流式播放
-}
-
-/// 播放模式（用于播放器控制区三态切换）
-enum PlaybackMode { shuffle, repeatAll, repeatOne }
+export 'player/player_state.dart';
+export 'player/favorite_scrobble_handler.dart';
+export 'player/cache_manager_handler.dart';
+import 'player/player_state.dart';
+import 'player/favorite_scrobble_handler.dart';
+import 'player/cache_manager_handler.dart';
 
 const _playerLogTag = 'PLAYER';
 const _playDbgTag = 'PLAYDBG';
-const _maxShuffleHistoryEntries = 200;
-
-class _ShuffleHistoryEntry {
-  const _ShuffleHistoryEntry({
-    required this.songId,
-    required this.preferredIndex,
-  });
-
-  final String songId;
-  final int preferredIndex;
-}
-
-/// 播放器状态
-class PlayerState {
-  final Song? currentSong;
-  final List<Song> queue;
-  final int currentIndex;
-  final bool isPlaying;
-  final ProcessingState processingState;
-  final Duration position;
-  final Duration duration;
-  final LoopMode loopMode;
-  final bool shuffleEnabled;
-  final int shuffleHistoryCount;
-  final AudioQualityLevel? currentQuality;
-  final PlaybackSource? playbackSource;
-  final int currentBitRateKbps;
-  final Duration bufferedPosition;
-
-  PlayerState({
-    this.currentSong,
-    this.queue = const [],
-    this.currentIndex = 0,
-    this.isPlaying = false,
-    this.processingState = ProcessingState.idle,
-    this.position = Duration.zero,
-    this.duration = Duration.zero,
-    this.loopMode = LoopMode.off,
-    this.shuffleEnabled = false,
-    this.shuffleHistoryCount = 0,
-    this.currentQuality,
-    this.playbackSource,
-    this.currentBitRateKbps = 0,
-    this.bufferedPosition = Duration.zero,
-  });
-
-  PlayerState copyWith({
-    Song? currentSong,
-    List<Song>? queue,
-    int? currentIndex,
-    bool? isPlaying,
-    ProcessingState? processingState,
-    Duration? position,
-    Duration? duration,
-    LoopMode? loopMode,
-    bool? shuffleEnabled,
-    int? shuffleHistoryCount,
-    AudioQualityLevel? currentQuality,
-    PlaybackSource? playbackSource,
-    int? currentBitRateKbps,
-    Duration? bufferedPosition,
-  }) {
-    return PlayerState(
-      currentSong: currentSong ?? this.currentSong,
-      queue: queue ?? this.queue,
-      currentIndex: currentIndex ?? this.currentIndex,
-      isPlaying: isPlaying ?? this.isPlaying,
-      processingState: processingState ?? this.processingState,
-      position: position ?? this.position,
-      duration: duration ?? this.duration,
-      loopMode: loopMode ?? this.loopMode,
-      shuffleEnabled: shuffleEnabled ?? this.shuffleEnabled,
-      shuffleHistoryCount: shuffleHistoryCount ?? this.shuffleHistoryCount,
-      currentQuality: currentQuality ?? this.currentQuality,
-      playbackSource: playbackSource ?? this.playbackSource,
-      currentBitRateKbps: currentBitRateKbps ?? this.currentBitRateKbps,
-      bufferedPosition: bufferedPosition ?? this.bufferedPosition,
-    );
-  }
-
-  bool get _hasValidCurrent =>
-      currentSong != null && currentIndex >= 0 && currentIndex < queue.length;
-
-  bool get hasNext {
-    if (!_hasValidCurrent) return false;
-    // 与 hasPrevious 对称：只要队列非空，下一曲始终可用（末项回到首项，单曲重新播放）。
-    return queue.isNotEmpty;
-  }
-
-  bool get hasPrevious {
-    if (!_hasValidCurrent) return false;
-    // 与主流播放器一致：只要队列存在当前曲目，上一曲始终可用（首项回到末项，单曲回自己）。
-    return queue.isNotEmpty;
-  }
-}
 
 /// 播放器 Provider
 
@@ -151,10 +52,10 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
   EchoAudioHandler? _audioHandler;
   StreamSubscription? _downloadProgressSubscription;
   final Random _random = Random();
-  final List<_ShuffleHistoryEntry> _shuffleBackHistory =
-      <_ShuffleHistoryEntry>[];
-  final List<_ShuffleHistoryEntry> _shuffleForwardHistory =
-      <_ShuffleHistoryEntry>[];
+  final List<ShuffleHistoryEntry> _shuffleBackHistory =
+      <ShuffleHistoryEntry>[];
+  final List<ShuffleHistoryEntry> _shuffleForwardHistory =
+      <ShuffleHistoryEntry>[];
   Duration? _pendingSeekPosition;
   String? _pendingSeekSongId;
   bool _usingLockCachingSource = false;
@@ -180,6 +81,10 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
   bool _loggedDurationUnavailableForSong = false;
   Timer? _fadeTimer;
 
+  // ── Handlers ──────────────────────────────────────────────────────────────
+  late final FavoriteScrobbleHandler _favoriteHandler;
+  late final CacheManagerHandler _cacheHandler;
+
   /// 动态获取最新的 API client
   SubsonicApiClient get _apiClient => _ref.read(subsonicApiClientProvider);
 
@@ -188,6 +93,8 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
       _ref.read(musicRepositoryProvider) ?? MusicRepository(_apiClient);
 
   PlayerNotifier(this._ref) : super(PlayerState()) {
+    _favoriteHandler = FavoriteScrobbleHandler(_ref);
+    _cacheHandler = CacheManagerHandler(_ref);
     _init();
   }
 
@@ -1359,18 +1266,11 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
     await _audioHandler?.pause();
   }
 
-  /// 播放（带淡入）
+  /// 播放（从暂停恢复，不使用淡入——淡入淡出仅用于切歌）
   Future<void> play() async {
-    final durationMs = _ref.read(crossfadeDurationMsProvider);
-    if (durationMs > 0) {
-      _cancelFade();
-      _audioPlayer?.setVolume(0.0);
-    }
+    _cancelFade(); // 取消任何进行中的淡入淡出，恢复音量到 1.0
     await _audioPlayer?.play();
     await _audioHandler?.play();
-    if (durationMs > 0) {
-      _fadeIn();
-    }
   }
 
   /// 暂停前的淡出：音量降到 0 后返回，由 pause() 执行实际暂停。
@@ -1751,7 +1651,7 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
     _syncShuffleHistoryState();
   }
 
-  _ShuffleHistoryEntry? _currentShuffleEntry({
+  ShuffleHistoryEntry? _currentShuffleEntry({
     required List<Song> queue,
     required Song? song,
     required int index,
@@ -1759,12 +1659,12 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
     if (song == null || queue.isEmpty) return null;
 
     if (index >= 0 && index < queue.length && queue[index].id == song.id) {
-      return _ShuffleHistoryEntry(songId: song.id, preferredIndex: index);
+      return ShuffleHistoryEntry(songId: song.id, preferredIndex: index);
     }
 
     for (var i = 0; i < queue.length; i++) {
       if (queue[i].id == song.id) {
-        return _ShuffleHistoryEntry(songId: song.id, preferredIndex: i);
+        return ShuffleHistoryEntry(songId: song.id, preferredIndex: i);
       }
     }
     return null;
@@ -1783,8 +1683,8 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
   }
 
   void _pushShuffleEntry(
-    List<_ShuffleHistoryEntry> stack,
-    _ShuffleHistoryEntry entry,
+    List<ShuffleHistoryEntry> stack,
+    ShuffleHistoryEntry entry,
   ) {
     if (stack.isNotEmpty) {
       final last = stack.last;
@@ -1795,12 +1695,12 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
     }
 
     stack.add(entry);
-    if (stack.length > _maxShuffleHistoryEntries) {
+    if (stack.length > maxShuffleHistoryEntries) {
       stack.removeAt(0);
     }
   }
 
-  int? _resolveShuffleEntryIndex(_ShuffleHistoryEntry entry) {
+  int? _resolveShuffleEntryIndex(ShuffleHistoryEntry entry) {
     final queue = state.queue;
     final preferredIndex = entry.preferredIndex;
     if (preferredIndex >= 0 &&
@@ -1817,7 +1717,7 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
     return null;
   }
 
-  int? _takeLastValidHistoryIndex(List<_ShuffleHistoryEntry> stack) {
+  int? _takeLastValidHistoryIndex(List<ShuffleHistoryEntry> stack) {
     while (stack.isNotEmpty) {
       final entry = stack.removeLast();
       final resolvedIndex = _resolveShuffleEntryIndex(entry);
@@ -2050,57 +1950,19 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
   }
 
   /// 上报播放记录（Scrobble）
-  Future<void> _scrobble(String songId, {required bool submission}) async {
-    try {
-      await _apiClient.post(
-        ApiConstants.scrobble,
-        queryParameters: {
-          'id': songId,
-          'time': DateTime.now().millisecondsSinceEpoch.toString(),
-          'submission': submission.toString(),
-        },
-      );
-      Logger.info('Scrobble: $songId (submission: $submission)');
-    } catch (e) {
-      Logger.warn('Failed to scrobble', e);
-    }
-  }
+  Future<void> _scrobble(String songId, {required bool submission}) =>
+      _favoriteHandler.scrobble(songId, submission: submission);
 
   Future<void> _recordMobileCacheSavedBytesForHit({
     required String songId,
     required String cacheFilePath,
     required String libraryId,
-  }) async {
-    if (libraryId.isEmpty) return;
-
-    try {
-      final networkType = _ref
-          .read(connectivityMonitorProvider)
-          .currentNetworkType;
-      if (networkType != NetworkType.mobile) return;
-
-      final cacheFile = File(cacheFilePath);
-      if (!await cacheFile.exists()) return;
-
-      final savedBytes = await cacheFile.length();
-      if (savedBytes <= 0) return;
-
-      await LocalStorage.addMobileCacheSavedBytes(
+  }) =>
+      _favoriteHandler.recordMobileCacheSavedBytesForHit(
+        songId: songId,
+        cacheFilePath: cacheFilePath,
         libraryId: libraryId,
-        bytes: savedBytes,
       );
-      Logger.infoWithTag(
-        _playerLogTag,
-        'mobile cache hit recorded song=$songId savedBytes=$savedBytes',
-      );
-    } catch (e) {
-      Logger.warnWithTag(
-        _playerLogTag,
-        'failed to record mobile cache hit savings',
-        e,
-      );
-    }
-  }
 
   /// 切换当前歌曲的收藏状态
   Future<void> toggleFavorite() async {
@@ -2111,78 +1973,32 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
 
   /// 切换指定歌曲的收藏状态
   Future<bool?> toggleSongFavorite(Song song) async {
-    try {
-      Song? queueSong;
-      for (final queued in state.queue) {
-        if (queued.id == song.id) {
-          queueSong = queued;
-          break;
-        }
-      }
-      final currentSong = state.currentSong;
-      final currentStarred =
-          queueSong?.starred ??
-          (currentSong?.id == song.id ? currentSong!.starred : song.starred);
-      final newStarred = !currentStarred;
-      await _musicRepository.setSongStarred(song.id, newStarred);
-
-      final updatedQueue = state.queue.map((queuedSong) {
-        if (queuedSong.id != song.id) return queuedSong;
-        return _copySongWithStarred(queuedSong, newStarred);
-      }).toList();
-
-      final updatedCurrentSong =
-          currentSong != null && currentSong.id == song.id
-          ? _copySongWithStarred(currentSong, newStarred)
-          : state.currentSong;
-
-      state = state.copyWith(
-        currentSong: updatedCurrentSong,
-        queue: updatedQueue,
-      );
-
-      // 刷新相关数据
-      _ref.invalidate(starredProvider);
-      _ref.invalidate(randomSongsProvider);
-      _ref.invalidate(allSongsProvider);
-      if (song.albumId != null && song.albumId!.isNotEmpty) {
-        _ref.invalidate(albumDetailProvider(song.albumId!));
-      }
-
-      Logger.info('Toggled favorite for ${song.title}: $newStarred');
-      return newStarred;
-    } catch (e) {
-      Logger.error('Failed to toggle favorite', e);
-      return null;
-    }
-  }
-
-  Song _copySongWithStarred(Song source, bool starred) {
-    return Song(
-      id: source.id,
-      title: source.title,
-      album: source.album,
-      albumId: source.albumId,
-      artist: source.artist,
-      artistId: source.artistId,
-      track: source.track,
-      year: source.year,
-      genre: source.genre,
-      coverArt: source.coverArt,
-      size: source.size,
-      contentType: source.contentType,
-      suffix: source.suffix,
-      duration: source.duration,
-      bitRate: source.bitRate,
-      path: source.path,
-      isVideo: source.isVideo,
-      playCount: source.playCount,
-      created: source.created,
-      starred: starred,
-      discNumber: source.discNumber,
-      type: source.type,
+    final newStarred = await _favoriteHandler.toggleSongFavorite(
+      song: song,
+      currentSong: state.currentSong,
+      queue: state.queue,
     );
+    if (newStarred == null) return null;
+
+    final updatedQueue = _favoriteHandler.updateQueueStarred(
+      state.queue,
+      song.id,
+      newStarred,
+    );
+    final currentSong = state.currentSong;
+    final updatedCurrentSong =
+        currentSong != null && currentSong.id == song.id
+        ? currentSong.copyWith(starred: newStarred)
+        : currentSong;
+
+    state = state.copyWith(
+      currentSong: updatedCurrentSong,
+      queue: updatedQueue,
+    );
+    _favoriteHandler.invalidateFavoriteProviders(albumId: song.albumId);
+    return newStarred;
   }
+
 
   Duration _normalizeSeekPosition(Duration position) {
     if (position < Duration.zero) return Duration.zero;
@@ -2632,104 +2448,20 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
     String songId,
     String libraryId,
     AudioQualityLevel quality,
-  ) async {
-    try {
-      if (!await cacheFile.exists()) return;
-      final fileSize = await cacheFile.length();
-      if (fileSize <= 0) return;
-
-      final cacheService = _ref.read(audioCacheServiceProvider);
-      await cacheService.registerCache(
-        songId: songId,
-        libraryId: libraryId,
-        filePath: cacheFile.path,
-        fileSize: fileSize,
-        quality: quality,
+  ) =>
+      _cacheHandler.registerCacheFromFile(
+        cacheFile,
+        songId,
+        libraryId,
+        quality,
       );
-      Logger.info(
-        'Cache registered (download complete): $songId '
-        '(${(fileSize / 1024 / 1024).toStringAsFixed(1)} MB)',
-      );
-    } catch (e) {
-      Logger.warn('Failed to register cache for $songId', e);
-    }
-  }
 
   /// 预缓存队列中下一首歌
-  void _preCacheNextSong() async {
-    if (!state.hasNext) return;
-    if (kIsWeb) return; // Web 平台不预缓存
-    if (state.shuffleEnabled) return; // 随机模式下一首不确定，跳过顺序预缓存
-    if (state.currentIndex < 0 ||
-        state.currentIndex >= state.queue.length - 1) {
-      return;
-    }
-
-    final nextSong = state.queue[state.currentIndex + 1];
-    final authState = _ref.read(authStateProvider);
-    final libraryId = authState.currentLibrary?.id ?? '';
-    if (libraryId.isEmpty) return;
-
-    final downloadService = _ref.read(downloadServiceProvider);
-    final cacheService = _ref.read(audioCacheServiceProvider);
-    final effectiveQuality = _ref.read(effectiveQualityProvider);
-    final maxBitRate = effectiveQuality.maxBitRate;
-    if (maxBitRate != null) {
-      _seekDbg('pre_cache_skip song=${nextSong.id} reason=bitrate-limited');
-      return;
-    }
-
-    // 已下载则不需要预缓存
-    final downloaded = await downloadService.isDownloaded(
-      nextSong.id,
-      libraryId,
-    );
-    if (downloaded) return;
-
-    // 已缓存则不需要预缓存
-    final cached = await cacheService.getCachedPath(
-      songId: nextSong.id,
-      libraryId: libraryId,
-      quality: effectiveQuality,
-    );
-    if (cached != null) return;
-
-    // 预缓存：构建 LockCachingAudioSource 并监听下载进度
-    try {
-      final streamUrl = _apiClient.getStreamUrl(
-        nextSong.id,
-        format: _needsTranscoding(nextSong.suffix),
-        maxBitRate: maxBitRate,
+  void _preCacheNextSong() => _cacheHandler.preCacheNextSong(
+        state: state,
+        needsTranscoding: _needsTranscoding,
+        seekDbg: _seekDbg,
       );
-      final cacheFilePath = await cacheService.getCacheFilePath(
-        songId: nextSong.id,
-        libraryId: libraryId,
-        quality: effectiveQuality,
-      );
-      final cacheFile = File(cacheFilePath);
-      // ignore: experimental_member_use
-      final source = LockCachingAudioSource(
-        Uri.parse(streamUrl),
-        cacheFile: cacheFile,
-      );
-      Logger.info('Pre-caching next song: ${nextSong.title}');
-
-      // 监听 downloadProgressStream，下载完成时注册缓存
-      // ignore: experimental_member_use
-      source.downloadProgressStream.listen((progress) {
-        if (progress >= 1.0) {
-          _registerCacheFromFile(
-            cacheFile,
-            nextSong.id,
-            libraryId,
-            effectiveQuality,
-          );
-        }
-      });
-    } catch (e) {
-      Logger.warn('Pre-cache failed for next song', e);
-    }
-  }
 
   @override
   void dispose() {

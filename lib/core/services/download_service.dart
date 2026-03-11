@@ -265,14 +265,18 @@ class DownloadService {
 
   /// 处理下载队列
   void _processQueue() async {
-    if (_activeDownloads.length >= maxConcurrent) return;
+    try {
+      if (_activeDownloads.length >= maxConcurrent) return;
 
-    final pending = await _repository.getPendingTasks();
-    for (final task in pending) {
-      if (_activeDownloads.length >= maxConcurrent) break;
-      if (_activeDownloads.containsKey(task.id)) continue;
+      final pending = await _repository.getPendingTasks();
+      for (final task in pending) {
+        if (_activeDownloads.length >= maxConcurrent) break;
+        if (_activeDownloads.containsKey(task.id)) continue;
 
-      _startDownload(task);
+        _startDownload(task);
+      }
+    } catch (e) {
+      Logger.warnWithTag(_logTag, 'failed to process download queue', e);
     }
   }
 
@@ -399,8 +403,12 @@ class DownloadService {
     String suffix,
   ) async {
     if (!kIsWeb && Platform.isAndroid) {
-      // Android: 使用公共 Music 目录
-      const musicDir = '/storage/emulated/0/Music';
+      // Android: 使用公共 Music 目录（动态获取，兼容不同设备）
+      final musicDirs = await getExternalStorageDirectories(
+        type: StorageDirectory.music,
+      );
+      final musicDir =
+          musicDirs?.firstOrNull?.path ?? '/storage/emulated/0/Music';
       return p.join(musicDir, 'Echoes', libraryId, '$songId.$suffix');
     }
     // iOS / 其他平台: 使用应用私有 Documents 目录
@@ -411,7 +419,12 @@ class DownloadService {
   /// 获取下载根目录
   Future<Directory> _getDownloadRootDir() async {
     if (!kIsWeb && Platform.isAndroid) {
-      return Directory('/storage/emulated/0/Music/Echoes');
+      final musicDirs = await getExternalStorageDirectories(
+        type: StorageDirectory.music,
+      );
+      final musicDir =
+          musicDirs?.firstOrNull?.path ?? '/storage/emulated/0/Music';
+      return Directory(p.join(musicDir, 'Echoes'));
     }
     final appDir = await getApplicationDocumentsDirectory();
     return Directory(p.join(appDir.path, 'echo_downloads'));

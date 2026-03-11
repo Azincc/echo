@@ -71,10 +71,9 @@ class AddressPool {
     // 手动模式下只更新延迟数据，不切换活跃地址
     if (isManualMode) {
       // 更新当前活跃地址的探测结果
-      final updatedActive = _addresses.cast<ServerAddress?>().firstWhere(
-        (a) => a!.id == _activeAddress!.id,
-        orElse: () => null,
-      );
+      final updatedActive = _addresses
+          .where((a) => a.id == _activeAddress!.id)
+          .firstOrNull;
       if (updatedActive != null) {
         _activeAddress = updatedActive;
         // 通知 UI 状态已更新（即使 ID 未变，status 可能变化）
@@ -208,28 +207,23 @@ class AddressPool {
 
   ServerAddress? _getNextAvailable() {
     // Find first OK address
-    try {
-      return _addresses.firstWhere(
-        (a) => a.status == ServerAddressStatus.ok && !a.isLocked,
-      );
-    } catch (_) {
-      // If no OK address, maybe try first one that is Unknown?
-      // Or return null if all failed.
-      // Plan says: "Fallback: ... automatically try next priority address"
+    final okAddress = _addresses
+        .where((a) => a.status == ServerAddressStatus.ok && !a.isLocked)
+        .firstOrNull;
+    if (okAddress != null) return okAddress;
 
-      // If active failed, get next in list
-      if (_activeAddress != null) {
-        final currentIndex = _addresses.indexWhere(
-          (a) => a.id == _activeAddress!.id,
-        );
-        if (currentIndex != -1 && currentIndex < _addresses.length - 1) {
-          return _addresses[currentIndex + 1];
-        }
-      } else if (_addresses.isNotEmpty) {
-        return _addresses.first;
+    // No OK address found — try next in list after current active
+    if (_activeAddress != null) {
+      final currentIndex = _addresses.indexWhere(
+        (a) => a.id == _activeAddress!.id,
+      );
+      if (currentIndex != -1 && currentIndex < _addresses.length - 1) {
+        return _addresses[currentIndex + 1];
       }
-      return null;
+    } else if (_addresses.isNotEmpty) {
+      return _addresses.first;
     }
+    return null;
   }
 
   /// 切换到自动模式（解锁所有地址，自动选择最优）

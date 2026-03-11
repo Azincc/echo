@@ -92,7 +92,7 @@ class MusicRepository {
     }
   }
 
-  /// 获取歌手详情（包含专辑列表）
+  /// 获取歌手详情（包含专辑列表和热门歌曲）
   Future<ArtistDetail?> getArtist(String artistId) async {
     try {
       final response = await _apiClient.get(
@@ -111,9 +111,40 @@ class MusicRepository {
               .toList() ??
           [];
 
-      return ArtistDetail(artist: artist, albums: albums);
+      // 获取歌手热门歌曲
+      List<Song> songs = [];
+      try {
+        songs = await getTopSongs(artist.name);
+      } catch (_) {
+        // 热门歌曲获取失败不影响整体
+      }
+
+      return ArtistDetail(artist: artist, albums: albums, songs: songs);
     } catch (e) {
       Logger.error('Failed to get artist', e);
+      rethrow;
+    }
+  }
+
+  /// 获取歌手热门歌曲
+  Future<List<Song>> getTopSongs(String artistName, {int? count}) async {
+    try {
+      final response = await _apiClient.get(
+        ApiConstants.getTopSongs,
+        queryParameters: {
+          'artist': artistName,
+          if (count != null) 'count': count.toString(),
+        },
+      );
+
+      final songList = response['topSongs']?['song'] as List?;
+      if (songList == null) return [];
+
+      return songList
+          .map((e) => Song.fromJson(e as Map<String, dynamic>))
+          .toList();
+    } catch (e) {
+      Logger.error('Failed to get top songs', e);
       rethrow;
     }
   }
@@ -328,12 +359,17 @@ class AlbumDetail {
   AlbumDetail({required this.album, required this.songs});
 }
 
-/// 歌手详情（包含专辑列表）
+/// 歌手详情（包含专辑列表和热门歌曲）
 class ArtistDetail {
   final Artist artist;
   final List<Album> albums;
+  final List<Song> songs;
 
-  ArtistDetail({required this.artist, required this.albums});
+  ArtistDetail({
+    required this.artist,
+    required this.albums,
+    this.songs = const [],
+  });
 }
 
 /// 搜索结果

@@ -37,6 +37,7 @@ class ApiConstants {
   static const String download = '/rest/download';
   static const String getCoverArt = '/rest/getCoverArt';
   static const String scrobble = '/rest/scrobble';
+  static const String getTopSongs = '/rest/getTopSongs';
 
   // 歌词 API（v0.3.0）
   static const String getLyricsBySongId = '/rest/getLyricsBySongId';

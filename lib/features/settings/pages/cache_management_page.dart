@@ -69,7 +69,7 @@ class CacheManagementPage extends ConsumerWidget {
                     height: 16,
                     child: CircularProgressIndicator(strokeWidth: 2),
                   ),
-                  error: (_, __) => const Text(
+                  error: (_, _) => const Text(
                     '获取失败',
                     style: TextStyle(fontSize: 13, color: Colors.red),
                   ),
@@ -97,7 +97,7 @@ class CacheManagementPage extends ConsumerWidget {
                 );
               },
               loading: () => const SizedBox.shrink(),
-              error: (_, __) => const SizedBox.shrink(),
+              error: (_, _) => const SizedBox.shrink(),
             ),
             const SizedBox(height: 12),
             // 缓存上限选择
@@ -218,7 +218,7 @@ class CacheManagementPage extends ConsumerWidget {
                 height: 16,
                 child: CircularProgressIndicator(strokeWidth: 2),
               ),
-              error: (_, __) => const Text(
+              error: (_, _) => const Text(
                 '获取失败',
                 style: TextStyle(fontSize: 13, color: Colors.red),
               ),
@@ -275,7 +275,7 @@ class CacheManagementPage extends ConsumerWidget {
                 height: 16,
                 child: CircularProgressIndicator(strokeWidth: 2),
               ),
-              error: (_, __) => const Text(
+              error: (_, _) => const Text(
                 '获取失败',
                 style: TextStyle(fontSize: 13, color: Colors.red),
               ),
@@ -340,7 +340,7 @@ class CacheManagementPage extends ConsumerWidget {
                     height: 16,
                     child: CircularProgressIndicator(strokeWidth: 2),
                   ),
-                  error: (_, __) => const Text(
+                  error: (_, _) => const Text(
                     '获取失败',
                     style: TextStyle(fontSize: 13, color: Colors.red),
                   ),

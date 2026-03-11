@@ -1,7 +1,9 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:fluttertoast/fluttertoast.dart';
 
 import '../../../core/utils/network_error_notifier.dart';
 import '../../../data/models/song.dart';
@@ -195,6 +197,10 @@ class _SongOptionsSheet extends ConsumerWidget {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
+                onLongPress: () {
+                  Clipboard.setData(ClipboardData(text: song.title));
+                  Fluttertoast.showToast(msg: '已复制歌曲名: ${song.title}');
+                },
               ),
               const Divider(height: 1),
               _buildActionTile(
@@ -283,6 +289,10 @@ class _SongOptionsSheet extends ConsumerWidget {
                           );
                         });
                       },
+                onLongPress: () {
+                  Clipboard.setData(ClipboardData(text: artistName));
+                  Fluttertoast.showToast(msg: '已复制歌手: $artistName');
+                },
               ),
               _buildActionTile(
                 context: context,
@@ -301,6 +311,10 @@ class _SongOptionsSheet extends ConsumerWidget {
                           );
                         });
                       },
+                onLongPress: () {
+                  Clipboard.setData(ClipboardData(text: albumName));
+                  Fluttertoast.showToast(msg: '已复制专辑: $albumName');
+                },
               ),
               if (extraActions.isNotEmpty) const Divider(height: 1),
               for (final action in extraActions)
@@ -352,6 +366,7 @@ class _SongOptionsSheet extends ConsumerWidget {
     Color? textColor,
     bool enabled = true,
     Future<void> Function()? onTap,
+    VoidCallback? onLongPress,
   }) {
     final disabledColor = Theme.of(
       context,
@@ -367,6 +382,7 @@ class _SongOptionsSheet extends ConsumerWidget {
         style: TextStyle(color: enabled ? textColor : disabledColor),
       ),
       onTap: enabled && onTap != null ? onTap : null,
+      onLongPress: onLongPress,
     );
   }
 }

@@ -1,9 +1,4 @@
-// import 'package:dio/dio.dart'; // unused? No, used for ref.watch(dioProvider) below? Actually below it uses 'dioProvider'.
-// dioProvider returns Dio.
-
-// import 'package:echoes/core/constants/api_constants.dart'; // unused
-
-import 'package:echoes/data/models/music_library.dart'; // New model
+import 'package:echoes/data/models/music_library.dart';
 import 'package:echoes/core/utils/logger.dart';
 import 'package:echoes/data/repositories/auth_repository.dart';
 import 'package:echoes/data/repositories/library_repository.dart';
@@ -11,11 +6,8 @@ import 'package:echoes/data/repositories/library_repository.dart';
 import 'package:echoes/providers/library_provider.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-// Removed apiClientProvider as it is replaced by subsonicApiClientProvider in api_provider.dart
-
 /// 认证仓库 Provider
 final authRepositoryProvider = Provider<AuthRepository>((ref) {
-  // Dio is no longer injected into AuthRepository as it creates its own ephemeral clients.
   return AuthRepository();
 });
 
@@ -23,9 +15,6 @@ final authRepositoryProvider = Provider<AuthRepository>((ref) {
 final authStateProvider = StateNotifierProvider<AuthNotifier, AuthState>((ref) {
   final repository = ref.watch(authRepositoryProvider);
   final libraryRepository = ref.watch(libraryRepositoryProvider);
-  // We don't need apiClient here anymore for login logic, as AuthRepository creates temp clients.
-  // But for logout or session checks, we might.
-
   return AuthNotifier(repository, libraryRepository);
 });
 
@@ -76,19 +65,10 @@ class AuthNotifier extends StateNotifier<AuthState> {
     Logger.infoWithTag('AUTH', 'auth state init start');
     state = state.copyWith(isLoading: true);
 
-    // We need to wait for library provider to load?
-    // Actually we can just check if there is an active library in the repository.
-    // Or simpler: The librariesProvider will emit libraries.
-    // But StateNotifier init is sync-ish.
-
-    // Let's defer to ACTIVE library provider?
-    // If we want auth state to reflect active library.
-
-    // For now, let's async check active library.
     try {
       final libraries = await _libraryRepository.watchLibraries().first;
-      try {
-        final active = libraries.firstWhere((l) => l.isActive);
+      final active = libraries.where((l) => l.isActive).firstOrNull;
+      if (active != null) {
         state = state.copyWith(
           isAuthenticated: true,
           isLoading: false,
@@ -99,7 +79,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
           'AUTH',
           'auth state init success, active library=${active.name}',
         );
-      } catch (_) {
+      } else {
         state = state.copyWith(
           isLoading: false,
           isInitializing: false,
@@ -194,27 +174,13 @@ class AuthNotifier extends StateNotifier<AuthState> {
     }
   }
 
-  /// 登出
+  /// 登出（停用当前 Library，保留记录以便重新登录）
   Future<void> logout() async {
     Logger.infoWithTag('AUTH', 'logout start');
-    // Just deactivate current library? Or delete?
-    // Usually logout means "switching users" or "clearing session".
-    // For Multi-account, logout might just mean "Go to Library selection" or "Deactivate current".
 
-    // Let's just unset active
     if (state.currentLibrary != null) {
-      // We don't necessarily delete it. But if standard "Logout" implies "Forget me", then delete?
-      // Let's assume Logout = Deactivate for now, user can switch or add new account.
-      // Actually "Logout" usually means clearing credentials.
-      // Plan says: "Binding libraries to users".
-
-      // For simple "Logout" behavior:
-      // Just set isAuthenticated = false.
-      // We might want to clear active library in DB too?
       try {
-        await _libraryRepository.setActiveLibrary(
-          '',
-        ); // Empty ID? Or implement "clearActive"
+        await _libraryRepository.setActiveLibrary('');
       } catch (e, stackTrace) {
         Logger.errorWithTag(
           'AUTH',

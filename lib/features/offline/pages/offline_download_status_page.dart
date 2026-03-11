@@ -300,7 +300,7 @@ class _JobTile extends ConsumerWidget {
         trailing: selectMode
             ? null
             : Text(
-                job.source ?? '',
+                job.album ?? '',
                 style: Theme.of(context).textTheme.bodySmall,
               ),
       ),

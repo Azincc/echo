@@ -245,17 +245,40 @@ class _JobTile extends ConsumerWidget {
     required this.onSelect,
   });
 
+  /// 过滤掉包含 URL 的消息
+  static bool _isUrl(String text) {
+    final t = text.trim().toLowerCase();
+    return t.startsWith('http://') ||
+        t.startsWith('https://') ||
+        t.startsWith('www.') ||
+        t.contains('://');
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final percent = (job.progressRatio * 100).clamp(0, 100).toStringAsFixed(0);
     final title = (job.title ?? '').isNotEmpty ? job.title! : job.jobId;
-    final subtitleParts = <String>[
+
+    // 构建 artist · album 行
+    final metaParts = <String>[
       if ((job.artist ?? '').isNotEmpty) job.artist!,
-      '${job.statusDisplayName} · $percent%',
-      if (job.message != null && job.message!.trim().isNotEmpty) job.message!,
-      if (job.isFailed && job.error != null && job.error!.trim().isNotEmpty)
-        '❌ ${job.error}',
+      if ((job.album ?? '').isNotEmpty) job.album!,
     ];
+    final metaLine = metaParts.join(' · ');
+
+    // 状态行：活动状态显示百分比，完成/失败状态只显示状态名
+    final String statusLine;
+    if (job.isActive) {
+      final percent =
+          (job.progressRatio * 100).clamp(0, 100).toStringAsFixed(0);
+      statusLine = '${job.statusDisplayName} · $percent%';
+    } else {
+      statusLine = job.statusDisplayName;
+    }
+
+    // 过滤掉包含 URL 的 message
+    final showMessage = job.message != null &&
+        job.message!.trim().isNotEmpty &&
+        !_isUrl(job.message!);
 
     return InkWell(
       onTap: selectMode ? onSelect : null,
@@ -267,28 +290,57 @@ class _JobTile extends ConsumerWidget {
                 job.isDone
                     ? Icons.check_circle
                     : job.isFailed
-                    ? Icons.error
-                    : job.isCancelled
-                    ? Icons.cancel
-                    : Icons.downloading,
+                        ? Icons.error
+                        : job.isCancelled
+                            ? Icons.cancel
+                            : Icons.downloading,
                 color: job.isDone
                     ? Colors.green
                     : job.isFailed
-                    ? Colors.red
-                    : job.isCancelled
-                    ? Colors.grey
-                    : Theme.of(context).colorScheme.primary,
+                        ? Colors.red
+                        : job.isCancelled
+                            ? Colors.grey
+                            : Theme.of(context).colorScheme.primary,
               ),
         title: Text(title, maxLines: 1, overflow: TextOverflow.ellipsis),
         subtitle: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            for (final line in subtitleParts)
+            if (metaLine.isNotEmpty)
               Text(
-                line,
+                metaLine,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: Theme.of(context).textTheme.bodySmall,
+              ),
+            Text(
+              statusLine,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: job.isFailed
+                        ? Colors.red
+                        : Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
+            ),
+            if (showMessage)
+              Text(
+                job.message!,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+            if (job.isFailed &&
+                job.error != null &&
+                job.error!.trim().isNotEmpty)
+              Text(
+                '❌ ${job.error}',
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context)
+                    .textTheme
+                    .bodySmall
+                    ?.copyWith(color: Colors.red),
               ),
             if (job.isActive)
               Padding(
@@ -297,12 +349,7 @@ class _JobTile extends ConsumerWidget {
               ),
           ],
         ),
-        trailing: selectMode
-            ? null
-            : Text(
-                job.album ?? '',
-                style: Theme.of(context).textTheme.bodySmall,
-              ),
+        trailing: selectMode ? null : const SizedBox.shrink(),
       ),
     );
   }

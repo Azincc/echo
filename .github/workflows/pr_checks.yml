@@ -1,0 +1,75 @@
+name: PR Checks
+
+on:
+  workflow_dispatch:
+  pull_request:
+    types:
+      - opened
+      - synchronize
+      - reopened
+      - ready_for_review
+
+permissions:
+  contents: read
+
+env:
+  FLUTTER_VERSION: 3.38.9
+
+concurrency:
+  group: pr-checks-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  pr-checks:
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        id: flutter-action
+        with:
+          channel: "stable"
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          cache: true
+          cache-key: flutter-sdk-${{ runner.os }}-stable-${{ env.FLUTTER_VERSION }}-${{ runner.arch }}
+          pub-cache-key: flutter-pub-${{ runner.os }}-stable-${{ env.FLUTTER_VERSION }}-${{ hashFiles('**/pubspec.lock') }}
+
+      - name: Cache build_runner
+        uses: actions/cache@v4
+        with:
+          path: .dart_tool/build
+          key: ${{ runner.os }}-build-runner-${{ env.FLUTTER_VERSION }}-${{ hashFiles('lib/**/*.dart', 'test/**/*.dart', 'pubspec.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-build-runner-${{ env.FLUTTER_VERSION }}-
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Snapshot workspace status
+        shell: bash
+        run: git status --short --untracked-files=all > /tmp/pre_codegen_status.txt
+
+      - name: Verify generated files
+        run: dart run build_runner build --delete-conflicting-outputs
+
+      - name: Fail if generated files changed
+        shell: bash
+        run: |
+          before_status="$(cat /tmp/pre_codegen_status.txt)"
+          after_status="$(git status --short --untracked-files=all)"
+
+          if [[ "$before_status" != "$after_status" ]]; then
+            echo "Workspace status before code generation:"
+            printf '%s\n' "$before_status"
+            echo "Workspace status after code generation:"
+            printf '%s\n' "$after_status"
+            echo "::error::Generated files are not up to date. Run build_runner and commit the updated files."
+            exit 1
+          fi
+
+      - name: Static analysis
+        run: flutter analyze
+
+      - name: Run tests
+        run: flutter test

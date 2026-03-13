@@ -179,15 +179,18 @@ class _RandomSongsSectionState extends ConsumerState<RandomSongsSection> {
             ? songs.length
             : (songs.length > 6 ? 6 : songs.length);
 
+        // 根据屏幕宽度计算列数：手机2列，平板及以上3列
+        final screenWidth = MediaQuery.of(context).size.width;
+        final crossAxisCount = screenWidth >= 600 ? 3 : 2;
+
         return Column(
           children: [
             GridView.builder(
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
-              gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-                maxCrossAxisExtent: 350,
-                mainAxisExtent:
-                    64, // Fixed height instead of scaling based on width
+              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: crossAxisCount,
+                mainAxisExtent: 64,
                 crossAxisSpacing: 12,
                 mainAxisSpacing: 8,
               ),

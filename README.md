@@ -111,6 +111,7 @@ lib/
 
 项目已新增 `PR Checks` 工作流，会在 Pull Request（非 Draft）中自动执行以下检查：
 
+- `dart run build_runner build --delete-conflicting-outputs` + `git diff --exit-code`（校验生成代码已提交）
 - `dart format --set-exit-if-changed .`（代码格式）
 - `flutter analyze`（静态检查）
 - `flutter test`（测试用例）

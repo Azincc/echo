@@ -16,9 +16,6 @@ jobs:
         with:
           channel: "stable"
           flutter-version: ${{ env.FLUTTER_VERSION }}
-          cache: true
-          cache-key: flutter-sdk-${{ runner.os }}-stable-${{ env.FLUTTER_VERSION }}-${{ runner.arch }}
-          pub-cache-key: flutter-pub-${{ runner.os }}-stable-${{ env.FLUTTER_VERSION }}-${{ hashFiles('**/pubspec.lock') }}
 
       - name: Cache build_runner
         uses: actions/cache@v5

@@ -106,23 +106,31 @@ class Logger {
     final mainLine = '[$now][$levelText]$tagText $message';
     _addToBuffer(mainLine);
 
-    if (error != null) {
-      final errLine = '[$now][$levelText]$tagText error=$error';
+    final includeErrorDetails = !kReleaseMode;
+    final errorText = includeErrorDetails
+        ? error?.toString()
+        : (error == null ? null : '<redacted:${error.runtimeType}>');
+    final stackTraceText = includeErrorDetails
+        ? stackTrace?.toString()
+        : (stackTrace == null ? null : '<omitted in release>');
+
+    if (errorText != null) {
+      final errLine = '[$now][$levelText]$tagText error=$errorText';
       _addToBuffer(errLine);
     }
-    if (stackTrace != null) {
-      final stLine = '[$now][$levelText]$tagText stackTrace=$stackTrace';
+    if (stackTraceText != null) {
+      final stLine = '[$now][$levelText]$tagText stackTrace=$stackTraceText';
       _addToBuffer(stLine);
     }
 
     // Console output gated by log level.
     if (!_shouldLog(level)) return;
     debugPrint(mainLine);
-    if (error != null) {
-      debugPrint('[$now][$levelText]$tagText error=$error');
+    if (errorText != null) {
+      debugPrint('[$now][$levelText]$tagText error=$errorText');
     }
-    if (stackTrace != null) {
-      debugPrint('[$now][$levelText]$tagText stackTrace=$stackTrace');
+    if (stackTraceText != null) {
+      debugPrint('[$now][$levelText]$tagText stackTrace=$stackTraceText');
     }
   }
 

@@ -12,6 +12,9 @@ on:
 permissions:
   contents: read
 
+env:
+  FLUTTER_VERSION: 3.38.9
+
 concurrency:
   group: pr-checks-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
@@ -24,25 +27,21 @@ jobs:
       - uses: actions/checkout@v4
 
       - uses: subosito/flutter-action@v2
+        id: flutter-action
         with:
           channel: "stable"
+          flutter-version: ${{ env.FLUTTER_VERSION }}
           cache: true
-
-      - name: Cache Pub dependencies
-        uses: actions/cache@v4
-        with:
-          path: ~/.pub-cache
-          key: ${{ runner.os }}-pub-${{ hashFiles('**/pubspec.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-pub-
+          cache-key: flutter-sdk-${{ runner.os }}-stable-${{ env.FLUTTER_VERSION }}-${{ runner.arch }}
+          pub-cache-key: flutter-pub-${{ runner.os }}-stable-${{ env.FLUTTER_VERSION }}-${{ hashFiles('**/pubspec.lock') }}
 
       - name: Cache build_runner
         uses: actions/cache@v4
         with:
           path: .dart_tool/build
-          key: ${{ runner.os }}-build-runner-${{ hashFiles('lib/**/*.dart', 'test/**/*.dart', 'pubspec.lock') }}
+          key: ${{ runner.os }}-build-runner-${{ env.FLUTTER_VERSION }}-${{ hashFiles('lib/**/*.dart', 'test/**/*.dart', 'pubspec.lock') }}
           restore-keys: |
-            ${{ runner.os }}-build-runner-
+            ${{ runner.os }}-build-runner-${{ env.FLUTTER_VERSION }}-
 
       - name: Install dependencies
         run: flutter pub get

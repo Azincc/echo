@@ -1,0 +1,3 @@
+[submodule "gdstudio-embeded-service"]
+	path = gdstudio-embeded-service
+	url = https://github.com/Azincc/gdstudio-embeded-service.git

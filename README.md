@@ -107,6 +107,16 @@ lib/
 └── app.dart       # 路由配置、MaterialApp
 ```
 
+## PR 合并质量门禁
+
+项目已新增 `PR Checks` 工作流，会在 Pull Request（非 Draft）中自动执行以下检查：
+
+- `dart format --set-exit-if-changed .`（代码格式）
+- `flutter analyze`（静态检查）
+- `flutter test`（测试用例）
+
+如需将其设为“必须通过后才可合并”，请在 GitHub 仓库设置中启用 Branch protection rule，并将 `quality-gate` 状态检查标记为 Required。
+
 ## 协议
 
 本项目基于 Subsonic API（v1.16.1）与 Navidrome 服务端通信，兼容所有 Subsonic 协议的音乐服务器。

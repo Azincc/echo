@@ -261,21 +261,6 @@ class AuthRepository {
             return true;
           }
 
-          // 兼容历史指纹格式（仅 user，不含 folder 列表）
-          final compatibleLegacy =
-              (_isLegacyUserOnlyFingerprint(oldFingerprint) &&
-                  _extractFingerprintUser(oldFingerprint) ==
-                      _extractFingerprintUser(newFingerprint)) ||
-              (_isLegacyUserOnlyFingerprint(newFingerprint) &&
-                  _extractFingerprintUser(oldFingerprint) ==
-                      _extractFingerprintUser(newFingerprint));
-          if (compatibleLegacy) {
-            Logger.info(
-              'Verify identity: accepted legacy fingerprint compatibility',
-            );
-            return true;
-          }
-
           Logger.warn(
             'Verify identity: Fingerprint mismatch. Expected $oldFingerprint, got $newFingerprint',
           );
@@ -288,16 +273,6 @@ class AuthRepository {
       if (storedFingerprint != null) {
         final storedFp = storedFingerprint.toString();
         if (storedFp == newFingerprint) {
-          return true;
-        }
-        final compatibleLegacy =
-            (_isLegacyUserOnlyFingerprint(storedFp) &&
-                _extractFingerprintUser(storedFp) ==
-                    _extractFingerprintUser(newFingerprint)) ||
-            (_isLegacyUserOnlyFingerprint(newFingerprint) &&
-                _extractFingerprintUser(storedFp) ==
-                    _extractFingerprintUser(newFingerprint));
-        if (compatibleLegacy) {
           return true;
         }
       }
@@ -350,19 +325,6 @@ class AuthRepository {
     final sorted = List<ServerAddress>.from(library.addresses)
       ..sort((a, b) => a.priority.compareTo(b.priority));
     return sorted.first;
-  }
-
-  bool _isLegacyUserOnlyFingerprint(String fp) {
-    return fp.startsWith('user:') && !fp.contains('folder:');
-  }
-
-  String _extractFingerprintUser(String fp) {
-    final start = fp.indexOf('user:');
-    if (start == -1) return '';
-    final from = start + 5;
-    final end = fp.indexOf('|', from);
-    if (end == -1) return fp.substring(from);
-    return fp.substring(from, end);
   }
 
   // Legacy load/logout methods are removed as they are handled by LibraryRepository

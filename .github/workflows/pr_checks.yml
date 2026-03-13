@@ -47,14 +47,24 @@ jobs:
       - name: Install dependencies
         run: flutter pub get
 
+      - name: Snapshot workspace status
+        shell: bash
+        run: git status --short --untracked-files=all > /tmp/pre_codegen_status.txt
+
       - name: Verify generated files
         run: dart run build_runner build --delete-conflicting-outputs
 
       - name: Fail if generated files changed
         shell: bash
         run: |
-          if [[ -n "$(git status --short --untracked-files=all)" ]]; then
-            git status --short --untracked-files=all
+          before_status="$(cat /tmp/pre_codegen_status.txt)"
+          after_status="$(git status --short --untracked-files=all)"
+
+          if [[ "$before_status" != "$after_status" ]]; then
+            echo "Workspace status before code generation:"
+            printf '%s\n' "$before_status"
+            echo "Workspace status after code generation:"
+            printf '%s\n' "$after_status"
             echo "::error::Generated files are not up to date. Run build_runner and commit the updated files."
             exit 1
           fi

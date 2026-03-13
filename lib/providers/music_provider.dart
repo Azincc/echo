@@ -192,8 +192,9 @@ final albumDetailProvider = FutureProvider.autoDispose
       final repository = ref.watch(musicRepositoryProvider);
       final cache = ref.watch(metadataCacheRepositoryProvider);
       final libraryId = ref.watch(activeLibraryProvider)?.id;
-      if (repository == null || libraryId == null || libraryId.isEmpty)
+      if (repository == null || libraryId == null || libraryId.isEmpty) {
         return null;
+      }
 
       return _fetchWithCacheFallback<AlbumDetail?>(
         ref: ref,
@@ -255,8 +256,9 @@ final artistDetailProvider = FutureProvider.autoDispose
       final repository = ref.watch(musicRepositoryProvider);
       final cache = ref.watch(metadataCacheRepositoryProvider);
       final libraryId = ref.watch(activeLibraryProvider)?.id;
-      if (repository == null || libraryId == null || libraryId.isEmpty)
+      if (repository == null || libraryId == null || libraryId.isEmpty) {
         return null;
+      }
 
       return _fetchWithCacheFallback<ArtistDetail?>(
         ref: ref,

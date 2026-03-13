@@ -23,21 +23,9 @@ void main() {
                   BuildContext fromHeroContext,
                   BuildContext toHeroContext,
                 ) {
-                  final fromText =
-                      (fromHeroContext.widget as Hero).child as Text;
-                  final toText = (toHeroContext.widget as Hero).child as Text;
-
-                  print('--- Builder Called ---');
-                  print('Direction: $flightDirection');
-                  print('fromHero: ${fromText.data}');
-                  print('toHero: ${toText.data}');
-
                   return AnimatedBuilder(
                     animation: animation,
-                    builder: (context, _) {
-                      print(
-                        'Animation value: ${animation.value} (Direction: $flightDirection)',
-                      );
+                    builder: (_, child) {
                       return const Text('Shuttle');
                     },
                   );
@@ -72,7 +60,6 @@ void main() {
     await tester.pump(const Duration(milliseconds: 100)); // During push
     await tester.pumpAndSettle();
 
-    print('====== NOW POPPING ======');
     navKey.currentState!.pop();
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 100)); // During pop

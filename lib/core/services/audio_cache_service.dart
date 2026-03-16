@@ -1,15 +1,17 @@
 import 'dart:io';
+
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/painting.dart';
-import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as p;
+import 'package:path_provider/path_provider.dart';
 import 'package:uuid/uuid.dart';
+
 import '../../data/models/audio_quality.dart';
 import '../../data/repositories/audio_cache_repository.dart';
 import '../../data/sources/database/app_database.dart';
+import '../utils/download_path_utils.dart';
 import '../utils/logger.dart';
 
-/// 音频缓存服务 — LFU+LRU 混合淘汰
 class AudioCacheService {
   static const _tag = 'CACHE_SVC';
 
@@ -21,57 +23,52 @@ class AudioCacheService {
   AudioCacheService({
     required AudioCacheRepository repository,
     required AppDatabase db,
-    this.maxCacheSizeBytes = 2 * 1024 * 1024 * 1024, // 2GB
+    this.maxCacheSizeBytes = 2 * 1024 * 1024 * 1024,
     this.protectionThreshold = 5,
   }) : _repository = repository,
        _db = db;
 
-  // ---------------------------------------------------------------------------
-  // Audio cache directory helpers
-  // ---------------------------------------------------------------------------
-
-  /// 获取音频缓存根目录
   Future<Directory> getAudioCacheDir() async {
     final cacheDir = await getApplicationCacheDirectory();
     return Directory(p.join(cacheDir.path, 'echo_audio_cache'));
   }
 
-  /// 获取缓存文件路径（若已缓存且文件存在）
-  /// 同时更新 playCount 和 lastPlayedAt
   Future<String?> getCachedPath({
     required String songId,
     required String libraryId,
     required AudioQualityLevel quality,
   }) async {
-    // 先查精确匹配
     var entry = await _repository.getCacheEntry(
       songId: songId,
       libraryId: libraryId,
       quality: quality,
     );
 
-    // 如果没有精确匹配，查找任意完整缓存
     entry ??= await _repository.getAnyCacheEntry(
       songId: songId,
       libraryId: libraryId,
     );
 
     if (entry == null || !entry.isComplete) return null;
-
-    // 验证文件存在
-    final file = File(entry.filePath);
-    if (!await file.exists()) {
-      // 文件不存在，清理元数据
+    if (!await _isManagedAudioFilePath(entry.filePath)) {
+      Logger.warnWithTag(
+        _tag,
+        'ignoring unmanaged cache entry path=${entry.filePath}',
+      );
       await _repository.deleteEntry(entry.id);
       return null;
     }
 
-    // 更新播放统计
+    final file = File(entry.filePath);
+    if (!await file.exists()) {
+      await _repository.deleteEntry(entry.id);
+      return null;
+    }
+
     await _repository.updatePlayStats(entry.id);
     return entry.filePath;
   }
 
-  /// 注册新的缓存条目（LockCachingAudioSource 缓存完成后调用）
   Future<void> registerCache({
     required String songId,
     required String libraryId,
@@ -93,31 +90,31 @@ class AudioCacheService {
     );
 
     await _repository.registerCache(entry);
-
-    // 检查并执行淘汰（保护刚缓存的歌曲）
     await evictIfNeeded(activeSongIds: {songId});
   }
 
-  /// 获取缓存文件路径（用于 LockCachingAudioSource 的 cacheFile）
   Future<String> getCacheFilePath({
     required String songId,
     required String libraryId,
     required AudioQualityLevel quality,
   }) async {
-    final dir = await getAudioCacheDir();
-    final libDir = Directory(p.join(dir.path, libraryId));
-    if (!await libDir.exists()) {
-      await libDir.create(recursive: true);
+    final rootDir = await getAudioCacheDir();
+    final cachePath = buildCacheFilePath(
+      rootDir: rootDir.path,
+      libraryId: libraryId,
+      songId: songId,
+      qualityName: quality.name,
+    );
+
+    final cacheDir = Directory(p.dirname(cachePath));
+    if (!await cacheDir.exists()) {
+      await cacheDir.create(recursive: true);
     }
-    return p.join(libDir.path, '${songId}_${quality.name}.cache');
+
+    return cachePath;
   }
 
-  /// 检查并执行缓存淘汰
-  ///
-  /// [activeSongIds] 当前正在播放或正在缓存的歌曲 ID 集合，
-  /// 这些歌曲的缓存文件不会被淘汰，以避免竞态条件。
   Future<void> evictIfNeeded({Set<String>? activeSongIds}) async {
-    // 使用磁盘实际大小判断是否超限
     var totalSize = await getAudioCacheSize();
     if (totalSize <= maxCacheSizeBytes) return;
 
@@ -128,17 +125,15 @@ class AudioCacheService {
     );
 
     final targetSize = (maxCacheSizeBytes * 0.8).toInt();
-    final downloadDirPath = await _getDownloadDirPath();
+    final cacheDirPath = (await getAudioCacheDir()).path;
+    final downloadDirPaths = await _getDownloadDirPaths();
 
-    // Phase 0: 清理孤立文件（磁盘上存在但 DB 中没有记录的文件）
     totalSize = await _cleanOrphanFiles(totalSize);
-
     if (totalSize <= targetSize) {
       Logger.infoWithTag(_tag, 'orphan cleanup sufficient');
       return;
     }
 
-    // Phase 1: 先淘汰低频条目（playCount < protectionThreshold）
     final lowFreqEntries = await _repository.getEvictablEntries(
       protectionThreshold: protectionThreshold,
     );
@@ -146,11 +141,11 @@ class AudioCacheService {
       lowFreqEntries,
       totalSize,
       targetSize,
-      downloadDirPath,
+      cacheDirPath,
+      downloadDirPaths,
       activeSongIds,
     );
 
-    // Phase 2: 如果仍然超限，降级到纯 LRU（所有完整条目按最后播放时间排序）
     if (totalSize > targetSize) {
       Logger.infoWithTag(
         _tag,
@@ -161,7 +156,8 @@ class AudioCacheService {
         allEntries,
         totalSize,
         targetSize,
-        downloadDirPath,
+        cacheDirPath,
+        downloadDirPaths,
         activeSongIds,
       );
     }
@@ -172,15 +168,13 @@ class AudioCacheService {
     );
   }
 
-  /// 清理孤立文件：删除磁盘上存在但 DB 中没有记录的缓存文件
   Future<int> _cleanOrphanFiles(int currentSize) async {
     try {
       final cacheDir = await getAudioCacheDir();
       if (!await cacheDir.exists()) return currentSize;
 
-      // 获取 DB 中所有已注册的文件路径
       final allEntries = await _repository.getAllEntries();
-      final registeredPaths = allEntries.map((e) => e.filePath).toSet();
+      final registeredPaths = allEntries.map((entry) => entry.filePath).toSet();
 
       var cleaned = 0;
       var cleanedBytes = 0;
@@ -191,9 +185,6 @@ class AudioCacheService {
       )) {
         if (entity is! File) continue;
         if (registeredPaths.contains(entity.path)) continue;
-
-        // 跳过 .part 临时文件 — just_audio 的 LockCachingAudioSource
-        // 正在写入这些文件，下载完成后会自动 rename 为 .cache
         if (entity.path.endsWith('.part')) {
           Logger.debugWithTag(
             _tag,
@@ -222,6 +213,7 @@ class AudioCacheService {
           'orphan cleanup: deleted $cleaned files, freed $cleanedBytes bytes',
         );
       }
+
       return currentSize - cleanedBytes;
     } catch (e) {
       Logger.warnWithTag(_tag, 'orphan cleanup failed', e);
@@ -229,26 +221,26 @@ class AudioCacheService {
     }
   }
 
-  /// 从列表中逐个淘汰条目，直到 totalSize <= targetSize
   Future<int> _evictEntries(
     List<AudioCacheEntry> entries,
     int totalSize,
     int targetSize,
-    String? downloadDirPath,
+    String cacheDirPath,
+    List<String> downloadDirPaths,
     Set<String>? activeSongIds,
   ) async {
     for (final entry in entries) {
       if (totalSize <= targetSize) break;
 
-      // 跳过正在播放/缓存的歌曲
       if (activeSongIds != null && activeSongIds.contains(entry.songId)) {
         Logger.infoWithTag(_tag, 'skip evict (active): ${entry.songId}');
         continue;
       }
 
-      // 跳过已下载文件（路径在下载目录中的不淘汰）
-      if (downloadDirPath != null &&
-          entry.filePath.startsWith(downloadDirPath)) {
+      if (downloadDirPaths.any(
+        (rootDir) =>
+            isPathWithinRoot(rootDir: rootDir, candidatePath: entry.filePath),
+      )) {
         Logger.infoWithTag(
           _tag,
           'skip evict (downloaded): ${entry.songId} path=${entry.filePath}',
@@ -256,7 +248,18 @@ class AudioCacheService {
         continue;
       }
 
-      // 删除文件
+      if (!isPathWithinRoot(
+        rootDir: cacheDirPath,
+        candidatePath: entry.filePath,
+      )) {
+        Logger.warnWithTag(
+          _tag,
+          'drop unmanaged cache entry without deleting file path=${entry.filePath}',
+        );
+        await _repository.deleteEntry(entry.id);
+        continue;
+      }
+
       try {
         final file = File(entry.filePath);
         if (await file.exists()) {
@@ -266,39 +269,48 @@ class AudioCacheService {
         Logger.warn('Failed to delete cache file: ${entry.filePath}', e);
       }
 
-      // 删除数据库记录
       await _repository.deleteEntry(entry.id);
       totalSize -= entry.fileSize;
 
       Logger.info('Evicted cache: ${entry.songId} (${entry.quality.name})');
     }
+
     return totalSize;
   }
 
-  /// 获取下载目录路径（用于淘汰保护）
-  Future<String?> _getDownloadDirPath() async {
+  Future<List<String>> _getDownloadDirPaths() async {
+    final roots = <String>[];
+
     try {
       if (!kIsWeb && Platform.isAndroid) {
-        return '/storage/emulated/0/Music/Echoes';
+        final musicDirs = await getExternalStorageDirectories(
+          type: StorageDirectory.music,
+        );
+        final musicDir =
+            musicDirs?.firstOrNull?.path ?? '/storage/emulated/0/Music';
+        roots.add(p.join(musicDir, 'Echoes'));
+
+        const legacyPublicMusicDir = '/storage/emulated/0/Music/Echoes';
+        if (!roots.any((root) => p.equals(root, legacyPublicMusicDir))) {
+          roots.add(legacyPublicMusicDir);
+        }
+
+        return roots;
       }
+
       final appDir = await getApplicationDocumentsDirectory();
-      return p.join(appDir.path, 'echo_downloads');
-    } catch (e) {
-      return null;
+      roots.add(p.join(appDir.path, 'echo_downloads'));
+      return roots;
+    } catch (_) {
+      return roots;
     }
   }
 
-  // ---------------------------------------------------------------------------
-  // 音频缓存大小 & 清理（基于磁盘扫描）
-  // ---------------------------------------------------------------------------
-
-  /// 获取音频缓存磁盘实际大小（字节）
   Future<int> getAudioCacheSize() async {
     final dir = await getAudioCacheDir();
     return _getDirectorySize(dir);
   }
 
-  /// 清除所有音频缓存（删除目录 + 清空 DB 表）
   Future<void> clearAllAudioCache() async {
     try {
       final dir = await getAudioCacheDir();
@@ -309,15 +321,19 @@ class AudioCacheService {
     } catch (e) {
       Logger.warnWithTag(_tag, 'failed to delete audio cache directory', e);
     }
+
     await _repository.clearAll();
     Logger.infoWithTag(_tag, 'audio cache DB cleared');
   }
 
-  /// 清除指定音乐库的音频缓存
   Future<void> clearAudioCacheByLibrary(String libraryId) async {
     try {
       final dir = await getAudioCacheDir();
-      final libDir = Directory(p.join(dir.path, libraryId));
+      final safeLibraryId = sanitizeDownloadPathSegment(
+        libraryId,
+        fallback: 'library',
+      );
+      final libDir = Directory(p.join(dir.path, safeLibraryId));
       if (await libDir.exists()) {
         await libDir.delete(recursive: true);
         Logger.infoWithTag(
@@ -328,18 +344,12 @@ class AudioCacheService {
     } catch (e) {
       Logger.warnWithTag(_tag, 'failed to delete library cache dir', e);
     }
+
     await _repository.clearByLibrary(libraryId);
   }
 
-  // ---------------------------------------------------------------------------
-  // 图片缓存（cached_network_image / DefaultCacheManager）
-  // ---------------------------------------------------------------------------
-
-  /// 获取图片缓存大小（字节）
   Future<int> getImageCacheSize() async {
     try {
-      // flutter_cache_manager stores files under the app cache directory
-      // in a subdirectory named after the cache key (default: "libCachedImageData")
       final appCacheDir = await getApplicationCacheDirectory();
       final imageCacheDir = Directory(
         p.join(appCacheDir.path, 'libCachedImageData'),
@@ -351,10 +361,8 @@ class AudioCacheService {
     }
   }
 
-  /// 清除图片缓存
   Future<void> clearImageCache() async {
     try {
-      // 删除磁盘上的图片缓存目录
       final appCacheDir = await getApplicationCacheDirectory();
       final imageCacheDir = Directory(
         p.join(appCacheDir.path, 'libCachedImageData'),
@@ -362,7 +370,7 @@ class AudioCacheService {
       if (await imageCacheDir.exists()) {
         await imageCacheDir.delete(recursive: true);
       }
-      // 同时清除内存中的图片缓存
+
       PaintingBinding.instance.imageCache.clear();
       PaintingBinding.instance.imageCache.clearLiveImages();
       Logger.infoWithTag(_tag, 'image cache cleared');
@@ -371,11 +379,6 @@ class AudioCacheService {
     }
   }
 
-  // ---------------------------------------------------------------------------
-  // 歌词缓存（Drift DB lyricsCache 表）
-  // ---------------------------------------------------------------------------
-
-  /// 获取歌词缓存条数
   Future<int> getLyricsCacheCount() async {
     try {
       final rows = await _db.select(_db.lyricsCache).get();
@@ -386,7 +389,6 @@ class AudioCacheService {
     }
   }
 
-  /// 清除歌词缓存
   Future<void> clearLyricsCache() async {
     try {
       await _db.delete(_db.lyricsCache).go();
@@ -396,33 +398,35 @@ class AudioCacheService {
     }
   }
 
-  // ---------------------------------------------------------------------------
-  // Legacy compatibility
-  // ---------------------------------------------------------------------------
-
-  /// 获取当前缓存总大小（向后兼容，改用磁盘扫描）
   Future<int> getTotalCacheSize() async {
     return getAudioCacheSize();
   }
 
-  /// 清除所有缓存（向后兼容）
   Future<void> clearAll() async {
     await clearAllAudioCache();
   }
 
-  /// 清除指定音乐库的缓存（向后兼容）
   Future<void> clearByLibrary(String libraryId) async {
     await clearAudioCacheByLibrary(libraryId);
   }
 
-  // ---------------------------------------------------------------------------
-  // Internal helpers
-  // ---------------------------------------------------------------------------
+  Future<bool> _isManagedAudioFilePath(String filePath) async {
+    final cacheDirPath = (await getAudioCacheDir()).path;
+    if (isPathWithinRoot(rootDir: cacheDirPath, candidatePath: filePath)) {
+      return true;
+    }
 
-  /// 递归计算目录大小
+    final downloadDirPaths = await _getDownloadDirPaths();
+    return downloadDirPaths.any(
+      (downloadDirPath) =>
+          isPathWithinRoot(rootDir: downloadDirPath, candidatePath: filePath),
+    );
+  }
+
   Future<int> _getDirectorySize(Directory dir) async {
     if (!await dir.exists()) return 0;
-    int totalSize = 0;
+
+    var totalSize = 0;
     try {
       await for (final entity in dir.list(
         recursive: true,
@@ -432,13 +436,14 @@ class AudioCacheService {
           try {
             totalSize += await entity.length();
           } catch (_) {
-            // skip unreadable files
+            // Ignore unreadable files while scanning cache size.
           }
         }
       }
     } catch (e) {
       Logger.warnWithTag(_tag, 'error scanning directory: ${dir.path}', e);
     }
+
     return totalSize;
   }
 }

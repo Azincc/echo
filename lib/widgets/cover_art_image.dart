@@ -1,11 +1,11 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:cached_network_image/cached_network_image.dart';
-import 'dart:io';
+
+import '../core/utils/cover_ref_security.dart';
 import '../providers/api_provider.dart';
 import 'shimmer_loading.dart';
 
-/// 封面图组件 - 从服务端获取封面
 class CoverArtImage extends ConsumerWidget {
   final String? coverArtId;
   final double? size;
@@ -22,67 +22,58 @@ class CoverArtImage extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    if (coverArtId == null || coverArtId!.isEmpty) {
-      // 没有封面，显示默认图标
+    final raw = coverArtId?.trim() ?? '';
+    if (raw.isEmpty) {
       return _buildPlaceholder(context);
     }
 
-    final raw = coverArtId!.trim();
-    if (raw.startsWith('/') || raw.startsWith('file://')) {
-      final filePath = raw.startsWith('file://')
-          ? Uri.parse(raw).toFilePath()
-          : raw;
-      final file = File(filePath);
-      if (file.existsSync()) {
-        return Image.file(
-          file,
-          width: size,
-          height: size,
-          fit: fit,
-          errorBuilder: (_, error, stackTrace) => _buildPlaceholder(context),
-        );
-      }
-      return _buildPlaceholder(context);
+    final trustedCoverUrl = extractTrustedCoverUrl(raw);
+    if (trustedCoverUrl != null) {
+      return _buildNetworkImage(context, trustedCoverUrl);
     }
 
-    if (raw.startsWith('http://') || raw.startsWith('https://')) {
-      return CachedNetworkImage(
-        imageUrl: raw,
-        width: size,
-        height: size,
-        fit: fit,
-        placeholder: (context, url) =>
-            _buildPlaceholder(context, isLoading: true),
-        errorWidget: (context, url, error) => _buildPlaceholder(context),
-      );
+    final safeCoverArtId = sanitizeServerCoverArtId(raw);
+    if (safeCoverArtId == null) {
+      return _buildPlaceholder(context);
     }
 
     final apiClient = ref.watch(subsonicApiClientProvider);
-
-    // 处理 size 参数，避免 Infinity
-    // 根据设备像素比请求更高分辨率的图片，提升清晰度
-    final int resolvedCoverSize;
-    if (requestSize != null && requestSize! > 0) {
-      resolvedCoverSize = requestSize!;
-    } else {
-      final devicePixelRatio = MediaQuery.devicePixelRatioOf(context);
-      int? coverSize;
-      if (size != null && !size!.isInfinite) {
-        coverSize = (size! * devicePixelRatio).ceil();
-      }
-      resolvedCoverSize = coverSize ?? 500;
-    }
-
-    final coverUrl = apiClient.getCoverArtUrl(raw, size: resolvedCoverSize);
-
+    final resolvedCoverSize = _resolveCoverSize(context);
+    final coverUrl = apiClient.getCoverArtUrl(
+      safeCoverArtId,
+      size: resolvedCoverSize,
+    );
     if (coverUrl.isEmpty) {
       return _buildPlaceholder(context);
     }
 
+    return _buildNetworkImage(
+      context,
+      coverUrl,
+      cacheKey: '${safeCoverArtId}_$resolvedCoverSize',
+    );
+  }
+
+  int _resolveCoverSize(BuildContext context) {
+    if (requestSize != null && requestSize! > 0) {
+      return requestSize!;
+    }
+
+    final devicePixelRatio = MediaQuery.devicePixelRatioOf(context);
+    if (size != null && !size!.isInfinite) {
+      return (size! * devicePixelRatio).ceil();
+    }
+    return 500;
+  }
+
+  Widget _buildNetworkImage(
+    BuildContext context,
+    String imageUrl, {
+    String? cacheKey,
+  }) {
     return CachedNetworkImage(
-      imageUrl: coverUrl,
-      // 使用 coverArtId 作为缓存键，避免因认证参数变化导致重复下载
-      cacheKey: '${raw}_$resolvedCoverSize',
+      imageUrl: imageUrl,
+      cacheKey: cacheKey,
       width: size,
       height: size,
       fit: fit,
@@ -92,7 +83,6 @@ class CoverArtImage extends ConsumerWidget {
     );
   }
 
-  /// 构建占位符
   Widget _buildPlaceholder(BuildContext context, {bool isLoading = false}) {
     final bgColor = Theme.of(context).colorScheme.surfaceContainerHighest;
     if (isLoading) {
@@ -100,6 +90,7 @@ class CoverArtImage extends ConsumerWidget {
         child: Container(width: size, height: size, color: bgColor),
       );
     }
+
     return Container(
       width: size,
       height: size,
@@ -112,10 +103,9 @@ class CoverArtImage extends ConsumerWidget {
     );
   }
 
-  /// 计算图标大小，避免 Infinity 问题
   double? _getIconSize() {
     if (size == null || size!.isInfinite) {
-      return 48; // 默认大小
+      return 48;
     }
     return size! * 0.5;
   }

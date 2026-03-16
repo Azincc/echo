@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import '../../../providers/auth_provider.dart';
-import '../../../data/repositories/auth_repository.dart';
 
-/// 登录页面
+import '../../../core/utils/server_url_security.dart';
+import '../../../data/repositories/auth_repository.dart';
+import '../../../providers/auth_provider.dart';
+
 class LoginPage extends ConsumerStatefulWidget {
   const LoginPage({super.key});
 
@@ -25,6 +26,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
   int _currentStep = 0;
   ServerCapabilities? _serverCapabilities;
   bool _isDetecting = false;
+  String? _confirmedInsecureHttpUrl;
 
   @override
   void dispose() {
@@ -37,14 +39,9 @@ class _LoginPageState extends ConsumerState<LoginPage> {
     super.dispose();
   }
 
-  /// 探测服务器能力
   Future<void> _detectServer() async {
     if (!_serverFormKey.currentState!.validate()) return;
-
-    if (_serverUrlController.text.isEmpty) {
-      _showError('请输入服务器地址');
-      return;
-    }
+    if (!await _confirmInsecureHttpIfNeeded()) return;
 
     setState(() {
       _isDetecting = true;
@@ -55,13 +52,16 @@ class _LoginPageState extends ConsumerState<LoginPage> {
       final capabilities = await repository.detectServerCapabilities(
         _serverUrlController.text.trim(),
       );
+      if (!mounted) return;
 
       setState(() {
         _serverCapabilities = capabilities;
         _isDetecting = false;
         _currentStep = 1;
       });
-    } catch (e) {
+    } catch (_) {
+      if (!mounted) return;
+
       setState(() {
         _isDetecting = false;
       });
@@ -69,40 +69,76 @@ class _LoginPageState extends ConsumerState<LoginPage> {
     }
   }
 
-  /// 执行登录
   Future<void> _login() async {
     if (!_authFormKey.currentState!.validate()) return;
+    if (!await _confirmInsecureHttpIfNeeded()) return;
 
     final authNotifier = ref.read(authStateProvider.notifier);
-    bool success;
+    final serverUrl = _serverUrlController.text.trim();
+    final username = _usernameController.text.trim();
+    final libraryName = _libraryNameController.text.trim();
+    final addressLabel = _addressLabelController.text.trim();
 
-    if (_serverCapabilities?.supportsApiKey == true &&
-        _apiKeyController.text.isNotEmpty) {
-      // 使用 API Key 登录
-      success = await authNotifier.loginWithApiKey(
-        serverUrl: _serverUrlController.text.trim(),
-        username: _usernameController.text.trim(),
-        apiKey: _apiKeyController.text.trim(),
-        libraryName: _libraryNameController.text.trim(),
-        addressLabel: _addressLabelController.text.trim(),
-      );
-    } else {
-      // 使用密码登录
-      success = await authNotifier.loginWithPassword(
-        serverUrl: _serverUrlController.text.trim(),
-        username: _usernameController.text.trim(),
-        password: _passwordController.text,
-        libraryName: _libraryNameController.text.trim(),
-        addressLabel: _addressLabelController.text.trim(),
-      );
+    final success =
+        _serverCapabilities?.supportsApiKey == true &&
+            _apiKeyController.text.isNotEmpty
+        ? await authNotifier.loginWithApiKey(
+            serverUrl: serverUrl,
+            username: username,
+            apiKey: _apiKeyController.text.trim(),
+            libraryName: libraryName,
+            addressLabel: addressLabel,
+          )
+        : await authNotifier.loginWithPassword(
+            serverUrl: serverUrl,
+            username: username,
+            password: _passwordController.text,
+            libraryName: libraryName,
+            addressLabel: addressLabel,
+          );
+
+    if (success && mounted && context.mounted) {
+      context.go('/home');
+    }
+  }
+
+  Future<bool> _confirmInsecureHttpIfNeeded() async {
+    final serverUrl = _serverUrlController.text.trim();
+    if (!isInsecureHttpUrl(serverUrl)) {
+      return true;
+    }
+    if (_confirmedInsecureHttpUrl == serverUrl) {
+      return true;
     }
 
-    if (success && mounted) {
-      // 登录成功，跳转到主页
-      if (context.mounted) {
-        context.go('/home');
-      }
+    final confirmed =
+        await showDialog<bool>(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text('HTTP 连接不安全'),
+            content: Text(
+              '当前服务器地址使用的是 HTTP：\n$serverUrl\n\n'
+              'HTTP 不会加密传输。密码、API Key、令牌以及媒体请求都可能被同一网络中的其他人窃听或篡改。'
+              '仅当你信任当前网络和该服务器时才继续。',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(false),
+                child: const Text('取消'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.of(context).pop(true),
+                child: const Text('继续'),
+              ),
+            ],
+          ),
+        ) ??
+        false;
+
+    if (confirmed) {
+      _confirmedInsecureHttpUrl = serverUrl;
     }
+    return confirmed;
   }
 
   void _showError(String message) {
@@ -115,7 +151,6 @@ class _LoginPageState extends ConsumerState<LoginPage> {
   Widget build(BuildContext context) {
     final authState = ref.watch(authStateProvider);
 
-    // 显示错误消息
     ref.listen<AuthState>(authStateProvider, (previous, next) {
       if (next.errorMessage != null) {
         _showError(next.errorMessage!);
@@ -161,9 +196,10 @@ class _LoginPageState extends ConsumerState<LoginPage> {
             );
           },
           steps: [
-            // Step 1: 输入服务器地址
             Step(
               title: const Text('服务器地址'),
+              isActive: _currentStep >= 0,
+              state: _currentStep > 0 ? StepState.complete : StepState.indexed,
               content: Form(
                 key: _serverFormKey,
                 child: Column(
@@ -174,15 +210,14 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                       decoration: const InputDecoration(
                         labelText: '服务器地址',
                         hintText: 'https://your-server.com',
-                        helperText: '输入你的 Navidrome 服务器地址',
+                        helperText: '优先使用 HTTPS。只有在可信局域网中才建议使用 HTTP。',
                       ),
                       keyboardType: TextInputType.url,
                       validator: (value) {
-                        if (value == null || value.isEmpty) {
+                        if (value == null || value.trim().isEmpty) {
                           return '请输入服务器地址';
                         }
-                        if (!value.startsWith('http://') &&
-                            !value.startsWith('https://')) {
+                        if (!isSupportedServerUrl(value)) {
                           return '请输入完整的 URL（包括 http:// 或 https://）';
                         }
                         return null;
@@ -217,13 +252,11 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                   ],
                 ),
               ),
-              isActive: _currentStep >= 0,
-              state: _currentStep > 0 ? StepState.complete : StepState.indexed,
             ),
-
-            // Step 2: 输入认证信息
             Step(
               title: const Text('认证信息'),
+              isActive: _currentStep >= 1,
+              state: _currentStep > 1 ? StepState.complete : StepState.indexed,
               content: Form(
                 key: _authFormKey,
                 child: Column(
@@ -244,7 +277,8 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                                 const SizedBox(width: 8),
                                 Expanded(
                                   child: Text(
-                                    '检测到 OpenSubsonic 服务器: ${_serverCapabilities!.serverType ?? "未知"}',
+                                    '检测到 OpenSubsonic 服务器: '
+                                    '${_serverCapabilities!.serverType ?? "未知"}',
                                     style: TextStyle(
                                       color: Theme.of(
                                         context,
@@ -262,7 +296,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                       controller: _usernameController,
                       decoration: const InputDecoration(labelText: '用户名'),
                       validator: (value) {
-                        if (value == null || value.isEmpty) {
+                        if (value == null || value.trim().isEmpty) {
                           return '请输入用户名';
                         }
                         return null;
@@ -287,7 +321,6 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                       decoration: const InputDecoration(labelText: '密码'),
                       obscureText: true,
                       validator: (value) {
-                        // 如果有 API Key，密码可以为空
                         if (_serverCapabilities?.supportsApiKey == true &&
                             _apiKeyController.text.isNotEmpty) {
                           return null;
@@ -307,8 +340,6 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                   ],
                 ),
               ),
-              isActive: _currentStep >= 1,
-              state: _currentStep > 1 ? StepState.complete : StepState.indexed,
             ),
           ],
         ),

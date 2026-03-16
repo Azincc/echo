@@ -2,7 +2,6 @@ import 'dart:async';
 import 'dart:io';
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
-import '../../core/constants/api_constants.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as p;
 import 'package:uuid/uuid.dart';
@@ -12,9 +11,11 @@ import '../../data/repositories/cover_repository.dart';
 import '../../data/models/song.dart';
 import '../../data/repositories/download_repository.dart';
 import '../../data/sources/subsonic_api_client.dart';
+import '../utils/cover_ref_security.dart';
 import '../utils/logger.dart';
 import 'audio_cache_service.dart';
 import 'storage_permission_service.dart';
+import '../utils/download_path_utils.dart';
 
 /// 下载服务 — 队列管理 + 并发控制
 class DownloadService {
@@ -206,9 +207,17 @@ class DownloadService {
     final tasks = await _repository.getAllTasks();
     final task = tasks.where((t) => t.id == taskId).firstOrNull;
     if (task?.filePath != null) {
-      final file = File(task!.filePath!);
-      if (await file.exists()) {
-        await file.delete();
+      final filePath = task!.filePath!;
+      if (await _isManagedDownloadFilePath(filePath)) {
+        final file = File(filePath);
+        if (await file.exists()) {
+          await file.delete();
+        }
+      } else {
+        Logger.warnWithTag(
+          _logTag,
+          'skip deleting unmanaged download path=$filePath',
+        );
       }
     }
 
@@ -246,6 +255,13 @@ class DownloadService {
     }
     // 验证文件存在
     if (task.filePath != null) {
+      if (!await _isManagedDownloadFilePath(task.filePath!)) {
+        Logger.warnWithTag(
+          _logTag,
+          'ignore unmanaged downloaded path=${task.filePath}',
+        );
+        return false;
+      }
       return File(task.filePath!).existsSync();
     }
     return false;
@@ -257,7 +273,9 @@ class DownloadService {
     if (task == null || task.status != DownloadTaskStatus.completed) {
       return null;
     }
-    if (task.filePath != null && File(task.filePath!).existsSync()) {
+    if (task.filePath != null &&
+        await _isManagedDownloadFilePath(task.filePath!) &&
+        File(task.filePath!).existsSync()) {
       return task.filePath;
     }
     return null;
@@ -395,25 +413,20 @@ class DownloadService {
   }
 
   /// 获取文件保存路径
-  /// Android: /storage/emulated/0/Music/Echoes/{libraryId}/{songId}.suffix
-  /// iOS: Documents/echo_downloads/{libraryId}/{songId}.suffix
+  /// Android: External Music app directory / Echoes / {libraryId} / {songId}.suffix
+  /// iOS: Documents / echo_downloads / {libraryId} / {songId}.suffix
   Future<String> _getSavePath(
     String libraryId,
     String songId,
     String suffix,
   ) async {
-    if (!kIsWeb && Platform.isAndroid) {
-      // Android: 使用公共 Music 目录（动态获取，兼容不同设备）
-      final musicDirs = await getExternalStorageDirectories(
-        type: StorageDirectory.music,
-      );
-      final musicDir =
-          musicDirs?.firstOrNull?.path ?? '/storage/emulated/0/Music';
-      return p.join(musicDir, 'Echoes', libraryId, '$songId.$suffix');
-    }
-    // iOS / 其他平台: 使用应用私有 Documents 目录
-    final appDir = await getApplicationDocumentsDirectory();
-    return p.join(appDir.path, 'echo_downloads', libraryId, '$songId.$suffix');
+    final rootDir = await _getDownloadRootDir();
+    return buildDownloadFilePath(
+      rootDir: rootDir.path,
+      libraryId: libraryId,
+      songId: songId,
+      suffix: suffix,
+    );
   }
 
   /// 获取下载根目录
@@ -434,6 +447,26 @@ class DownloadService {
   Future<String> getDownloadDir() async {
     final dir = await _getDownloadRootDir();
     return dir.path;
+  }
+
+  Future<bool> _isManagedDownloadFilePath(String filePath) async {
+    final rootDirs = await _getManagedDownloadRootPaths();
+    return rootDirs.any(
+      (rootDir) => isPathWithinRoot(rootDir: rootDir, candidatePath: filePath),
+    );
+  }
+
+  Future<List<String>> _getManagedDownloadRootPaths() async {
+    final rootDirs = <String>[(await _getDownloadRootDir()).path];
+
+    if (!kIsWeb && Platform.isAndroid) {
+      const legacyPublicMusicDir = '/storage/emulated/0/Music/Echoes';
+      if (!rootDirs.any((rootDir) => p.equals(rootDir, legacyPublicMusicDir))) {
+        rootDirs.add(legacyPublicMusicDir);
+      }
+    }
+
+    return rootDirs;
   }
 
   /// 为历史已完成任务补齐封面缓存（可在列表渲染时触发）
@@ -478,17 +511,16 @@ class DownloadService {
   Future<String?> _resolvePreferredCoverRef(DownloadTask task) async {
     final rawCoverRef = task.coverArt?.trim();
     final hasRawCoverRef = rawCoverRef != null && rawCoverRef.isNotEmpty;
-    final isLocalRef = hasRawCoverRef && _isLocalFilePath(rawCoverRef);
     final artist = (task.artist ?? '').trim();
     final album = task.album?.trim();
 
     // 已经是外部可访问的 URL（非 Navidrome getCoverArt）时，直接沿用。
-    if (hasRawCoverRef && !isLocalRef && !_isSubsonicCoverRef(rawCoverRef)) {
+    if (hasRawCoverRef && isTrustedCoverUrlRef(rawCoverRef)) {
       return rawCoverRef;
     }
 
     final coverLookupId =
-        (hasRawCoverRef && !isLocalRef && _isSubsonicCoverRef(rawCoverRef))
+        (hasRawCoverRef && isSafeServerCoverArtId(rawCoverRef))
         ? rawCoverRef
         : task.songId;
 
@@ -531,26 +563,17 @@ class DownloadService {
         _logTag,
         'cover resolve hit source=${result.sourceId} title="${task.title}" songId=${task.songId} url=${result.url}',
       );
-      return result.url;
-    }
-  }
+      final trustedCoverRef = tryToTrustedCoverUrlRef(result.url);
+      if (trustedCoverRef != null) {
+        return trustedCoverRef;
+      }
 
-  bool _isLocalFilePath(String value) {
-    if (value.startsWith('/')) return true;
-    if (value.startsWith('file://')) return true;
-    return false;
-  }
-
-  bool _isSubsonicCoverRef(String coverRef) {
-    if (coverRef.isEmpty) return false;
-    if (_isLocalFilePath(coverRef)) return false;
-    if (coverRef.startsWith('http://') || coverRef.startsWith('https://')) {
-      final uri = Uri.tryParse(coverRef);
-      final path = uri?.path.toLowerCase() ?? '';
-      final apiPath = ApiConstants.getCoverArt.toLowerCase();
-      return path.endsWith(apiPath) || path.contains(apiPath);
+      Logger.warnWithTag(
+        _logTag,
+        'skip unsafe cover url source=${result.sourceId} title="${task.title}" songId=${task.songId} url=${result.url}',
+      );
+      return null;
     }
-    return true;
   }
 
   Future<bool> _isLikelyDefaultNavidromeCover(String coverUrl) async {

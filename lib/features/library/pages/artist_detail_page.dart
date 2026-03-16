@@ -9,6 +9,7 @@ import '../widgets/album_options_sheet.dart';
 import '../../player/widgets/song_options_sheet.dart';
 import 'album_detail_page.dart';
 import '../../../widgets/error_placeholder.dart';
+import '../../../widgets/song_list_item.dart';
 import '../../../widgets/skeleton_templates.dart';
 
 /// 歌手详情页
@@ -224,14 +225,10 @@ class ArtistDetailPage extends ConsumerWidget {
               SliverList(
                 delegate: SliverChildBuilderDelegate((context, index) {
                   final song = songs[index];
-                  return ListTile(
-                    leading: ClipRRect(
-                      borderRadius: BorderRadius.circular(4),
-                      child: CoverArtImage(coverArtId: song.coverArt, size: 48),
-                    ),
-                    title: Text(song.title),
-                    subtitle: song.artist != null ? Text(song.artist!) : null,
-                    trailing: Text(song.durationString),
+                  return SongListItem(
+                    song: song,
+                    index: index,
+                    variant: SongListItemVariant.standard,
                     onTap: () {
                       ref
                           .read(playerProvider.notifier)

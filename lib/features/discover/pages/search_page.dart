@@ -7,6 +7,7 @@ import '../../library/pages/album_detail_page.dart';
 import '../../library/pages/artist_detail_page.dart';
 import '../../player/widgets/song_options_sheet.dart';
 import '../../../widgets/error_placeholder.dart';
+import '../../../widgets/song_list_item.dart';
 import '../../../widgets/skeleton_templates.dart';
 
 /// 搜索页面
@@ -124,27 +125,17 @@ class _SearchPageState extends ConsumerState<SearchPage> {
                           ],
                         ),
                       ),
-                      ...result.songs.map((song) {
-                        return ListTile(
-                          leading: ClipRRect(
-                            borderRadius: BorderRadius.circular(4),
-                            child: CoverArtImage(
-                              coverArtId: song.coverArt,
-                              size: 48,
-                            ),
-                          ),
-                          title: Text(song.title),
-                          subtitle: song.artist != null
-                              ? Text(song.artist!)
-                              : null,
-                          trailing: Text(song.durationString),
+                      ...result.songs.asMap().entries.map((entry) {
+                        final index = entry.key;
+                        final song = entry.value;
+                        return SongListItem(
+                          song: song,
+                          index: index,
+                          variant: SongListItemVariant.standard,
                           onTap: () {
                             ref
                                 .read(playerProvider.notifier)
-                                .playQueue(
-                                  result.songs,
-                                  startIndex: result.songs.indexOf(song),
-                                );
+                                .playQueue(result.songs, startIndex: index);
                           },
                           onLongPress: () {
                             showSongOptionsSheet(context: context, song: song);

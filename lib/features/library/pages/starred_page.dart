@@ -10,6 +10,7 @@ import '../widgets/album_options_sheet.dart';
 import 'album_detail_page.dart';
 import 'artist_detail_page.dart';
 import '../../../widgets/error_placeholder.dart';
+import '../../../widgets/song_list_item.dart';
 import '../../../widgets/skeleton_templates.dart';
 
 enum StarredTab { songs, albums, artists }
@@ -113,14 +114,10 @@ class StarredPage extends ConsumerWidget {
           ...songs.asMap().entries.map((entry) {
             final index = entry.key;
             final song = entry.value;
-            return ListTile(
-              leading: ClipRRect(
-                borderRadius: BorderRadius.circular(4),
-                child: CoverArtImage(coverArtId: song.coverArt, size: 48),
-              ),
-              title: Text(song.title),
-              subtitle: song.artist != null ? Text(song.artist!) : null,
-              trailing: Text(song.durationString),
+            return SongListItem(
+              song: song,
+              index: index,
+              variant: SongListItemVariant.standard,
               onTap: () {
                 ref
                     .read(playerProvider.notifier)

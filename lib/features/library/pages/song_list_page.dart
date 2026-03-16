@@ -10,9 +10,9 @@ import '../../../providers/music_provider.dart';
 import '../../../providers/player_provider.dart';
 import '../../../utils/az_item.dart';
 import '../../../utils/pinyin_helper.dart';
-import '../../../widgets/cover_art_image.dart';
 import '../../player/widgets/song_options_sheet.dart';
 import '../../../widgets/error_placeholder.dart';
+import '../../../widgets/song_list_item.dart';
 import '../../../widgets/skeleton_templates.dart';
 
 class SongListPage extends ConsumerStatefulWidget {
@@ -23,7 +23,6 @@ class SongListPage extends ConsumerStatefulWidget {
 }
 
 class _SongListPageState extends ConsumerState<SongListPage> {
-  static const double _tileLeadingSize = 48;
   List<AzItem<Song>> _azSongs = [];
   int _songsSignature = 0;
   late final ItemPositionsListener _itemPositionsListener;
@@ -50,7 +49,7 @@ class _SongListPageState extends ConsumerState<SongListPage> {
     final positions = _itemPositionsListener.itemPositions.value;
     if (positions.isEmpty) return;
 
-    // 只统计当前可见项（进入 viewport 的条目）。
+    // Only count items that are currently visible in the viewport.
     final visible = positions
         .where((p) => p.itemTrailingEdge > 0 && p.itemLeadingEdge < 1)
         .toList();
@@ -64,7 +63,7 @@ class _SongListPageState extends ConsumerState<SongListPage> {
         .reduce((a, b) => math.max(a, b));
 
     final visibleCount = maxVisibleIndex - minVisibleIndex + 1;
-    // 预加载可见数量的 100%，总计约 200%。
+    // Preload roughly one viewport of covers around the visible range.
     final extraTotal = math.max(1, visibleCount);
     final extraBefore = extraTotal ~/ 2;
     final extraAfter = extraTotal - extraBefore;
@@ -142,16 +141,11 @@ class _SongListPageState extends ConsumerState<SongListPage> {
                   final shouldLoadCover =
                       index >= _coverLoadStart && index <= _coverLoadEnd;
 
-                  return ListTile(
-                    title: Text(song.title),
-                    subtitle: Text(song.artist ?? '未知歌手'),
-                    leading: ClipRRect(
-                      borderRadius: BorderRadius.circular(6),
-                      child: CoverArtImage(
-                        coverArtId: shouldLoadCover ? song.coverArt : null,
-                        size: _tileLeadingSize,
-                      ),
-                    ),
+                  return SongListItem(
+                    song: song,
+                    index: index,
+                    variant: SongListItemVariant.standard,
+                    coverArtId: shouldLoadCover ? song.coverArt : null,
                     onTap: () {
                       final queue = _azSongs.map((e) => e.data).toList();
                       ref

@@ -51,3 +51,4 @@ jobs:
         with:
           name: windows-release-${{ steps.version.outputs.name }}
           path: windows-release.zip
+          retention-days: 5

@@ -48,3 +48,4 @@ jobs:
         with:
           name: macos-release-${{ steps.version.outputs.name }}
           path: macos-release.zip
+          retention-days: 5

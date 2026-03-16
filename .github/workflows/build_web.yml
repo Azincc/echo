@@ -48,3 +48,4 @@ jobs:
         with:
           name: web-release-${{ steps.version.outputs.name }}
           path: web-release.zip
+          retention-days: 5

@@ -51,3 +51,4 @@ jobs:
         with:
           name: app-release-ipa-unsigned-${{ steps.version.outputs.name }}
           path: app-release-unsigned.ipa
+          retention-days: 5

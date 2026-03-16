@@ -54,3 +54,4 @@ jobs:
         with:
           name: linux-release-${{ steps.version.outputs.name }}
           path: linux-release.zip
+          retention-days: 5

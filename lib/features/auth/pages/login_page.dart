@@ -162,6 +162,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
       appBar: AppBar(title: const Text('连接到服务器')),
       body: SafeArea(
         child: Stepper(
+          clipBehavior: Clip.none,
           currentStep: _currentStep,
           onStepCancel: _currentStep > 0
               ? () {
@@ -205,11 +206,15 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    const SizedBox(height: 8),
                     TextFormField(
                       controller: _serverUrlController,
                       decoration: const InputDecoration(
                         labelText: '服务器地址',
                         hintText: 'https://your-server.com',
+                        floatingLabelStyle: TextStyle(height: 1.2),
+                        visualDensity: VisualDensity.standard,
+                        contentPadding: EdgeInsets.fromLTRB(12, 22, 12, 14),
                         helperText: '优先使用 HTTPS。只有在可信局域网中才建议使用 HTTP。',
                       ),
                       keyboardType: TextInputType.url,

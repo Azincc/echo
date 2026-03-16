@@ -160,7 +160,7 @@ class ArtistDetailPage extends ConsumerWidget {
                   },
                   body: TabBarView(
                     children: [
-                      _buildSongsTab(context, ref, songs),
+                      _buildSongsTab(artist.name, songs),
                       _buildAlbumsTab(context, ref, albums),
                     ],
                   ),
@@ -177,74 +177,8 @@ class ArtistDetailPage extends ConsumerWidget {
   }
 
   /// 歌曲 Tab
-  Widget _buildSongsTab(BuildContext context, WidgetRef ref, List<Song> songs) {
-    return Builder(
-      builder: (context) {
-        return CustomScrollView(
-          slivers: [
-            SliverOverlapInjector(
-              handle: NestedScrollView.sliverOverlapAbsorberHandleFor(context),
-            ),
-            if (songs.isEmpty)
-              SliverFillRemaining(
-                child: Center(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.music_off, size: 64, color: Colors.grey[400]),
-                      const SizedBox(height: 16),
-                      const Text('暂无歌曲'),
-                    ],
-                  ),
-                ),
-              )
-            else ...[
-              SliverToBoxAdapter(
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Row(
-                    children: [
-                      const Icon(Icons.music_note),
-                      const SizedBox(width: 8),
-                      Text(
-                        '歌曲 (${songs.length})',
-                        style: Theme.of(context).textTheme.titleMedium
-                            ?.copyWith(fontWeight: FontWeight.bold),
-                      ),
-                      const Spacer(),
-                      TextButton.icon(
-                        onPressed: () =>
-                            ref.read(playerProvider.notifier).playQueue(songs),
-                        icon: const Icon(Icons.play_arrow, size: 18),
-                        label: const Text('播放全部'),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-              SliverList(
-                delegate: SliverChildBuilderDelegate((context, index) {
-                  final song = songs[index];
-                  return SongListItem(
-                    song: song,
-                    index: index,
-                    variant: SongListItemVariant.standard,
-                    onTap: () {
-                      ref
-                          .read(playerProvider.notifier)
-                          .playQueue(songs, startIndex: index);
-                    },
-                    onLongPress: () {
-                      showSongOptionsSheet(context: context, song: song);
-                    },
-                  );
-                }, childCount: songs.length),
-              ),
-            ],
-          ],
-        );
-      },
-    );
+  Widget _buildSongsTab(String artistName, List<Song> songs) {
+    return _ArtistSongsTab(artistName: artistName, songs: songs);
   }
 
   /// 专辑 Tab
@@ -357,6 +291,174 @@ class ArtistDetailPage extends ConsumerWidget {
                 }, childCount: albums.length),
               ),
             ),
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _ArtistSongsTab extends ConsumerStatefulWidget {
+  final String artistName;
+  final List<Song> songs;
+
+  const _ArtistSongsTab({required this.artistName, required this.songs});
+
+  @override
+  ConsumerState<_ArtistSongsTab> createState() => _ArtistSongsTabState();
+}
+
+class _ArtistSongsTabState extends ConsumerState<_ArtistSongsTab> {
+  static const int _topSongsPreviewCount = 5;
+  bool _showAllTopSongs = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final topSongsAsync = ref.watch(
+      topSongsByArtistProvider(widget.artistName),
+    );
+
+    return Builder(
+      builder: (context) {
+        return CustomScrollView(
+          slivers: [
+            SliverOverlapInjector(
+              handle: NestedScrollView.sliverOverlapAbsorberHandleFor(context),
+            ),
+            SliverToBoxAdapter(
+              child: topSongsAsync.when(
+                data: (topSongs) {
+                  if (topSongs.isEmpty) {
+                    return const SizedBox.shrink();
+                  }
+
+                  final visibleTopSongs =
+                      _showAllTopSongs ||
+                          topSongs.length <= _topSongsPreviewCount
+                      ? topSongs
+                      : topSongs.take(_topSongsPreviewCount).toList();
+
+                  return Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+                    child: Column(
+                      children: [
+                        Row(
+                          children: [
+                            const Icon(Icons.whatshot),
+                            const SizedBox(width: 8),
+                            Text(
+                              '热门歌曲 (${topSongs.length})',
+                              style: Theme.of(context).textTheme.titleMedium
+                                  ?.copyWith(fontWeight: FontWeight.bold),
+                            ),
+                            const Spacer(),
+                            if (topSongs.length > _topSongsPreviewCount)
+                              TextButton(
+                                onPressed: () {
+                                  setState(() {
+                                    _showAllTopSongs = !_showAllTopSongs;
+                                  });
+                                },
+                                child: Text(_showAllTopSongs ? '收起' : '显示所有'),
+                              ),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        ...List.generate(visibleTopSongs.length, (index) {
+                          final song = visibleTopSongs[index];
+                          final queueIndex = topSongs.indexWhere(
+                            (item) => item.id == song.id,
+                          );
+                          return SongListItem(
+                            song: song,
+                            index: index,
+                            variant: SongListItemVariant.standard,
+                            onTap: () {
+                              ref
+                                  .read(playerProvider.notifier)
+                                  .playQueue(
+                                    topSongs,
+                                    startIndex: queueIndex >= 0
+                                        ? queueIndex
+                                        : index,
+                                  );
+                            },
+                            onLongPress: () {
+                              showSongOptionsSheet(
+                                context: context,
+                                song: song,
+                              );
+                            },
+                          );
+                        }),
+                      ],
+                    ),
+                  );
+                },
+                loading: () => const Padding(
+                  padding: EdgeInsets.fromLTRB(16, 16, 16, 8),
+                  child: LinearProgressIndicator(),
+                ),
+                error: (error, stack) => const SizedBox.shrink(),
+              ),
+            ),
+            if (widget.songs.isEmpty)
+              SliverFillRemaining(
+                child: Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.music_off, size: 64, color: Colors.grey[400]),
+                      const SizedBox(height: 16),
+                      const Text('暂无歌曲'),
+                    ],
+                  ),
+                ),
+              )
+            else ...[
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.library_music),
+                      const SizedBox(width: 8),
+                      Text(
+                        '所有歌曲 (${widget.songs.length})',
+                        style: Theme.of(context).textTheme.titleMedium
+                            ?.copyWith(fontWeight: FontWeight.bold),
+                      ),
+                      const Spacer(),
+                      TextButton.icon(
+                        onPressed: () => ref
+                            .read(playerProvider.notifier)
+                            .playQueue(widget.songs),
+                        icon: const Icon(Icons.play_arrow, size: 18),
+                        label: const Text('播放全部'),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              SliverList(
+                delegate: SliverChildBuilderDelegate((context, index) {
+                  final song = widget.songs[index];
+                  return SongListItem(
+                    song: song,
+                    index: index,
+                    variant: SongListItemVariant.standard,
+                    onTap: () {
+                      ref
+                          .read(playerProvider.notifier)
+                          .playQueue(widget.songs, startIndex: index);
+                    },
+                    onLongPress: () {
+                      showSongOptionsSheet(context: context, song: song);
+                    },
+                  );
+                }, childCount: widget.songs.length),
+              ),
+            ],
           ],
         );
       },

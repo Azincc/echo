@@ -173,7 +173,7 @@ class LocalStorage {
   /// 读取主题主色（ARGB int）
   static Future<int> getThemeSeedColorValue() async {
     final prefs = await SharedPreferences.getInstance();
-    final color = prefs.getInt(_keyThemeSeedColor) ?? 0xFF6750A4;
+    final color = prefs.getInt(_keyThemeSeedColor) ?? 0xFF4CAF50;
     Logger.debugWithTag(
       _logTag,
       'theme seed color loaded: 0x${color.toRadixString(16)}',

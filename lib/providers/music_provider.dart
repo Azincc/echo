@@ -270,18 +270,44 @@ final artistDetailProvider = FutureProvider.autoDispose
               libraryId,
               detail.artist,
               detail.albums,
+              detail.songs,
             );
           }
         },
         cacheRead: () async {
           final cached = await cache.getArtistDetail(libraryId, artistId);
           if (cached == null) return null;
-          return ArtistDetail(artist: cached.artist, albums: cached.albums);
+          return ArtistDetail(
+            artist: cached.artist,
+            albums: cached.albums,
+            songs: cached.songs,
+          );
         },
         failedProvider: artistDetailLoadFailedProvider(artistId),
         errorMessage: '网络异常，歌手详情加载失败',
         emptyValue: null,
       );
+    });
+
+/// 热门歌曲 Provider（按歌手名）
+final topSongsByArtistProvider = FutureProvider.autoDispose
+    .family<List<Song>, String>((ref, artistName) async {
+      final repository = ref.watch(musicRepositoryProvider);
+      if (repository == null || artistName.trim().isEmpty) {
+        return [];
+      }
+
+      try {
+        await ref.read(ensureActiveAddressProvider.future);
+        return await repository.getTopSongs(artistName);
+      } catch (e) {
+        Logger.warnWithTag(
+          _musicLogTag,
+          'topSongs failed: artist=$artistName',
+          e,
+        );
+        return [];
+      }
     });
 
 /// 搜索 Provider

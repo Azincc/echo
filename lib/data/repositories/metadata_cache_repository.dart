@@ -228,10 +228,12 @@ class MetadataCacheRepository {
     String libraryId,
     Artist artist,
     List<Album> albums,
+    List<Song> songs,
   ) async {
     await _saveMap(libraryId, 'artist_detail_${artist.id}', {
       'artist': artist.toJson(),
       'albums': albums.map((e) => e.toJson()).toList(),
+      'songs': songs.map((e) => e.toJson()).toList(),
       'cachedAt': DateTime.now().millisecondsSinceEpoch,
     });
   }
@@ -245,10 +247,14 @@ class MetadataCacheRepository {
     final artistMap = map['artist'] as Map<String, dynamic>?;
     final albumsList = map['albums'] as List?;
     if (artistMap == null || albumsList == null) return null;
+    final songsList = map['songs'] as List? ?? const [];
     return ArtistDetailCache(
       artist: Artist.fromJson(artistMap),
       albums: albumsList
           .map((e) => Album.fromJson(e as Map<String, dynamic>))
+          .toList(),
+      songs: songsList
+          .map((e) => Song.fromJson(e as Map<String, dynamic>))
           .toList(),
     );
   }
@@ -298,8 +304,13 @@ class MetadataCacheRepository {
 class ArtistDetailCache {
   final Artist artist;
   final List<Album> albums;
+  final List<Song> songs;
 
-  ArtistDetailCache({required this.artist, required this.albums});
+  ArtistDetailCache({
+    required this.artist,
+    required this.albums,
+    this.songs = const [],
+  });
 }
 
 /// Starred cache DTO

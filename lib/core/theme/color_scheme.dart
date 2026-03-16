@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 /// App color scheme definitions.
 class AppColorScheme {
-  static const Color defaultSeedColor = Color(0xFF6750A4);
+  static const Color defaultSeedColor = Color(0xFF4CAF50);
   static const Color lightBackgroundColor = Color(0xFFFFFFFF);
   static const Color darkBackgroundColor = Color(0xFF121212);
 

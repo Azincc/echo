@@ -92,7 +92,7 @@ class MusicRepository {
     }
   }
 
-  /// 获取歌手详情（包含专辑列表和热门歌曲）
+  /// 获取歌手详情（包含专辑列表和全部歌曲）
   Future<ArtistDetail?> getArtist(String artistId) async {
     try {
       final response = await _apiClient.get(
@@ -111,13 +111,35 @@ class MusicRepository {
               .toList() ??
           [];
 
-      // 获取歌手热门歌曲
-      List<Song> songs = [];
-      try {
-        songs = await getTopSongs(artist.name);
-      } catch (_) {
-        // 热门歌曲获取失败不影响整体
+      // 按歌手下所有专辑聚合歌曲，避免仅返回热门歌曲。
+      final albumDetails = await Future.wait(
+        albums.map((album) async {
+          try {
+            return await getAlbum(album.id);
+          } catch (e) {
+            Logger.warn(
+              'Failed to get album songs for artist=$artistId album=${album.id}',
+              e,
+            );
+            return null;
+          }
+        }),
+      );
+
+      final songsById = <String, Song>{};
+      for (final detail in albumDetails) {
+        if (detail == null) continue;
+        for (final song in detail.songs) {
+          final songArtistId = song.artistId;
+          if (songArtistId != null &&
+              songArtistId.isNotEmpty &&
+              songArtistId != artist.id) {
+            continue;
+          }
+          songsById.putIfAbsent(song.id, () => song);
+        }
       }
+      final songs = songsById.values.toList();
 
       return ArtistDetail(artist: artist, albums: albums, songs: songs);
     } catch (e) {
@@ -359,7 +381,7 @@ class AlbumDetail {
   AlbumDetail({required this.album, required this.songs});
 }
 
-/// 歌手详情（包含专辑列表和热门歌曲）
+/// 歌手详情（包含专辑列表和歌曲）
 class ArtistDetail {
   final Artist artist;
   final List<Album> albums;

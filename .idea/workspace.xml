@@ -5,23 +5,15 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="5b69f946-7f9d-4fe4-a71a-1e52a91bf237" name="更改" comment="主题功能">
-      <change beforePath="$PROJECT_DIR$/.idea/libraries/Dart_Packages.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/libraries/Dart_Packages.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/lib/core/constants/api_constants.dart" beforeDir="false" afterPath="$PROJECT_DIR$/lib/core/constants/api_constants.dart" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/lib/core/network/address_pool.dart" beforeDir="false" afterPath="$PROJECT_DIR$/lib/core/network/address_pool.dart" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/lib/core/services/download_service.dart" beforeDir="false" afterPath="$PROJECT_DIR$/lib/core/services/download_service.dart" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/lib/data/models/song.dart" beforeDir="false" afterPath="$PROJECT_DIR$/lib/data/models/song.dart" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/echo.iml" beforeDir="false" afterPath="$PROJECT_DIR$/echo.iml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/lib/core/theme/color_scheme.dart" beforeDir="false" afterPath="$PROJECT_DIR$/lib/core/theme/color_scheme.dart" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/lib/data/repositories/metadata_cache_repository.dart" beforeDir="false" afterPath="$PROJECT_DIR$/lib/data/repositories/metadata_cache_repository.dart" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/lib/data/repositories/music_repository.dart" beforeDir="false" afterPath="$PROJECT_DIR$/lib/data/repositories/music_repository.dart" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/lib/features/download/pages/download_manager_page.dart" beforeDir="false" afterPath="$PROJECT_DIR$/lib/features/download/pages/download_manager_page.dart" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/lib/data/sources/local_storage.dart" beforeDir="false" afterPath="$PROJECT_DIR$/lib/data/sources/local_storage.dart" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/lib/features/auth/pages/login_page.dart" beforeDir="false" afterPath="$PROJECT_DIR$/lib/features/auth/pages/login_page.dart" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/lib/features/library/pages/artist_detail_page.dart" beforeDir="false" afterPath="$PROJECT_DIR$/lib/features/library/pages/artist_detail_page.dart" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/lib/features/offline/pages/offline_download_status_page.dart" beforeDir="false" afterPath="$PROJECT_DIR$/lib/features/offline/pages/offline_download_status_page.dart" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/lib/features/player/widgets/song_options_sheet.dart" beforeDir="false" afterPath="$PROJECT_DIR$/lib/features/player/widgets/song_options_sheet.dart" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/lib/features/settings/pages/cache_management_page.dart" beforeDir="false" afterPath="$PROJECT_DIR$/lib/features/settings/pages/cache_management_page.dart" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/lib/providers/auth_provider.dart" beforeDir="false" afterPath="$PROJECT_DIR$/lib/providers/auth_provider.dart" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/lib/providers/music_provider.dart" beforeDir="false" afterPath="$PROJECT_DIR$/lib/providers/music_provider.dart" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/lib/providers/player_provider.dart" beforeDir="false" afterPath="$PROJECT_DIR$/lib/providers/player_provider.dart" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/pubspec.lock" beforeDir="false" afterPath="$PROJECT_DIR$/pubspec.lock" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/pubspec.yaml" beforeDir="false" afterPath="$PROJECT_DIR$/pubspec.yaml" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -143,6 +135,9 @@
       <workItem from="1772931487766" duration="3154000" />
       <workItem from="1772958452224" duration="7231000" />
       <workItem from="1773203857682" duration="12093000" />
+      <workItem from="1773324489484" duration="548000" />
+      <workItem from="1773583309417" duration="3809000" />
+      <workItem from="1773636388009" duration="7033000" />
     </task>
     <task id="LOCAL-00001" summary="添加github打包action">
       <option name="closed" value="true" />

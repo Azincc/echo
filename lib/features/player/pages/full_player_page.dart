@@ -761,6 +761,35 @@ class _FullPlayerPageState extends ConsumerState<FullPlayerPage>
     return '';
   }
 
+  String _normalizeQualityPartForCompare(String value) {
+    final trimmed = value.trim();
+    if (trimmed.isEmpty) return '';
+
+    final bitrateMatch = RegExp(
+      r'(\d{2,4})\s*(k|kbps|kbit/s|kb/s)',
+      caseSensitive: false,
+    ).firstMatch(trimmed);
+    if (bitrateMatch != null) {
+      return '${bitrateMatch.group(1)}k';
+    }
+
+    return trimmed.toLowerCase().replaceAll(RegExp(r'\s+'), '');
+  }
+
+  void _appendUniqueQualityPart(List<String> parts, String part) {
+    final candidate = part.trim();
+    if (candidate.isEmpty) return;
+
+    final normalizedCandidate = _normalizeQualityPartForCompare(candidate);
+    final duplicated = parts.any(
+      (existing) =>
+          _normalizeQualityPartForCompare(existing) == normalizedCandidate,
+    );
+    if (!duplicated) {
+      parts.add(candidate);
+    }
+  }
+
   Widget _buildQualityIndicator(WidgetRef ref) {
     final playerState = ref.watch(playerProvider);
     final song = playerState.currentSong;
@@ -774,15 +803,16 @@ class _FullPlayerPageState extends ConsumerState<FullPlayerPage>
 
     if (song?.isPreview == true) {
       final qualityLabel = song?.previewQualityLabel?.trim();
-      final parts = <String>[
-        '试听',
+      final parts = <String>['试听'];
+      _appendUniqueQualityPart(
+        parts,
         qualityLabel == null || qualityLabel.isEmpty ? '未知音质' : qualityLabel,
-      ];
+      );
       if (_showBitRate) {
-        parts.add(bitRateText);
+        _appendUniqueQualityPart(parts, bitRateText);
       }
       if (audioSpecText.isNotEmpty) {
-        parts.add(audioSpecText);
+        _appendUniqueQualityPart(parts, audioSpecText);
       }
       final text = parts.join('·');
       return GestureDetector(
@@ -856,10 +886,10 @@ class _FullPlayerPageState extends ConsumerState<FullPlayerPage>
 
     parts.add(qualityLabel);
     if (_showBitRate) {
-      parts.add(bitRateText);
+      _appendUniqueQualityPart(parts, bitRateText);
     }
     if (audioSpecText.isNotEmpty) {
-      parts.add(audioSpecText);
+      _appendUniqueQualityPart(parts, audioSpecText);
     }
     final text = parts.join('·');
 

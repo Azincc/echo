@@ -4,16 +4,13 @@
     <option name="autoReloadType" value="NONE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="5b69f946-7f9d-4fe4-a71a-1e52a91bf237" name="更改" comment="主题功能">
+    <list default="true" id="5b69f946-7f9d-4fe4-a71a-1e52a91bf237" name="更改" comment="IDEA配置">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/echo.iml" beforeDir="false" afterPath="$PROJECT_DIR$/echo.iml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/lib/core/theme/color_scheme.dart" beforeDir="false" afterPath="$PROJECT_DIR$/lib/core/theme/color_scheme.dart" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/lib/data/repositories/metadata_cache_repository.dart" beforeDir="false" afterPath="$PROJECT_DIR$/lib/data/repositories/metadata_cache_repository.dart" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/lib/data/repositories/music_repository.dart" beforeDir="false" afterPath="$PROJECT_DIR$/lib/data/repositories/music_repository.dart" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/lib/core/services/audio_handler_service.dart" beforeDir="false" afterPath="$PROJECT_DIR$/lib/core/services/audio_handler_service.dart" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/lib/data/models/song.dart" beforeDir="false" afterPath="$PROJECT_DIR$/lib/data/models/song.dart" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/lib/data/sources/local_storage.dart" beforeDir="false" afterPath="$PROJECT_DIR$/lib/data/sources/local_storage.dart" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/lib/features/auth/pages/login_page.dart" beforeDir="false" afterPath="$PROJECT_DIR$/lib/features/auth/pages/login_page.dart" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/lib/features/library/pages/artist_detail_page.dart" beforeDir="false" afterPath="$PROJECT_DIR$/lib/features/library/pages/artist_detail_page.dart" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/lib/providers/music_provider.dart" beforeDir="false" afterPath="$PROJECT_DIR$/lib/providers/music_provider.dart" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/lib/providers/player_provider.dart" beforeDir="false" afterPath="$PROJECT_DIR$/lib/providers/player_provider.dart" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/test/data/models/song_test.dart" beforeDir="false" afterPath="$PROJECT_DIR$/test/data/models/song_test.dart" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -137,7 +134,8 @@
       <workItem from="1773203857682" duration="12093000" />
       <workItem from="1773324489484" duration="548000" />
       <workItem from="1773583309417" duration="3809000" />
-      <workItem from="1773636388009" duration="7033000" />
+      <workItem from="1773636388009" duration="9849000" />
+      <workItem from="1773754859762" duration="1928000" />
     </task>
     <task id="LOCAL-00001" summary="添加github打包action">
       <option name="closed" value="true" />
@@ -171,7 +169,15 @@
       <option name="project" value="LOCAL" />
       <updated>1771379729401</updated>
     </task>
-    <option name="localTasksCounter" value="5" />
+    <task id="LOCAL-00005" summary="IDEA配置">
+      <option name="closed" value="true" />
+      <created>1773677096967</created>
+      <option name="number" value="00005" />
+      <option name="presentableId" value="LOCAL-00005" />
+      <option name="project" value="LOCAL" />
+      <updated>1773677096967</updated>
+    </task>
+    <option name="localTasksCounter" value="6" />
     <servers />
   </component>
   <component name="ToolWindowManager">
@@ -197,7 +203,8 @@
   <component name="VcsManagerConfiguration">
     <MESSAGE value="添加github打包action" />
     <MESSAGE value="主题功能" />
-    <option name="LAST_COMMIT_MESSAGE" value="主题功能" />
+    <MESSAGE value="IDEA配置" />
+    <option name="LAST_COMMIT_MESSAGE" value="IDEA配置" />
   </component>
   <component name="XSLT-Support.FileAssociations.UIState">
     <expand />

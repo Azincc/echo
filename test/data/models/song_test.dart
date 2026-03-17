@@ -7,37 +7,37 @@ void main() {
   // -------------------------------------------------------------------------
 
   Map<String, dynamic> fullJson() => {
-        'id': 'song-1',
-        'title': 'Test Song',
-        'album': 'Test Album',
-        'albumId': 'album-1',
-        'artist': 'Test Artist',
-        'artistId': 'artist-1',
-        'track': 3,
-        'year': 2024,
-        'genre': 'Rock',
-        'coverArt': 'cover-1',
-        'size': 5242880,
-        'contentType': 'audio/flac',
-        'suffix': 'flac',
-        'duration': 245,
-        'bitRate': 320,
-        'bitDepth': 24,
-        'samplingRate': 96000,
-        'channelCount': 2,
-        'path': '/music/test.flac',
-        'isVideo': false,
-        'playCount': 42,
-        'created': '2024-01-15T10:30:00.000Z',
-        'starred': '2024-02-01T00:00:00.000Z',
-        'discNumber': 1,
-        'type': 'music',
-      };
+    'id': 'song-1',
+    'title': 'Test Song',
+    'album': 'Test Album',
+    'albumId': 'album-1',
+    'artist': 'Test Artist',
+    'artistId': 'artist-1',
+    'track': 3,
+    'year': 2024,
+    'genre': 'Rock',
+    'coverArt': 'cover-1',
+    'size': 5242880,
+    'contentType': 'audio/flac',
+    'suffix': 'flac',
+    'duration': 245,
+    'bitRate': 320,
+    'bitDepth': 24,
+    'samplingRate': 96000,
+    'channelCount': 2,
+    'path': '/music/test.flac',
+    'isVideo': false,
+    'playCount': 42,
+    'created': '2024-01-15T10:30:00.000Z',
+    'starred': '2024-02-01T00:00:00.000Z',
+    'discNumber': 1,
+    'type': 'music',
+  };
 
   Map<String, dynamic> minimalJson() => {
-        'id': 'song-min',
-        'title': 'Minimal Song',
-      };
+    'id': 'song-min',
+    'title': 'Minimal Song',
+  };
 
   // -------------------------------------------------------------------------
   // fromJson
@@ -101,6 +101,16 @@ void main() {
     test('starred is false when starred field is null', () {
       final json = minimalJson()..['starred'] = null;
       expect(Song.fromJson(json).starred, false);
+    });
+
+    test('starred supports boolean false', () {
+      final json = minimalJson()..['starred'] = false;
+      expect(Song.fromJson(json).starred, false);
+    });
+
+    test('starred supports boolean true', () {
+      final json = minimalJson()..['starred'] = true;
+      expect(Song.fromJson(json).starred, true);
     });
   });
 

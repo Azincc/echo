@@ -1,6 +1,7 @@
 import 'package:audio_service/audio_service.dart';
 import 'package:just_audio/just_audio.dart';
 import '../utils/logger.dart';
+import '../theme/color_scheme.dart';
 
 /// 音频处理器 - 处理后台播放和通知栏控制
 class EchoAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
@@ -166,6 +167,8 @@ Future<EchoAudioHandler> initAudioService() async {
       androidNotificationChannelId: 'com.example.echo.audio',
       androidNotificationChannelName: 'Echo Music Playback',
       androidNotificationChannelDescription: 'Echo music player controls',
+      // Android 通知进度条/强调元素使用的底色，避免浅色主题下不可见。
+      notificationColor: AppColorScheme.defaultSeedColor,
       androidNotificationOngoing: false, // 允许用户手动关闭通知
       androidNotificationIcon: 'drawable/ic_notification',
       androidShowNotificationBadge: true,

@@ -52,8 +52,7 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
   EchoAudioHandler? _audioHandler;
   StreamSubscription? _downloadProgressSubscription;
   final Random _random = Random();
-  final List<ShuffleHistoryEntry> _shuffleBackHistory =
-      <ShuffleHistoryEntry>[];
+  final List<ShuffleHistoryEntry> _shuffleBackHistory = <ShuffleHistoryEntry>[];
   final List<ShuffleHistoryEntry> _shuffleForwardHistory =
       <ShuffleHistoryEntry>[];
   Duration? _pendingSeekPosition;
@@ -80,6 +79,10 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
   int _playDebugSession = 0;
   bool _loggedDurationUnavailableForSong = false;
   Timer? _fadeTimer;
+  static const Duration _playbackSessionPersistInterval = Duration(seconds: 2);
+  Timer? _playbackSessionPersistTimer;
+  bool _isPersistingPlaybackSession = false;
+  bool _isRestoringPlaybackSession = false;
 
   // ── Handlers ──────────────────────────────────────────────────────────────
   late final FavoriteScrobbleHandler _favoriteHandler;
@@ -96,6 +99,12 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
     _favoriteHandler = FavoriteScrobbleHandler(_ref);
     _cacheHandler = CacheManagerHandler(_ref);
     _init();
+  }
+
+  @override
+  set state(PlayerState value) {
+    super.state = value;
+    _schedulePersistPlaybackSession();
   }
 
   /// 初始化播放器
@@ -287,6 +296,7 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
     });
 
     await _restorePlaybackMode();
+    await _restorePlaybackSession();
   }
 
   /// 播放单曲
@@ -296,9 +306,10 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
     int? index,
     bool recordShuffleHistory = false,
     bool clearShuffleForwardHistory = false,
+    bool autoPlay = true,
   }) async {
     if (song.isPreview) {
-      await _playPreviewSongInternal(song);
+      await _playPreviewSongInternal(song, autoPlay: autoPlay);
       return;
     }
 
@@ -317,7 +328,7 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
       _seekDbg(
         'playSong start song=${song.id} title="${song.title}" '
         'suffix=${song.suffix} duration=${song.duration}s '
-        'queue=${playQueue.length} index=$playIndex',
+        'queue=${playQueue.length} index=$playIndex autoPlay=$autoPlay',
       );
       _playDbg(
         'sid=$debugSession playSong enter song=${song.id} '
@@ -327,6 +338,11 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
 
       // 淡出当前歌曲（如果启用了淡入淡出）
       await _fadeOut(debugSession);
+      if (!autoPlay) {
+        _cancelFade();
+        await _audioPlayer?.pause();
+        await _audioHandler?.pause();
+      }
 
       _downloadProgressSubscription?.cancel();
       _downloadProgressSubscription = null;
@@ -389,7 +405,7 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
         _usingLockCachingSource = false;
         _currentStreamUrl = null;
         _clearStreamContext();
-        _startPlayback();
+        await _syncPlaybackAfterSourceReady(autoPlay: autoPlay);
         await _applyPendingSeekIfNeeded();
         _seekDbg('source=download path=$downloadedPath');
         state = state.copyWith(
@@ -402,8 +418,10 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
           ),
           bufferedPosition: initialDuration,
         );
-        await _scrobble(song.id, submission: false);
-        _preCacheNextSong();
+        if (autoPlay) {
+          await _scrobble(song.id, submission: false);
+          _preCacheNextSong();
+        }
         return;
       }
 
@@ -423,7 +441,7 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
         _usingLockCachingSource = false;
         _currentStreamUrl = null;
         _clearStreamContext();
-        _startPlayback();
+        await _syncPlaybackAfterSourceReady(autoPlay: autoPlay);
         await _applyPendingSeekIfNeeded();
         _seekDbg(
           'source=cache path=$cachedPath quality=${effectiveQuality.name}',
@@ -439,15 +457,17 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
           ),
           bufferedPosition: initialDuration,
         );
-        await _scrobble(song.id, submission: false);
-        unawaited(
-          _recordMobileCacheSavedBytesForHit(
-            songId: song.id,
-            cacheFilePath: cachedPath,
-            libraryId: libraryId,
-          ),
-        );
-        _preCacheNextSong();
+        if (autoPlay) {
+          await _scrobble(song.id, submission: false);
+          unawaited(
+            _recordMobileCacheSavedBytesForHit(
+              songId: song.id,
+              cacheFilePath: cachedPath,
+              libraryId: libraryId,
+            ),
+          );
+          _preCacheNextSong();
+        }
         return;
       }
 
@@ -544,7 +564,7 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
             maxBitRate: maxBitRate,
             seekByReloadStream: false,
           );
-          _startPlayback();
+          await _syncPlaybackAfterSourceReady(autoPlay: autoPlay);
           _seekDbg(
             'source=lock_cache stream quality=${effectiveQuality.name} '
             'format=${transcodeFormat ?? song.suffix} '
@@ -609,7 +629,7 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
             maxBitRate: maxBitRate,
             seekByReloadStream: transcodeFormat != null,
           );
-          _startPlayback();
+          await _syncPlaybackAfterSourceReady(autoPlay: autoPlay);
           _seekDbg(
             'source=direct_stream_from_lock_fallback quality=${effectiveQuality.name} '
             'format=${transcodeFormat ?? song.suffix}',
@@ -642,7 +662,7 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
             maxBitRate: maxBitRate,
             seekByReloadStream: transcodeFormat != null,
           );
-          _startPlayback();
+          await _syncPlaybackAfterSourceReady(autoPlay: autoPlay);
           _seekDbg(
             'source=direct_stream quality=${effectiveQuality.name} '
             'format=${transcodeFormat ?? song.suffix}',
@@ -684,7 +704,7 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
             maxBitRate: maxBitRate,
             seekByReloadStream: false,
           );
-          _startPlayback();
+          await _syncPlaybackAfterSourceReady(autoPlay: autoPlay);
           _seekDbg(
             'source=lock_cache_from_direct_fallback '
             'quality=${effectiveQuality.name} '
@@ -706,7 +726,9 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
       }
 
       // 上报"正在播放"
-      await _scrobble(song.id, submission: false);
+      if (autoPlay) {
+        await _scrobble(song.id, submission: false);
+      }
 
       Logger.info('Playing: ${song.title}');
       _seekDbg(
@@ -723,7 +745,9 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
       );
 
       // 预缓存下一首
-      _preCacheNextSong();
+      if (autoPlay) {
+        _preCacheNextSong();
+      }
     } catch (e) {
       Logger.error('Failed to play song', e);
       _seekDbg('playSong failed song=${song.id} err=$e');
@@ -760,6 +784,7 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
           queue: queue,
           index: index,
           debugSession: debugSession,
+          autoPlay: autoPlay,
         );
       }
     }
@@ -771,6 +796,7 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
     List<Song>? queue,
     int? index,
     int? debugSession,
+    bool autoPlay = true,
   }) async {
     // 会话已被更新的 playSong 取代，放弃本次转码重试
     final sid = debugSession ?? _playDebugSession;
@@ -825,7 +851,7 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
           maxBitRate: 320,
           seekByReloadStream: true,
         );
-        _startPlayback();
+        await _syncPlaybackAfterSourceReady(autoPlay: autoPlay);
         _seekDbg('source=direct_stream_transcoding mp3 song=${song.id}');
       } catch (e) {
         final canFallbackToLockCache =
@@ -865,7 +891,7 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
           maxBitRate: 320,
           seekByReloadStream: false,
         );
-        _startPlayback();
+        await _syncPlaybackAfterSourceReady(autoPlay: autoPlay);
         _seekDbg('source=lock_cache_transcoding mp3 song=${song.id}');
       }
 
@@ -891,7 +917,9 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
       );
 
       // 上报"正在播放"
-      await _scrobble(song.id, submission: false);
+      if (autoPlay) {
+        await _scrobble(song.id, submission: false);
+      }
     } catch (e) {
       Logger.error('Failed to play song even with transcoding', e);
       final hasAvailableRoute = await _refreshRoutesAndCheckAvailability();
@@ -1067,6 +1095,20 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
     }
   }
 
+  Future<void> _syncPlaybackAfterSourceReady({required bool autoPlay}) async {
+    if (autoPlay) {
+      _startPlayback();
+      return;
+    }
+
+    _cancelFade();
+    await _audioPlayer?.pause();
+    await _audioHandler?.pause();
+    if (mounted && state.isPlaying) {
+      state = state.copyWith(isPlaying: false);
+    }
+  }
+
   // ---------------------------------------------------------------------------
   // 淡入淡出
   // ---------------------------------------------------------------------------
@@ -1169,13 +1211,21 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
     await _playPreviewSongInternal(song);
   }
 
-  Future<void> _playPreviewSongInternal(Song song) async {
+  Future<void> _playPreviewSongInternal(
+    Song song, {
+    bool autoPlay = true,
+  }) async {
     final streamUrl = song.previewStreamUrl?.trim() ?? '';
     if (streamUrl.isEmpty) {
       NetworkErrorNotifier.show('试听链接不可用');
       return;
     }
     final previewHeaders = song.previewRequestHeaders;
+    if (!autoPlay) {
+      _cancelFade();
+      await _audioPlayer?.pause();
+      await _audioHandler?.pause();
+    }
 
     _downloadProgressSubscription?.cancel();
     _downloadProgressSubscription = null;
@@ -1224,7 +1274,7 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
         maxBitRate: null,
         seekByReloadStream: true,
       );
-      _startPlayback();
+      await _syncPlaybackAfterSourceReady(autoPlay: autoPlay);
       await _applyPendingSeekIfNeeded();
       state = state.copyWith(
         currentQuality: AudioQualityLevel.original,
@@ -1609,6 +1659,198 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
     }
   }
 
+  void _schedulePersistPlaybackSession({bool immediate = false}) {
+    if (!mounted || _isRestoringPlaybackSession) return;
+
+    if (immediate) {
+      _playbackSessionPersistTimer?.cancel();
+      _playbackSessionPersistTimer = null;
+      unawaited(_persistPlaybackSession());
+      return;
+    }
+
+    if (_playbackSessionPersistTimer != null) return;
+    _playbackSessionPersistTimer = Timer(_playbackSessionPersistInterval, () {
+      _playbackSessionPersistTimer = null;
+      unawaited(_persistPlaybackSession());
+    });
+  }
+
+  Map<String, dynamic>? _buildPlaybackSessionPayload() {
+    final queue = state.queue;
+    if (queue.isEmpty) return null;
+
+    var currentIndex = state.currentIndex;
+    final currentSongId = state.currentSong?.id;
+    final hasCurrentIndex = currentIndex >= 0 && currentIndex < queue.length;
+
+    if (currentSongId != null &&
+        (!hasCurrentIndex || queue[currentIndex].id != currentSongId)) {
+      final resolvedIndex = queue.indexWhere(
+        (song) => song.id == currentSongId,
+      );
+      if (resolvedIndex >= 0) {
+        currentIndex = resolvedIndex;
+      }
+    }
+
+    if (currentIndex < 0 || currentIndex >= queue.length) return null;
+
+    final normalizedPosition = _normalizeSeekPosition(state.position);
+    return {
+      'version': 1,
+      'queue': queue.map((song) => song.toJson()).toList(growable: false),
+      'currentIndex': currentIndex,
+      'currentSongId': queue[currentIndex].id,
+      'positionMs': normalizedPosition.inMilliseconds,
+      'isPlaying': state.isPlaying,
+      'updatedAt': DateTime.now().millisecondsSinceEpoch,
+    };
+  }
+
+  Future<void> _persistPlaybackSession() async {
+    if (!mounted ||
+        _isRestoringPlaybackSession ||
+        _isPersistingPlaybackSession) {
+      return;
+    }
+
+    _isPersistingPlaybackSession = true;
+    try {
+      final payload = _buildPlaybackSessionPayload();
+      if (payload == null) {
+        await LocalStorage.clearPlaybackSession();
+        return;
+      }
+      await LocalStorage.savePlaybackSession(payload);
+    } catch (e) {
+      Logger.warnWithTag(
+        _playerLogTag,
+        'failed to persist playback session',
+        e,
+      );
+    } finally {
+      _isPersistingPlaybackSession = false;
+    }
+  }
+
+  Future<void> _restorePlaybackSession() async {
+    if (!mounted) return;
+    var restored = false;
+    _isRestoringPlaybackSession = true;
+
+    try {
+      final session = await LocalStorage.getPlaybackSession();
+      if (session == null) return;
+
+      final queue = _parsePlaybackSessionQueue(session['queue']);
+      if (queue.isEmpty) {
+        await LocalStorage.clearPlaybackSession();
+        return;
+      }
+
+      final preferredIndex = _parseStoredInt(session['currentIndex']) ?? 0;
+      final currentSongId = session['currentSongId']?.toString();
+      final restoredIndex = _resolveRestoredQueueIndex(
+        queue: queue,
+        preferredIndex: preferredIndex,
+        currentSongId: currentSongId,
+      );
+      final storedPositionMs = _parseStoredInt(session['positionMs']) ?? 0;
+      final restoredPosition = Duration(milliseconds: max(0, storedPositionMs));
+      final wasPlaying = session['isPlaying'] == true;
+      Logger.infoWithTag(
+        _playerLogTag,
+        'restoring playback session queue=${queue.length} '
+        'index=$restoredIndex posMs=${restoredPosition.inMilliseconds} '
+        'wasPlaying=$wasPlaying',
+      );
+      await playSong(
+        queue[restoredIndex],
+        queue: queue,
+        index: restoredIndex,
+        autoPlay: false,
+      );
+      if (restoredPosition > Duration.zero) {
+        await seek(restoredPosition);
+      }
+      // 安全策略：恢复会话后始终暂停，避免未确认自动播放出声。
+      await pause();
+
+      Logger.infoWithTag(_playerLogTag, 'playback session restored');
+      restored = true;
+    } catch (e) {
+      Logger.warnWithTag(
+        _playerLogTag,
+        'failed to restore playback session',
+        e,
+      );
+    } finally {
+      _isRestoringPlaybackSession = false;
+    }
+
+    if (restored) {
+      _schedulePersistPlaybackSession(immediate: true);
+    }
+  }
+
+  List<Song> _parsePlaybackSessionQueue(Object? rawQueue) {
+    if (rawQueue is! List) return const [];
+
+    final queue = <Song>[];
+    for (final item in rawQueue) {
+      try {
+        if (item is Map<String, dynamic>) {
+          queue.add(Song.fromJson(item));
+          continue;
+        }
+        if (item is Map) {
+          final mapped = item.map(
+            (key, value) => MapEntry(key.toString(), value),
+          );
+          queue.add(Song.fromJson(mapped));
+        }
+      } catch (e) {
+        Logger.warnWithTag(
+          _playerLogTag,
+          'skip invalid song in playback session',
+          e,
+        );
+      }
+    }
+    return queue;
+  }
+
+  int? _parseStoredInt(Object? value) {
+    if (value is int) return value;
+    if (value is num) return value.toInt();
+    if (value is String) return int.tryParse(value);
+    return null;
+  }
+
+  int _resolveRestoredQueueIndex({
+    required List<Song> queue,
+    required int preferredIndex,
+    required String? currentSongId,
+  }) {
+    if (queue.isEmpty) return 0;
+
+    if (currentSongId != null && currentSongId.isNotEmpty) {
+      if (preferredIndex >= 0 &&
+          preferredIndex < queue.length &&
+          queue[preferredIndex].id == currentSongId) {
+        return preferredIndex;
+      }
+
+      final matched = queue.indexWhere((song) => song.id == currentSongId);
+      if (matched >= 0) return matched;
+    }
+
+    if (preferredIndex < 0) return 0;
+    if (preferredIndex >= queue.length) return queue.length - 1;
+    return preferredIndex;
+  }
+
   void _syncShuffleHistoryBeforeSongChange({
     required Song nextSong,
     required List<Song> nextQueue,
@@ -1957,12 +2199,11 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
     required String songId,
     required String cacheFilePath,
     required String libraryId,
-  }) =>
-      _favoriteHandler.recordMobileCacheSavedBytesForHit(
-        songId: songId,
-        cacheFilePath: cacheFilePath,
-        libraryId: libraryId,
-      );
+  }) => _favoriteHandler.recordMobileCacheSavedBytesForHit(
+    songId: songId,
+    cacheFilePath: cacheFilePath,
+    libraryId: libraryId,
+  );
 
   /// 切换当前歌曲的收藏状态
   Future<void> toggleFavorite() async {
@@ -1986,8 +2227,7 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
       newStarred,
     );
     final currentSong = state.currentSong;
-    final updatedCurrentSong =
-        currentSong != null && currentSong.id == song.id
+    final updatedCurrentSong = currentSong != null && currentSong.id == song.id
         ? currentSong.copyWith(starred: newStarred)
         : currentSong;
 
@@ -1998,7 +2238,6 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
     _favoriteHandler.invalidateFavoriteProviders(albumId: song.albumId);
     return newStarred;
   }
-
 
   Duration _normalizeSeekPosition(Duration position) {
     if (position < Duration.zero) return Duration.zero;
@@ -2448,23 +2687,24 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
     String songId,
     String libraryId,
     AudioQualityLevel quality,
-  ) =>
-      _cacheHandler.registerCacheFromFile(
-        cacheFile,
-        songId,
-        libraryId,
-        quality,
-      );
+  ) => _cacheHandler.registerCacheFromFile(
+    cacheFile,
+    songId,
+    libraryId,
+    quality,
+  );
 
   /// 预缓存队列中下一首歌
   void _preCacheNextSong() => _cacheHandler.preCacheNextSong(
-        state: state,
-        needsTranscoding: _needsTranscoding,
-        seekDbg: _seekDbg,
-      );
+    state: state,
+    needsTranscoding: _needsTranscoding,
+    seekDbg: _seekDbg,
+  );
 
   @override
   void dispose() {
+    _playbackSessionPersistTimer?.cancel();
+    unawaited(_persistPlaybackSession());
     _positionPollTimer?.cancel();
     _fadeTimer?.cancel();
     _downloadProgressSubscription?.cancel();

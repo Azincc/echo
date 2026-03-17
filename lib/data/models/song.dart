@@ -182,7 +182,10 @@ class Song {
       created: json['created'] != null
           ? DateTime.parse(json['created'] as String)
           : null,
-      starred: json['starred'] != null,
+      starred: switch (json['starred']) {
+        bool value => value,
+        _ => json['starred'] != null,
+      },
       discNumber: json['discNumber'] as int?,
       type: json['type'] as String?,
       isPreview: json['isPreview'] as bool? ?? false,

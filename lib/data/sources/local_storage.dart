@@ -11,6 +11,7 @@ class LocalStorage {
   static const String _keyAutoFallback = 'auto_fallback';
   static const String _keyAudioQualitySettings = 'audio_quality_settings';
   static const String _keyPlaybackMode = 'playback_mode';
+  static const String _keyPlaybackSession = 'playback_session_v1';
   static const String _keyThemeMode = 'theme_mode';
   static const String _keyThemeSeedColor = 'theme_seed_color';
   static const String _keyMobileCacheSavedBytesByLibrary =
@@ -145,6 +146,45 @@ class LocalStorage {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_keyPlaybackMode, mode);
     Logger.infoWithTag(_logTag, 'playback mode saved: $mode');
+  }
+
+  /// 保存播放会话（队列 + 索引 + 进度 + 播放状态）
+  static Future<void> savePlaybackSession(Map<String, dynamic> session) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_keyPlaybackSession, jsonEncode(session));
+    Logger.debugWithTag(_logTag, 'playback session saved');
+  }
+
+  /// 读取播放会话
+  static Future<Map<String, dynamic>?> getPlaybackSession() async {
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getString(_keyPlaybackSession);
+    if (raw == null || raw.isEmpty) {
+      Logger.debugWithTag(_logTag, 'playback session not found');
+      return null;
+    }
+
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is Map<String, dynamic>) {
+        return decoded;
+      }
+      if (decoded is Map) {
+        return decoded.map((key, value) => MapEntry(key.toString(), value));
+      }
+      Logger.warnWithTag(_logTag, 'invalid playback session payload type');
+      return null;
+    } catch (e) {
+      Logger.warnWithTag(_logTag, 'failed to parse playback session', e);
+      return null;
+    }
+  }
+
+  /// 清除播放会话
+  static Future<void> clearPlaybackSession() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_keyPlaybackSession);
+    Logger.debugWithTag(_logTag, 'playback session cleared');
   }
 
   /// 读取主题模式（system / light / dark）

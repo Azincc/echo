@@ -145,7 +145,7 @@ class _SongListPageState extends ConsumerState<SongListPage> {
                     song: song,
                     index: index,
                     variant: SongListItemVariant.standard,
-                    coverArtId: shouldLoadCover ? song.coverArt : null,
+                    coverArtId: shouldLoadCover ? song.coverArt : '',
                     onTap: () {
                       final queue = _azSongs.map((e) => e.data).toList();
                       ref

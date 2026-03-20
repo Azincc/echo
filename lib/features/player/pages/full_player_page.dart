@@ -1196,13 +1196,19 @@ class PlaybackControls extends ConsumerWidget {
         : (playerState.loopMode == LoopMode.one
               ? PlaybackMode.repeatOne
               : PlaybackMode.repeatAll);
+    final playbackModeColor = playbackMode == PlaybackMode.repeatAll
+        ? inactiveControlColor
+        : Colors.white;
 
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
         // 播放模式按钮（三态）
         IconButton(
-          icon: Icon(_getPlaybackModeIcon(playbackMode), color: Colors.white),
+          icon: Icon(
+            _getPlaybackModeIcon(playbackMode),
+            color: playbackModeColor,
+          ),
           onPressed: () {
             ref.read(playerProvider.notifier).cyclePlaybackMode();
           },

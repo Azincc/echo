@@ -22,6 +22,8 @@ jobs:
         with:
           channel: "stable"
           flutter-version: ${{ env.FLUTTER_VERSION }}
+          cache: true
+          pub-cache: true
 
       - name: Cache build_runner
         uses: actions/cache@v5

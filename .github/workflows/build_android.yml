@@ -67,6 +67,20 @@ jobs:
       - name: Install dependencies
         run: flutter pub get
 
+      - name: Verify tag matches pubspec version
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          pubspec_version=$(grep '^version:' pubspec.yaml | head -n1 | awk '{print $2}' | cut -d'+' -f1)
+          if [[ -z "$pubspec_version" ]]; then
+            echo "Cannot find version in pubspec.yaml"
+            exit 1
+          fi
+          expected_tag="v${pubspec_version}"
+          if [[ "${GITHUB_REF_NAME}" != "${expected_tag}" ]]; then
+            echo "Tag ${GITHUB_REF_NAME} does not match pubspec version ${pubspec_version}"
+            exit 1
+          fi
+
       - name: Run code generation
         run: dart run build_runner build --delete-conflicting-outputs
 

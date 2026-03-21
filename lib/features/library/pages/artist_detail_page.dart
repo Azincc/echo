@@ -18,6 +18,22 @@ class ArtistDetailPage extends ConsumerWidget {
 
   const ArtistDetailPage({super.key, required this.artistId});
 
+  void _showSongSourceInfo(BuildContext context) {
+    showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('歌曲来源说明'),
+        content: const Text('当前歌手歌曲来源为该歌手作为专辑艺术家的专辑下的所有歌曲，可能出现错漏。'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('知道了'),
+          ),
+        ],
+      ),
+    );
+  }
+
   Future<void> _toggleArtistStarred(
     BuildContext context,
     WidgetRef ref,
@@ -52,7 +68,16 @@ class ArtistDetailPage extends ConsumerWidget {
     final artistDetailAsync = ref.watch(artistDetailProvider(artistId));
 
     return Scaffold(
-      appBar: AppBar(title: const Text('歌手详情')),
+      appBar: AppBar(
+        title: const Text('歌手详情'),
+        actions: [
+          IconButton(
+            tooltip: '歌曲来源说明',
+            onPressed: () => _showSongSourceInfo(context),
+            icon: const Icon(Icons.info_outline),
+          ),
+        ],
+      ),
       body: artistDetailAsync.when(
         data: (artistDetail) {
           if (artistDetail == null) {
@@ -341,6 +366,7 @@ class _ArtistSongsTabState extends ConsumerState<_ArtistSongsTab> {
                   return Padding(
                     padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
                     child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
                         Row(
                           children: [
@@ -373,6 +399,9 @@ class _ArtistSongsTabState extends ConsumerState<_ArtistSongsTab> {
                             song: song,
                             index: index,
                             variant: SongListItemVariant.standard,
+                            contentPadding: const EdgeInsets.symmetric(
+                              vertical: 8,
+                            ),
                             onTap: () {
                               ref
                                   .read(playerProvider.notifier)

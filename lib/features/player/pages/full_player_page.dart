@@ -1196,9 +1196,6 @@ class PlaybackControls extends ConsumerWidget {
         : (playerState.loopMode == LoopMode.one
               ? PlaybackMode.repeatOne
               : PlaybackMode.repeatAll);
-    final playbackModeColor = playbackMode == PlaybackMode.repeatAll
-        ? inactiveControlColor
-        : Colors.white;
 
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
@@ -1207,7 +1204,7 @@ class PlaybackControls extends ConsumerWidget {
         IconButton(
           icon: Icon(
             _getPlaybackModeIcon(playbackMode),
-            color: playbackModeColor,
+            color: inactiveControlColor,
           ),
           onPressed: () {
             ref.read(playerProvider.notifier).cyclePlaybackMode();

@@ -7,6 +7,7 @@ import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 
 import '../../../data/models/song.dart';
 import '../../../providers/music_provider.dart';
+import '../../../providers/navigation_provider.dart';
 import '../../../providers/player_provider.dart';
 import '../../../utils/az_item.dart';
 import '../../../utils/pinyin_helper.dart';
@@ -14,6 +15,7 @@ import '../../player/widgets/song_options_sheet.dart';
 import '../../../widgets/error_placeholder.dart';
 import '../../../widgets/song_list_item.dart';
 import '../../../widgets/skeleton_templates.dart';
+import '../../../widgets/visible_remote_retry_scope.dart';
 
 class SongListPage extends ConsumerStatefulWidget {
   const SongListPage({super.key});
@@ -114,78 +116,85 @@ class _SongListPageState extends ConsumerState<SongListPage> {
     final songsAsync = ref.watch(allSongsProvider);
     final loadFailed = ref.watch(allSongsLoadFailedProvider);
 
-    return Scaffold(
-      appBar: AppBar(title: const Text('所有歌曲')),
-      body: songsAsync.when(
-        data: (songs) {
-          if (songs.isEmpty) {
-            return Center(child: Text(loadFailed ? '网络异常，歌曲加载失败' : '暂无歌曲'));
-          }
+    return VisibleRemoteRetryScope(
+      branchIndex: libraryBranchIndex,
+      debugLabel: 'song_list_page',
+      shouldRetry: (ref) => loadFailed || songsAsync.hasError,
+      onRetry: (ref) => ref.invalidate(allSongsProvider),
+      child: Scaffold(
+        appBar: AppBar(title: const Text('所有歌曲')),
+        body: songsAsync.when(
+          data: (songs) {
+            if (songs.isEmpty) {
+              return Center(child: Text(loadFailed ? '网络异常，歌曲加载失败' : '暂无歌曲'));
+            }
 
-          final signature = _buildSongsSignature(songs);
-          if (signature != _songsSignature || _azSongs.length != songs.length) {
-            _processSongs(songs, signature);
-          }
+            final signature = _buildSongsSignature(songs);
+            if (signature != _songsSignature ||
+                _azSongs.length != songs.length) {
+              _processSongs(songs, signature);
+            }
 
-          return Align(
-            alignment: Alignment.topCenter,
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 1400),
-              child: AzListView(
-                data: _azSongs,
-                itemCount: _azSongs.length,
-                itemPositionsListener: _itemPositionsListener,
-                itemBuilder: (context, index) {
-                  final item = _azSongs[index];
-                  final song = item.data;
-                  final shouldLoadCover =
-                      index >= _coverLoadStart && index <= _coverLoadEnd;
+            return Align(
+              alignment: Alignment.topCenter,
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 1400),
+                child: AzListView(
+                  data: _azSongs,
+                  itemCount: _azSongs.length,
+                  itemPositionsListener: _itemPositionsListener,
+                  itemBuilder: (context, index) {
+                    final item = _azSongs[index];
+                    final song = item.data;
+                    final shouldLoadCover =
+                        index >= _coverLoadStart && index <= _coverLoadEnd;
 
-                  return SongListItem(
-                    song: song,
-                    index: index,
-                    variant: SongListItemVariant.standard,
-                    coverArtId: shouldLoadCover ? song.coverArt : null,
-                    onTap: () {
-                      final queue = _azSongs.map((e) => e.data).toList();
-                      ref
-                          .read(playerProvider.notifier)
-                          .playQueue(queue, startIndex: index);
-                    },
-                    onLongPress: () {
-                      showSongOptionsSheet(context: context, song: song);
-                    },
-                  );
-                },
-                // Index Bar setup
-                indexBarData: SuspensionUtil.getTagIndexList(_azSongs),
-                indexBarOptions: IndexBarOptions(
-                  needRebuild: true,
-                  ignoreDragCancel: true,
-                  downTextStyle: TextStyle(fontSize: 12, color: Colors.white),
-                  downItemDecoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: Colors.green,
+                    return SongListItem(
+                      song: song,
+                      index: index,
+                      variant: SongListItemVariant.standard,
+                      coverArtId: shouldLoadCover ? song.coverArt : null,
+                      onTap: () {
+                        final queue = _azSongs.map((e) => e.data).toList();
+                        ref
+                            .read(playerProvider.notifier)
+                            .playQueue(queue, startIndex: index);
+                      },
+                      onLongPress: () {
+                        showSongOptionsSheet(context: context, song: song);
+                      },
+                    );
+                  },
+                  // Index Bar setup
+                  indexBarData: SuspensionUtil.getTagIndexList(_azSongs),
+                  indexBarOptions: IndexBarOptions(
+                    needRebuild: true,
+                    ignoreDragCancel: true,
+                    downTextStyle: TextStyle(fontSize: 12, color: Colors.white),
+                    downItemDecoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: Colors.green,
+                    ),
+                    indexHintWidth: 120 / 2,
+                    indexHintHeight: 100 / 2,
+                    indexHintDecoration: BoxDecoration(
+                      image: null,
+                      color: Colors.grey[700],
+                      shape: BoxShape.rectangle,
+                      borderRadius: BorderRadius.circular(5.0),
+                    ),
+                    indexHintAlignment: Alignment.centerRight,
+                    indexHintChildAlignment: Alignment(-0.25, 0.0),
+                    indexHintOffset: Offset(-20, 0),
                   ),
-                  indexHintWidth: 120 / 2,
-                  indexHintHeight: 100 / 2,
-                  indexHintDecoration: BoxDecoration(
-                    image: null,
-                    color: Colors.grey[700],
-                    shape: BoxShape.rectangle,
-                    borderRadius: BorderRadius.circular(5.0),
-                  ),
-                  indexHintAlignment: Alignment.centerRight,
-                  indexHintChildAlignment: Alignment(-0.25, 0.0),
-                  indexHintOffset: Offset(-20, 0),
                 ),
               ),
-            ),
-          );
-        },
-        loading: () => const ListTileSkeleton(count: 10),
-        error: (err, stack) =>
-            const ErrorPlaceholder(message: '歌曲加载失败，请检查网络后重试'),
+            );
+          },
+          loading: () => const ListTileSkeleton(count: 10),
+          error: (err, stack) =>
+              const ErrorPlaceholder(message: '歌曲加载失败，请检查网络后重试'),
+        ),
       ),
     );
   }

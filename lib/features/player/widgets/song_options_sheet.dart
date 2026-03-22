@@ -3,9 +3,9 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:fluttertoast/fluttertoast.dart';
 
 import '../../../core/utils/network_error_notifier.dart';
+import '../../../core/utils/toast_notifier.dart';
 import '../../../data/models/song.dart';
 import '../../../providers/api_provider.dart';
 import '../../../providers/auth_provider.dart';
@@ -199,7 +199,7 @@ class _SongOptionsSheet extends ConsumerWidget {
                 ),
                 onLongPress: () {
                   Clipboard.setData(ClipboardData(text: song.title));
-                  Fluttertoast.showToast(msg: '已复制歌曲名: ${song.title}');
+                  ToastNotifier.show('已复制歌曲名: ${song.title}');
                 },
               ),
               const Divider(height: 1),
@@ -291,7 +291,7 @@ class _SongOptionsSheet extends ConsumerWidget {
                       },
                 onLongPress: () {
                   Clipboard.setData(ClipboardData(text: artistName));
-                  Fluttertoast.showToast(msg: '已复制歌手: $artistName');
+                  ToastNotifier.show('已复制歌手: $artistName');
                 },
               ),
               _buildActionTile(
@@ -313,7 +313,7 @@ class _SongOptionsSheet extends ConsumerWidget {
                       },
                 onLongPress: () {
                   Clipboard.setData(ClipboardData(text: albumName));
-                  Fluttertoast.showToast(msg: '已复制专辑: $albumName');
+                  ToastNotifier.show('已复制专辑: $albumName');
                 },
               ),
               if (extraActions.isNotEmpty) const Divider(height: 1),

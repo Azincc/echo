@@ -14,6 +14,7 @@ final currentSongPaletteProvider =
     FutureProvider.autoDispose<PaletteGenerator?>((ref) async {
       // 仅监听 currentSong 变化，不监听 position 等高频更新
       final song = ref.watch(playerProvider.select((s) => s.currentSong));
+      ref.watch(activeAddressProvider);
 
       if (song == null) return null;
 
@@ -28,6 +29,7 @@ final currentSongPaletteProvider =
           final url = ref
               .read(subsonicApiClientProvider)
               .getCoverArtUrl(coverArtId, size: 300);
+          if (url.isEmpty) return null;
           imageProvider = CachedNetworkImageProvider(url);
         }
 

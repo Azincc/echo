@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../data/models/album.dart';
 import '../../../data/models/song.dart';
 import '../../../providers/music_provider.dart';
+import '../../../providers/navigation_provider.dart';
 import '../../../providers/player_provider.dart';
 import '../../../widgets/cover_art_image.dart';
 import '../widgets/album_options_sheet.dart';
@@ -11,6 +12,7 @@ import 'album_detail_page.dart';
 import '../../../widgets/error_placeholder.dart';
 import '../../../widgets/song_list_item.dart';
 import '../../../widgets/skeleton_templates.dart';
+import '../../../widgets/visible_remote_retry_scope.dart';
 
 /// 歌手详情页
 class ArtistDetailPage extends ConsumerWidget {
@@ -66,137 +68,161 @@ class ArtistDetailPage extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final artistDetailAsync = ref.watch(artistDetailProvider(artistId));
+    final loadFailed = ref.watch(artistDetailLoadFailedProvider(artistId));
+    final currentArtistName = artistDetailAsync.valueOrNull?.artist.name;
+    final topSongsLoadFailed = currentArtistName == null
+        ? false
+        : ref.watch(topSongsByArtistLoadFailedProvider(currentArtistName));
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('歌手详情'),
-        actions: [
-          IconButton(
-            tooltip: '歌曲来源说明',
-            onPressed: () => _showSongSourceInfo(context),
-            icon: const Icon(Icons.info_outline),
-          ),
-        ],
-      ),
-      body: artistDetailAsync.when(
-        data: (artistDetail) {
-          if (artistDetail == null) {
-            return const Center(child: Text('歌手不存在'));
-          }
+    return VisibleRemoteRetryScope(
+      branchIndex: libraryBranchIndex,
+      debugLabel: 'artist_detail_page',
+      shouldRetry: (ref) =>
+          loadFailed || artistDetailAsync.hasError || topSongsLoadFailed,
+      onRetry: (ref) {
+        ref.invalidate(artistDetailProvider(artistId));
+        if (currentArtistName != null && currentArtistName.isNotEmpty) {
+          ref.invalidate(topSongsByArtistProvider(currentArtistName));
+        }
+      },
+      child: Scaffold(
+        appBar: AppBar(
+          title: const Text('歌手详情'),
+          actions: [
+            IconButton(
+              tooltip: '歌曲来源说明',
+              onPressed: () => _showSongSourceInfo(context),
+              icon: const Icon(Icons.info_outline),
+            ),
+          ],
+        ),
+        body: artistDetailAsync.when(
+          data: (artistDetail) {
+            if (artistDetail == null) {
+              return const Center(child: Text('歌手不存在'));
+            }
 
-          final artist = artistDetail.artist;
-          final albums = artistDetail.albums;
-          final songs = artistDetail.songs;
+            final artist = artistDetail.artist;
+            final albums = artistDetail.albums;
+            final songs = artistDetail.songs;
 
-          return Align(
-            alignment: Alignment.topCenter,
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 1400),
-              child: DefaultTabController(
-                length: 2,
-                child: NestedScrollView(
-                  headerSliverBuilder: (context, innerBoxIsScrolled) {
-                    return [
-                      // 歌手头像 + 名称 + 统计信息（可滚动消失）
-                      SliverToBoxAdapter(
-                        child: Padding(
-                          padding: const EdgeInsets.all(16),
-                          child: Column(
-                            children: [
-                              CircleAvatar(
-                                radius: 60,
-                                child: CoverArtImage(
-                                  coverArtId: artist.coverArt,
-                                  size: 120,
+            return Align(
+              alignment: Alignment.topCenter,
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 1400),
+                child: DefaultTabController(
+                  length: 2,
+                  child: NestedScrollView(
+                    headerSliverBuilder: (context, innerBoxIsScrolled) {
+                      return [
+                        // 歌手头像 + 名称 + 统计信息（可滚动消失）
+                        SliverToBoxAdapter(
+                          child: Padding(
+                            padding: const EdgeInsets.all(16),
+                            child: Column(
+                              children: [
+                                CircleAvatar(
+                                  radius: 60,
+                                  child: CoverArtImage(
+                                    coverArtId: artist.coverArt,
+                                    size: 120,
+                                  ),
                                 ),
-                              ),
-                              const SizedBox(height: 16),
-                              Row(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Flexible(
-                                    child: Text(
-                                      artist.name,
-                                      textAlign: TextAlign.center,
-                                      style: Theme.of(context)
-                                          .textTheme
-                                          .headlineSmall
-                                          ?.copyWith(
-                                            fontWeight: FontWeight.bold,
-                                          ),
+                                const SizedBox(height: 16),
+                                Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Flexible(
+                                      child: Text(
+                                        artist.name,
+                                        textAlign: TextAlign.center,
+                                        style: Theme.of(context)
+                                            .textTheme
+                                            .headlineSmall
+                                            ?.copyWith(
+                                              fontWeight: FontWeight.bold,
+                                            ),
+                                      ),
                                     ),
-                                  ),
-                                  IconButton(
-                                    tooltip: artist.starred ? '取消收藏歌手' : '收藏歌手',
-                                    onPressed: () => _toggleArtistStarred(
-                                      context,
-                                      ref,
-                                      artist.id,
-                                      artist.starred,
-                                    ),
-                                    icon: Icon(
-                                      artist.starred
-                                          ? Icons.favorite
-                                          : Icons.favorite_border,
-                                      color: artist.starred ? Colors.red : null,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              Text(
-                                '${songs.length} 首歌曲 · ${albums.length} 张专辑',
-                                style: Theme.of(context).textTheme.bodyMedium
-                                    ?.copyWith(
-                                      color: Theme.of(
+                                    IconButton(
+                                      tooltip: artist.starred
+                                          ? '取消收藏歌手'
+                                          : '收藏歌手',
+                                      onPressed: () => _toggleArtistStarred(
                                         context,
-                                      ).colorScheme.onSurfaceVariant,
+                                        ref,
+                                        artist.id,
+                                        artist.starred,
+                                      ),
+                                      icon: Icon(
+                                        artist.starred
+                                            ? Icons.favorite
+                                            : Icons.favorite_border,
+                                        color: artist.starred
+                                            ? Colors.red
+                                            : null,
+                                      ),
                                     ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                      // TabBar（吸顶固定）
-                      SliverOverlapAbsorber(
-                        handle: NestedScrollView.sliverOverlapAbsorberHandleFor(
-                          context,
-                        ),
-                        sliver: SliverPersistentHeader(
-                          pinned: true,
-                          delegate: _SliverTabBarDelegate(
-                            TabBar(
-                              tabs: const [
-                                Tab(text: '歌曲'),
-                                Tab(text: '专辑'),
+                                  ],
+                                ),
+                                Text(
+                                  '${songs.length} 首歌曲 · ${albums.length} 张专辑',
+                                  style: Theme.of(context).textTheme.bodyMedium
+                                      ?.copyWith(
+                                        color: Theme.of(
+                                          context,
+                                        ).colorScheme.onSurfaceVariant,
+                                      ),
+                                ),
                               ],
-                              labelColor: Theme.of(context).colorScheme.primary,
-                              unselectedLabelColor: Theme.of(
-                                context,
-                              ).colorScheme.onSurface,
-                              indicatorColor: Theme.of(
-                                context,
-                              ).colorScheme.primary,
                             ),
-                            color: Theme.of(context).scaffoldBackgroundColor,
                           ),
                         ),
-                      ),
-                    ];
-                  },
-                  body: TabBarView(
-                    children: [
-                      _buildSongsTab(artist.name, songs),
-                      _buildAlbumsTab(context, ref, albums),
-                    ],
+                        // TabBar（吸顶固定）
+                        SliverOverlapAbsorber(
+                          handle:
+                              NestedScrollView.sliverOverlapAbsorberHandleFor(
+                                context,
+                              ),
+                          sliver: SliverPersistentHeader(
+                            pinned: true,
+                            delegate: _SliverTabBarDelegate(
+                              TabBar(
+                                tabs: const [
+                                  Tab(text: '歌曲'),
+                                  Tab(text: '专辑'),
+                                ],
+                                labelColor: Theme.of(
+                                  context,
+                                ).colorScheme.primary,
+                                unselectedLabelColor: Theme.of(
+                                  context,
+                                ).colorScheme.onSurface,
+                                indicatorColor: Theme.of(
+                                  context,
+                                ).colorScheme.primary,
+                              ),
+                              color: Theme.of(context).scaffoldBackgroundColor,
+                            ),
+                          ),
+                        ),
+                      ];
+                    },
+                    body: TabBarView(
+                      children: [
+                        _buildSongsTab(artist.name, songs),
+                        _buildAlbumsTab(context, ref, albums),
+                      ],
+                    ),
                   ),
                 ),
               ),
-            ),
-          );
-        },
-        loading: () => const ArtistDetailSkeleton(),
-        error: (error, stack) =>
-            const ErrorPlaceholder(message: '歌手详情加载失败，请检查网络后重试'),
+            );
+          },
+          loading: () => const ArtistDetailSkeleton(),
+          error: (error, stack) =>
+              const ErrorPlaceholder(message: '歌手详情加载失败，请检查网络后重试'),
+        ),
       ),
     );
   }

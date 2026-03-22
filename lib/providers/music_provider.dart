@@ -34,6 +34,12 @@ final artistDetailLoadFailedProvider = StateProvider.family<bool, String>(
   (ref, artistId) => false,
 );
 final starredLoadFailedProvider = StateProvider<bool>((ref) => false);
+final topSongsByArtistLoadFailedProvider = StateProvider.family<bool, String>(
+  (ref, artistName) => false,
+);
+final searchLoadFailedProvider = StateProvider.family<bool, String>(
+  (ref, query) => false,
+);
 
 // ---------------------------------------------------------------------------
 // 通用辅助：远程获取 + 缓存回退
@@ -299,13 +305,22 @@ final topSongsByArtistProvider = FutureProvider.autoDispose
 
       try {
         await ref.read(ensureActiveAddressProvider.future);
-        return await repository.getTopSongs(artistName);
+        final songs = await repository.getTopSongs(artistName);
+        ref
+                .read(topSongsByArtistLoadFailedProvider(artistName).notifier)
+                .state =
+            false;
+        return songs;
       } catch (e) {
         Logger.warnWithTag(
           _musicLogTag,
           'topSongs failed: artist=$artistName',
           e,
         );
+        ref
+                .read(topSongsByArtistLoadFailedProvider(artistName).notifier)
+                .state =
+            true;
         return [];
       }
     });
@@ -317,19 +332,25 @@ final searchProvider = FutureProvider.autoDispose.family<SearchResult, String>((
 ) async {
   final repository = ref.watch(musicRepositoryProvider);
   if (query.isEmpty || repository == null) {
+    if (query.isNotEmpty) {
+      ref.read(searchLoadFailedProvider(query).notifier).state = false;
+    }
     return SearchResult(artists: [], albums: [], songs: []);
   }
   try {
     await ref.read(ensureActiveAddressProvider.future);
-    return await repository.search(
+    final result = await repository.search(
       query: query,
       artistCount: 10,
       albumCount: 20,
       songCount: 30,
     );
+    ref.read(searchLoadFailedProvider(query).notifier).state = false;
+    return result;
   } catch (e) {
     Logger.warnWithTag(_musicLogTag, 'search failed: query=$query', e);
     NetworkErrorNotifier.show('网络异常，搜索失败');
+    ref.read(searchLoadFailedProvider(query).notifier).state = true;
     return SearchResult(artists: [], albums: [], songs: []);
   }
 });

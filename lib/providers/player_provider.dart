@@ -12,6 +12,7 @@ import '../data/sources/subsonic_api_client.dart';
 import '../data/sources/local_storage.dart';
 import '../data/repositories/music_repository.dart';
 
+import '../core/network/connectivity_monitor.dart';
 import '../core/utils/logger.dart';
 import '../core/utils/network_error_notifier.dart';
 import '../core/services/audio_handler_service.dart';
@@ -51,6 +52,7 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
   AudioPlayer? _audioPlayer;
   EchoAudioHandler? _audioHandler;
   StreamSubscription? _downloadProgressSubscription;
+  StreamSubscription<NetworkType>? _networkTypeSubscription;
   final Random _random = Random();
   final List<ShuffleHistoryEntry> _shuffleBackHistory = <ShuffleHistoryEntry>[];
   final List<ShuffleHistoryEntry> _shuffleForwardHistory =
@@ -83,6 +85,12 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
   Timer? _playbackSessionPersistTimer;
   bool _isPersistingPlaybackSession = false;
   bool _isRestoringPlaybackSession = false;
+  NetworkType _lastObservedNetworkType = NetworkType.none;
+  bool _retryCurrentPlaybackOnReconnect = false;
+  bool _retryingCurrentPlayback = false;
+  String? _pendingRetrySongId;
+  bool _pendingRetryIsPreview = false;
+  bool _pendingRetryAutoPlay = true;
 
   // ── Handlers ──────────────────────────────────────────────────────────────
   late final FavoriteScrobbleHandler _favoriteHandler;
@@ -98,6 +106,7 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
   PlayerNotifier(this._ref) : super(PlayerState()) {
     _favoriteHandler = FavoriteScrobbleHandler(_ref);
     _cacheHandler = CacheManagerHandler(_ref);
+    _initConnectivityRetryHandling();
     _init();
   }
 
@@ -299,6 +308,135 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
     await _restorePlaybackSession();
   }
 
+  void _initConnectivityRetryHandling() {
+    final connectivityMonitor = _ref.read(connectivityMonitorProvider);
+    _lastObservedNetworkType = connectivityMonitor.currentNetworkType;
+    _networkTypeSubscription?.cancel();
+    _networkTypeSubscription = connectivityMonitor.networkTypeStream.listen(
+      (networkType) {
+        final previousType = _lastObservedNetworkType;
+        _lastObservedNetworkType = networkType;
+        if (networkType == NetworkType.none || previousType == networkType) {
+          return;
+        }
+        unawaited(
+          _retryCurrentPlaybackIfNeeded(
+            networkType: networkType,
+            previousType: previousType,
+          ),
+        );
+      },
+      onError: (Object error, StackTrace stackTrace) {
+        Logger.warnWithTag(
+          _playerLogTag,
+          'connectivity retry listener error',
+          error,
+        );
+      },
+    );
+  }
+
+  void _scheduleCurrentPlaybackRetry({
+    required Song song,
+    required bool isPreview,
+    required bool autoPlay,
+  }) {
+    _retryCurrentPlaybackOnReconnect = true;
+    _pendingRetrySongId = song.id;
+    _pendingRetryIsPreview = isPreview;
+    _pendingRetryAutoPlay = autoPlay;
+    _playDbg(
+      'schedule reconnect retry song=${song.id} preview=$isPreview '
+      'autoPlay=$autoPlay network=$_lastObservedNetworkType',
+    );
+  }
+
+  void _clearCurrentPlaybackRetry({
+    String? reason,
+    bool preserveRetrying = false,
+  }) {
+    final hadRetryState =
+        _retryCurrentPlaybackOnReconnect ||
+        _retryingCurrentPlayback ||
+        _pendingRetrySongId != null;
+    if (hadRetryState && reason != null) {
+      _playDbg(
+        'clear reconnect retry reason=$reason '
+        'song=$_pendingRetrySongId retrying=$_retryingCurrentPlayback',
+      );
+    }
+    _retryCurrentPlaybackOnReconnect = false;
+    _pendingRetrySongId = null;
+    _pendingRetryIsPreview = false;
+    _pendingRetryAutoPlay = true;
+    if (!preserveRetrying) {
+      _retryingCurrentPlayback = false;
+    }
+  }
+
+  Future<void> _retryCurrentPlaybackIfNeeded({
+    required NetworkType networkType,
+    required NetworkType previousType,
+  }) async {
+    if (!_retryCurrentPlaybackOnReconnect || _retryingCurrentPlayback) {
+      return;
+    }
+
+    final song = state.currentSong;
+    if (song == null) {
+      _clearCurrentPlaybackRetry(reason: 'no_current_song');
+      return;
+    }
+
+    if (_pendingRetrySongId != null && song.id != _pendingRetrySongId) {
+      _clearCurrentPlaybackRetry(reason: 'current_song_changed');
+      return;
+    }
+
+    _retryingCurrentPlayback = true;
+    final retryAutoPlay = _pendingRetryAutoPlay;
+    final retryPreview = _pendingRetryIsPreview || song.isPreview;
+    _playDbg(
+      'retry current playback on connectivity change '
+      '$previousType->$networkType song=${song.id} preview=$retryPreview',
+    );
+
+    try {
+      if (retryPreview) {
+        await _playPreviewSongInternal(song, autoPlay: retryAutoPlay);
+        return;
+      }
+
+      final retryQueue = state.queue.isEmpty ? [song] : state.queue;
+      var retryIndex = state.currentIndex;
+      final currentIndexMatchesSong =
+          retryIndex >= 0 &&
+          retryIndex < retryQueue.length &&
+          retryQueue[retryIndex].id == song.id;
+      if (!currentIndexMatchesSong) {
+        final matchedIndex = retryQueue.indexWhere(
+          (item) => item.id == song.id,
+        );
+        retryIndex = matchedIndex >= 0 ? matchedIndex : 0;
+      }
+
+      await playSong(
+        song,
+        queue: retryQueue,
+        index: retryIndex,
+        autoPlay: retryAutoPlay,
+      );
+    } catch (e) {
+      Logger.warnWithTag(
+        _playerLogTag,
+        'reconnect retry failed for current playback',
+        e,
+      );
+    } finally {
+      _retryingCurrentPlayback = false;
+    }
+  }
+
   /// 播放单曲
   Future<void> playSong(
     Song song, {
@@ -324,6 +462,10 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
     );
 
     final debugSession = ++_playDebugSession;
+    _clearCurrentPlaybackRetry(
+      reason: 'play_song_started',
+      preserveRetrying: _retryingCurrentPlayback,
+    );
     try {
       _seekDbg(
         'playSong start song=${song.id} title="${song.title}" '
@@ -374,11 +516,9 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
         currentBitRateKbps: 0,
       );
 
-      // 异步获取完整歌曲元数据（补充位深/采样率等字段）
-      unawaited(_enrichSongMetadata(song.id, debugSession));
-
       // 更新通知栏媒体信息
       _updateMediaItem(song);
+      _scheduleSongRemoteRefresh(song, debugSession);
 
       // 获取当前音质设置
       final effectiveQuality = _ref.read(effectiveQualityProvider);
@@ -418,6 +558,7 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
           ),
           bufferedPosition: initialDuration,
         );
+        _clearCurrentPlaybackRetry(reason: 'playback_ready_downloaded');
         if (autoPlay) {
           await _scrobble(song.id, submission: false);
           _preCacheNextSong();
@@ -457,6 +598,7 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
           ),
           bufferedPosition: initialDuration,
         );
+        _clearCurrentPlaybackRetry(reason: 'playback_ready_cached');
         if (autoPlay) {
           await _scrobble(song.id, submission: false);
           unawaited(
@@ -486,8 +628,31 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
         maxBitRate = effectiveQuality.maxBitRate;
       }
 
-      final streamUrl = _apiClient.getStreamUrl(
+      final activeAddress = await _ensureActiveAddressForPlayback(
+        session: debugSession,
+        reason: 'stream_playback',
+      );
+      if (_playDebugSession != debugSession) {
+        _playDbg(
+          'sid=$debugSession abandoned while waiting for active address '
+          '(current=$_playDebugSession)',
+        );
+        return;
+      }
+      if (activeAddress == null) {
+        _scheduleCurrentPlaybackRetry(
+          song: song,
+          isPreview: false,
+          autoPlay: autoPlay,
+        );
+        NetworkErrorNotifier.show('网络异常，当前无可用线路');
+        return;
+      }
+
+      final streamUrl = _buildStreamUrlOrThrow(
         song.id,
+        session: debugSession,
+        source: 'primary_stream',
         format: transcodeFormat,
         maxBitRate: maxBitRate,
       );
@@ -725,6 +890,8 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
         );
       }
 
+      _clearCurrentPlaybackRetry(reason: 'playback_ready_stream');
+
       // 上报"正在播放"
       if (autoPlay) {
         await _scrobble(song.id, submission: false);
@@ -763,6 +930,11 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
 
       final hasAvailableRoute = await _refreshRoutesAndCheckAvailability();
       if (!hasAvailableRoute) {
+        _scheduleCurrentPlaybackRetry(
+          song: song,
+          isPreview: false,
+          autoPlay: autoPlay,
+        );
         NetworkErrorNotifier.show('网络异常，当前无可用线路');
         return;
       }
@@ -812,8 +984,10 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
       final authState = _ref.read(authStateProvider);
       final libraryId = authState.currentLibrary?.id ?? '';
       final cacheService = _ref.read(audioCacheServiceProvider);
-      final streamUrl = _apiClient.getStreamUrl(
+      final streamUrl = _buildStreamUrlOrThrow(
         song.id,
+        session: sid,
+        source: 'transcoding_retry',
         format: 'mp3', // 转码为 MP3
         maxBitRate: 320,
       );
@@ -915,6 +1089,7 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
           maxBitRate: 320,
         ),
       );
+      _clearCurrentPlaybackRetry(reason: 'playback_ready_transcoding');
 
       // 上报"正在播放"
       if (autoPlay) {
@@ -923,7 +1098,19 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
     } catch (e) {
       Logger.error('Failed to play song even with transcoding', e);
       final hasAvailableRoute = await _refreshRoutesAndCheckAvailability();
+      if (debugSession != null && _playDebugSession != debugSession) {
+        _playDbg(
+          'sid=$sid transcoding retry abandoned after route refresh '
+          '(current=$_playDebugSession)',
+        );
+        return;
+      }
       if (!hasAvailableRoute) {
+        _scheduleCurrentPlaybackRetry(
+          song: song,
+          isPreview: false,
+          autoPlay: autoPlay,
+        );
         NetworkErrorNotifier.show('网络异常，当前无可用线路');
       }
     }
@@ -1017,6 +1204,109 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
     }
   }
 
+  void _scheduleSongRemoteRefresh(Song song, int session) {
+    unawaited(() async {
+      final activeAddress = await _ensureActiveAddressForPlayback(
+        session: session,
+        reason: 'song_remote_refresh',
+        logFailure: false,
+      );
+      if (activeAddress == null ||
+          !mounted ||
+          _playDebugSession != session ||
+          state.currentSong?.id != song.id) {
+        return;
+      }
+      _updateMediaItem(song);
+      await _enrichSongMetadata(song.id, session);
+    }());
+  }
+
+  ServerAddress? _syncImmediateActiveAddress({
+    required int session,
+    required String reason,
+  }) {
+    final pool = _ref.read(addressPoolProvider);
+    final active = pool.activeAddress ?? _ref.read(activeAddressProvider);
+    if (active == null) return null;
+
+    final dio = _apiClient.dio;
+    if (dio.options.baseUrl != active.url) {
+      dio.options.baseUrl = active.url;
+      Logger.infoWithTag('API', 'switched base URL to: ${active.url}');
+    }
+    _playDbg(
+      'sid=$session active_address_ready '
+      'reason=$reason label=${active.label} url=${active.url}',
+    );
+    return active;
+  }
+
+  Future<ServerAddress?> _ensureActiveAddressForPlayback({
+    required int session,
+    required String reason,
+    bool logFailure = true,
+  }) async {
+    final immediate = _syncImmediateActiveAddress(
+      session: session,
+      reason: reason,
+    );
+    if (immediate != null) return immediate;
+
+    _playDbg('sid=$session active_address_wait start reason=$reason');
+    try {
+      final ensured = await _ref.read(ensureActiveAddressProvider.future);
+      final dio = _apiClient.dio;
+      if (dio.options.baseUrl != ensured.url) {
+        dio.options.baseUrl = ensured.url;
+        Logger.infoWithTag('API', 'switched base URL to: ${ensured.url}');
+      }
+      _playDbg(
+        'sid=$session active_address_ready '
+        'reason=$reason label=${ensured.label} url=${ensured.url}',
+      );
+      return ensured;
+    } catch (e) {
+      if (logFailure) {
+        Logger.warnWithTag(
+          _playerLogTag,
+          'failed to ensure active address for $reason',
+          e,
+        );
+      }
+      _playDbg(
+        'sid=$session active_address_wait failed '
+        'reason=$reason err=$e',
+      );
+      return null;
+    }
+  }
+
+  String _buildStreamUrlOrThrow(
+    String songId, {
+    required int session,
+    required String source,
+    int? maxBitRate,
+    String? format,
+    int? timeOffset,
+  }) {
+    final streamUrl = _apiClient.getStreamUrl(
+      songId,
+      maxBitRate: maxBitRate,
+      format: format,
+      timeOffset: timeOffset,
+    );
+    if (streamUrl.isEmpty) {
+      final baseUrl = _apiClient.dio.options.baseUrl;
+      _playDbg(
+        'sid=$session $source stream_url_empty '
+        'baseUrl=${baseUrl.isEmpty ? 'none' : baseUrl}',
+      );
+      throw StateError('No active server address available for stream URL');
+    }
+    return streamUrl;
+  }
+
   /// 更新通知栏媒体信息
   void _updateMediaItem(Song song) {
     if (_audioHandler == null) return;
@@ -1028,6 +1318,7 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
         : (song.coverArt != null
               ? _apiClient.getCoverArtUrl(song.coverArt!, size: 300)
               : null);
+    final safeCoverArtUrl = coverArtUrl?.trim();
 
     final mediaItem = MediaItem(
       id: song.id,
@@ -1037,7 +1328,9 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
       duration: song.duration != null
           ? Duration(seconds: song.duration!)
           : null,
-      artUri: coverArtUrl != null ? Uri.parse(coverArtUrl) : null,
+      artUri: safeCoverArtUrl != null && safeCoverArtUrl.isNotEmpty
+          ? Uri.parse(safeCoverArtUrl)
+          : null,
     );
 
     _audioHandler?.updateMediaItem(mediaItem);
@@ -1215,6 +1508,11 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
     Song song, {
     bool autoPlay = true,
   }) async {
+    final debugSession = ++_playDebugSession;
+    _clearCurrentPlaybackRetry(
+      reason: 'play_preview_started',
+      preserveRetrying: _retryingCurrentPlayback,
+    );
     final streamUrl = song.previewStreamUrl?.trim() ?? '';
     if (streamUrl.isEmpty) {
       NetworkErrorNotifier.show('试听链接不可用');
@@ -1262,7 +1560,8 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
 
     try {
       _playDbg(
-        'preview setUrl song=${song.id} url=${_summarizeStreamUrl(streamUrl)} '
+        'sid=$debugSession preview setUrl song=${song.id} '
+        'url=${_summarizeStreamUrl(streamUrl)} '
         'headers=${previewHeaders.keys.join(",")}',
       );
       await _audioPlayer?.setUrl(streamUrl, headers: previewHeaders);
@@ -1286,10 +1585,30 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
           maxBitRate: _normalizeBitRateKbps(song.bitRate),
         ),
       );
+      _clearCurrentPlaybackRetry(reason: 'playback_ready_preview');
     } catch (e) {
       Logger.error('Failed to play preview song', e);
+      if (_playDebugSession != debugSession) {
+        _playDbg(
+          'sid=$debugSession preview abandoned after failure '
+          '(current=$_playDebugSession)',
+        );
+        return;
+      }
       final hasAvailableRoute = await _refreshRoutesAndCheckAvailability();
+      if (_playDebugSession != debugSession) {
+        _playDbg(
+          'sid=$debugSession preview abandoned after route refresh '
+          '(current=$_playDebugSession)',
+        );
+        return;
+      }
       if (!hasAvailableRoute) {
+        _scheduleCurrentPlaybackRetry(
+          song: song,
+          isPreview: true,
+          autoPlay: autoPlay,
+        );
         NetworkErrorNotifier.show('试听播放失败，当前无可用线路');
         return;
       }
@@ -2708,6 +3027,7 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
     _positionPollTimer?.cancel();
     _fadeTimer?.cancel();
     _downloadProgressSubscription?.cancel();
+    _networkTypeSubscription?.cancel();
     // Check if initialized/assigned before disposing
     // Since it was 'late', we can't check.
     // Converting to nullable field:

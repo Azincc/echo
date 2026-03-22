@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../../providers/api_provider.dart';
 import '../../../providers/music_provider.dart';
+import '../../../providers/navigation_provider.dart';
 import '../../../providers/player_provider.dart';
 import '../../../widgets/cover_art_image.dart';
 import '../../../widgets/main_scaffold.dart';
+import '../../../widgets/visible_remote_retry_scope.dart';
 import '../../library/pages/album_detail_page.dart';
 import '../../player/widgets/song_options_sheet.dart';
 import 'search_page.dart';
@@ -21,82 +22,94 @@ class DiscoverPage extends ConsumerStatefulWidget {
 
 class _DiscoverPageState extends ConsumerState<DiscoverPage> {
   @override
-  void initState() {
-    super.initState();
-    // 监听地址变化：离线→在线时自动刷新首页数据
-    ref.listenManual(activeAddressProvider, (previous, next) {
-      if (previous == null && next != null) {
+  Widget build(BuildContext context) {
+    final randomSongsLoadFailed = ref.watch(randomSongsLoadFailedProvider);
+    final newestAlbumsLoadFailed = ref.watch(newestAlbumsLoadFailedProvider);
+    final recentAlbumsLoadFailed = ref.watch(recentAlbumsLoadFailedProvider);
+    final frequentAlbumsLoadFailed = ref.watch(
+      frequentAlbumsLoadFailedProvider,
+    );
+
+    return VisibleRemoteRetryScope(
+      branchIndex: discoverBranchIndex,
+      debugLabel: 'discover_page',
+      shouldRetry: (ref) =>
+          randomSongsLoadFailed ||
+          newestAlbumsLoadFailed ||
+          recentAlbumsLoadFailed ||
+          frequentAlbumsLoadFailed ||
+          ref.read(randomSongsProvider).hasError ||
+          ref.read(newestAlbumsProvider).hasError ||
+          ref.read(recentAlbumsProvider).hasError ||
+          ref.read(frequentAlbumsProvider).hasError,
+      onRetry: (ref) {
         ref.invalidate(randomSongsProvider);
         ref.invalidate(newestAlbumsProvider);
         ref.invalidate(recentAlbumsProvider);
         ref.invalidate(frequentAlbumsProvider);
-      }
-    });
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        leading: IconButton(
-          icon: const Icon(Icons.menu),
-          onPressed: () {
-            // 使用 GlobalKey 打开侧栏
-            scaffoldKey.currentState?.openDrawer();
-          },
-        ),
-        title: const Text('音乐流'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.search),
+      },
+      child: Scaffold(
+        appBar: AppBar(
+          leading: IconButton(
+            icon: const Icon(Icons.menu),
             onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (context) => const SearchPage()),
-              );
+              // 使用 GlobalKey 打开侧栏
+              scaffoldKey.currentState?.openDrawer();
             },
           ),
-        ],
-      ),
-      body: RefreshIndicator(
-        onRefresh: () async {
-          // 刷新数据
-          ref.invalidate(randomSongsProvider);
-          ref.invalidate(newestAlbumsProvider);
-          ref.invalidate(recentAlbumsProvider);
-          ref.invalidate(frequentAlbumsProvider);
-        },
-        child: Align(
-          alignment: Alignment.topCenter,
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 1400),
-            child: ListView(
-              cacheExtent: 1500, // 保持更多离屏内容，避免频繁重建
-              padding: const EdgeInsets.all(16),
-              children: [
-                // 随机推荐
-                const SectionHeader(title: '随机推荐', icon: Icons.shuffle),
-                const SizedBox(height: 12),
-                const RandomSongsSection(),
-                const SizedBox(height: 24),
+          title: const Text('音乐流'),
+          actions: [
+            IconButton(
+              icon: const Icon(Icons.search),
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => const SearchPage()),
+                );
+              },
+            ),
+          ],
+        ),
+        body: RefreshIndicator(
+          onRefresh: () async {
+            // 刷新数据
+            ref.invalidate(randomSongsProvider);
+            ref.invalidate(newestAlbumsProvider);
+            ref.invalidate(recentAlbumsProvider);
+            ref.invalidate(frequentAlbumsProvider);
+          },
+          child: Align(
+            alignment: Alignment.topCenter,
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 1400),
+              child: ListView(
+                cacheExtent: 1500, // 保持更多离屏内容，避免频繁重建
+                padding: const EdgeInsets.all(16),
+                children: [
+                  // 随机推荐
+                  const SectionHeader(title: '随机推荐', icon: Icons.shuffle),
+                  const SizedBox(height: 12),
+                  const RandomSongsSection(),
+                  const SizedBox(height: 24),
 
-                // 最近入库的专辑
-                const SectionHeader(title: '最近入库', icon: Icons.library_add),
-                const SizedBox(height: 12),
-                const NewestAlbumsSection(),
-                const SizedBox(height: 24),
+                  // 最近入库的专辑
+                  const SectionHeader(title: '最近入库', icon: Icons.library_add),
+                  const SizedBox(height: 12),
+                  const NewestAlbumsSection(),
+                  const SizedBox(height: 24),
 
-                // 最近播放的专辑
-                const SectionHeader(title: '最近播放', icon: Icons.history),
-                const SizedBox(height: 12),
-                const RecentAlbumsSection(),
-                const SizedBox(height: 24),
+                  // 最近播放的专辑
+                  const SectionHeader(title: '最近播放', icon: Icons.history),
+                  const SizedBox(height: 12),
+                  const RecentAlbumsSection(),
+                  const SizedBox(height: 24),
 
-                // 常听的专辑
-                const SectionHeader(title: '经常听的专辑', icon: Icons.whatshot),
-                const SizedBox(height: 12),
-                const FrequentAlbumsSection(),
-              ],
+                  // 常听的专辑
+                  const SectionHeader(title: '经常听的专辑', icon: Icons.whatshot),
+                  const SizedBox(height: 12),
+                  const FrequentAlbumsSection(),
+                ],
+              ),
             ),
           ),
         ),

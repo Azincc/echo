@@ -2,8 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../data/models/album.dart';
+import '../../../providers/music_provider.dart';
 import '../../../providers/playback_stats_provider.dart';
 import '../../../widgets/cover_art_image.dart';
+import '../../../widgets/error_placeholder.dart';
+import '../../../widgets/visible_remote_retry_scope.dart';
 
 class PlaybackStatsPage extends ConsumerWidget {
   const PlaybackStatsPage({super.key});
@@ -11,164 +14,190 @@ class PlaybackStatsPage extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final statsAsync = ref.watch(playbackStatsProvider);
+    final hasRemoteLoadFailed =
+        ref.watch(allSongsLoadFailedProvider) ||
+        ref.watch(allAlbumsLoadFailedProvider) ||
+        ref.watch(allArtistsLoadFailedProvider) ||
+        ref.watch(starredLoadFailedProvider) ||
+        ref.watch(recentAlbumsLoadFailedProvider) ||
+        ref.watch(frequentAlbumsLoadFailedProvider);
 
-    return Scaffold(
-      appBar: AppBar(title: const Text('统计信息')),
-      body: statsAsync.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (error, stackTrace) {
-          return Center(
-            child: Padding(
-              padding: const EdgeInsets.all(24),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
+    return VisibleRemoteRetryScope(
+      debugLabel: 'playback_stats_page',
+      shouldRetry: (ref) => hasRemoteLoadFailed || statsAsync.hasError,
+      onRetry: (ref) {
+        ref.invalidate(allSongsProvider);
+        ref.invalidate(allAlbumsProvider);
+        ref.invalidate(allArtistsProvider);
+        ref.invalidate(starredProvider);
+        ref.invalidate(recentAlbumsProvider);
+        ref.invalidate(frequentAlbumsProvider);
+        ref.invalidate(playbackStatsProvider);
+      },
+      child: Scaffold(
+        appBar: AppBar(title: const Text('统计信息')),
+        body: statsAsync.when(
+          loading: () => const Center(child: CircularProgressIndicator()),
+          error: (error, stackTrace) {
+            return ErrorPlaceholder(
+              message: '统计加载失败，请检查网络后重试',
+              onRetry: () {
+                ref.invalidate(allSongsProvider);
+                ref.invalidate(allAlbumsProvider);
+                ref.invalidate(allArtistsProvider);
+                ref.invalidate(starredProvider);
+                ref.invalidate(recentAlbumsProvider);
+                ref.invalidate(frequentAlbumsProvider);
+                ref.invalidate(playbackStatsProvider);
+              },
+            );
+          },
+          data: (stats) {
+            return RefreshIndicator(
+              onRefresh: () async {
+                ref.invalidate(allSongsProvider);
+                ref.invalidate(allAlbumsProvider);
+                ref.invalidate(allArtistsProvider);
+                ref.invalidate(starredProvider);
+                ref.invalidate(recentAlbumsProvider);
+                ref.invalidate(frequentAlbumsProvider);
+                ref.invalidate(playbackStatsProvider);
+                await ref.read(playbackStatsProvider.future);
+              },
+              child: ListView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                padding: const EdgeInsets.all(16),
                 children: [
-                  const Icon(Icons.error_outline, size: 48),
-                  const SizedBox(height: 12),
-                  const Text('统计加载失败'),
-                  const SizedBox(height: 12),
-                  FilledButton(
-                    onPressed: () => ref.invalidate(playbackStatsProvider),
-                    child: const Text('重试'),
+                  _buildSectionTitle(context, '库总览'),
+                  _buildStatsGrid(context, [
+                    _StatItem(
+                      icon: Icons.music_note_outlined,
+                      label: '歌曲总数',
+                      value: _formatInteger(stats.totalSongs),
+                    ),
+                    _StatItem(
+                      icon: Icons.album_outlined,
+                      label: '专辑总数',
+                      value: _formatInteger(stats.totalAlbums),
+                    ),
+                    _StatItem(
+                      icon: Icons.person_outline,
+                      label: '歌手总数',
+                      value: _formatInteger(stats.totalArtists),
+                    ),
+                    _StatItem(
+                      icon: Icons.schedule_outlined,
+                      label: '曲库总时长',
+                      value: _formatDuration(stats.totalSongDurationSeconds),
+                    ),
+                  ]),
+                  const SizedBox(height: 16),
+                  _buildSectionTitle(context, '播放总览'),
+                  _buildStatsGrid(context, [
+                    _StatItem(
+                      icon: Icons.equalizer_outlined,
+                      label: '总播放次数',
+                      value: _formatInteger(stats.totalPlayCount),
+                    ),
+                    _StatItem(
+                      icon: Icons.library_music_outlined,
+                      label: '有播放记录歌曲',
+                      value: _formatInteger(stats.playedSongsCount),
+                    ),
+                    _StatItem(
+                      icon: Icons.timer_outlined,
+                      label: '估算累计播放时长',
+                      value: _formatDuration(
+                        stats.estimatedPlayedDurationSeconds,
+                      ),
+                    ),
+                    _StatItem(
+                      icon: Icons.auto_graph_outlined,
+                      label: '平均每首播放次数',
+                      value: stats.averagePlayCountPerSong.toStringAsFixed(2),
+                    ),
+                  ]),
+                  const SizedBox(height: 16),
+                  _buildSectionTitle(context, '收藏统计'),
+                  _buildStatsGrid(context, [
+                    _StatItem(
+                      icon: Icons.favorite_outline,
+                      label: '收藏歌曲',
+                      value: _formatInteger(stats.starredSongCount),
+                    ),
+                    _StatItem(
+                      icon: Icons.collections_bookmark_outlined,
+                      label: '收藏专辑',
+                      value: _formatInteger(stats.starredAlbumCount),
+                    ),
+                    _StatItem(
+                      icon: Icons.people_outline,
+                      label: '收藏歌手',
+                      value: _formatInteger(stats.starredArtistCount),
+                    ),
+                  ]),
+                  const SizedBox(height: 16),
+                  _buildSectionTitle(context, '缓存统计'),
+                  _buildStatsGrid(context, [
+                    _StatItem(
+                      icon: Icons.storage_outlined,
+                      label: '缓存条目',
+                      value: _formatInteger(stats.cacheEntryCount),
+                    ),
+                    _StatItem(
+                      icon: Icons.music_video_outlined,
+                      label: '缓存歌曲',
+                      value: _formatInteger(stats.cacheSongCount),
+                    ),
+                    _StatItem(
+                      icon: Icons.sd_storage_outlined,
+                      label: '缓存大小',
+                      value: _formatBytes(stats.cacheTotalBytes),
+                    ),
+                    _StatItem(
+                      icon: Icons.shield_outlined,
+                      label: '受保护缓存条目',
+                      value: _formatInteger(stats.cacheProtectedEntryCount),
+                      subtitle: '播放次数 >= $cacheProtectionThreshold',
+                    ),
+                    _StatItem(
+                      icon: Icons.touch_app_outlined,
+                      label: '缓存命中次数',
+                      value: _formatInteger(stats.cachePlayCount),
+                    ),
+                    _StatItem(
+                      icon: Icons.network_check_outlined,
+                      label: '移动网络节省流量',
+                      value: _formatBytes(stats.cacheSavedTrafficBytes),
+                      subtitle: '仅统计移动网络缓存命中',
+                    ),
+                  ]),
+                  const SizedBox(height: 16),
+                  _buildSectionTitle(context, '最多播放歌曲'),
+                  _buildTopSongsCard(stats.topSongs),
+                  const SizedBox(height: 16),
+                  _buildSectionTitle(context, '最多播放歌手'),
+                  _buildTopArtistsCard(stats.topArtists),
+                  const SizedBox(height: 16),
+                  _buildSectionTitle(context, '最多播放专辑'),
+                  _buildTopAlbumsCard(stats.topAlbums),
+                  const SizedBox(height: 16),
+                  _buildSectionTitle(context, '最近播放专辑'),
+                  _buildAlbumChipsCard(
+                    stats.recentAlbums,
+                    emptyText: '暂无最近播放专辑',
+                  ),
+                  const SizedBox(height: 16),
+                  _buildSectionTitle(context, '常听专辑'),
+                  _buildAlbumChipsCard(
+                    stats.frequentAlbums,
+                    emptyText: '暂无常听专辑',
                   ),
                 ],
               ),
-            ),
-          );
-        },
-        data: (stats) {
-          return RefreshIndicator(
-            onRefresh: () async {
-              ref.invalidate(playbackStatsProvider);
-              await ref.read(playbackStatsProvider.future);
-            },
-            child: ListView(
-              physics: const AlwaysScrollableScrollPhysics(),
-              padding: const EdgeInsets.all(16),
-              children: [
-                _buildSectionTitle(context, '库总览'),
-                _buildStatsGrid(context, [
-                  _StatItem(
-                    icon: Icons.music_note_outlined,
-                    label: '歌曲总数',
-                    value: _formatInteger(stats.totalSongs),
-                  ),
-                  _StatItem(
-                    icon: Icons.album_outlined,
-                    label: '专辑总数',
-                    value: _formatInteger(stats.totalAlbums),
-                  ),
-                  _StatItem(
-                    icon: Icons.person_outline,
-                    label: '歌手总数',
-                    value: _formatInteger(stats.totalArtists),
-                  ),
-                  _StatItem(
-                    icon: Icons.schedule_outlined,
-                    label: '曲库总时长',
-                    value: _formatDuration(stats.totalSongDurationSeconds),
-                  ),
-                ]),
-                const SizedBox(height: 16),
-                _buildSectionTitle(context, '播放总览'),
-                _buildStatsGrid(context, [
-                  _StatItem(
-                    icon: Icons.equalizer_outlined,
-                    label: '总播放次数',
-                    value: _formatInteger(stats.totalPlayCount),
-                  ),
-                  _StatItem(
-                    icon: Icons.library_music_outlined,
-                    label: '有播放记录歌曲',
-                    value: _formatInteger(stats.playedSongsCount),
-                  ),
-                  _StatItem(
-                    icon: Icons.timer_outlined,
-                    label: '估算累计播放时长',
-                    value: _formatDuration(
-                      stats.estimatedPlayedDurationSeconds,
-                    ),
-                  ),
-                  _StatItem(
-                    icon: Icons.auto_graph_outlined,
-                    label: '平均每首播放次数',
-                    value: stats.averagePlayCountPerSong.toStringAsFixed(2),
-                  ),
-                ]),
-                const SizedBox(height: 16),
-                _buildSectionTitle(context, '收藏统计'),
-                _buildStatsGrid(context, [
-                  _StatItem(
-                    icon: Icons.favorite_outline,
-                    label: '收藏歌曲',
-                    value: _formatInteger(stats.starredSongCount),
-                  ),
-                  _StatItem(
-                    icon: Icons.collections_bookmark_outlined,
-                    label: '收藏专辑',
-                    value: _formatInteger(stats.starredAlbumCount),
-                  ),
-                  _StatItem(
-                    icon: Icons.people_outline,
-                    label: '收藏歌手',
-                    value: _formatInteger(stats.starredArtistCount),
-                  ),
-                ]),
-                const SizedBox(height: 16),
-                _buildSectionTitle(context, '缓存统计'),
-                _buildStatsGrid(context, [
-                  _StatItem(
-                    icon: Icons.storage_outlined,
-                    label: '缓存条目',
-                    value: _formatInteger(stats.cacheEntryCount),
-                  ),
-                  _StatItem(
-                    icon: Icons.music_video_outlined,
-                    label: '缓存歌曲',
-                    value: _formatInteger(stats.cacheSongCount),
-                  ),
-                  _StatItem(
-                    icon: Icons.sd_storage_outlined,
-                    label: '缓存大小',
-                    value: _formatBytes(stats.cacheTotalBytes),
-                  ),
-                  _StatItem(
-                    icon: Icons.shield_outlined,
-                    label: '受保护缓存条目',
-                    value: _formatInteger(stats.cacheProtectedEntryCount),
-                    subtitle: '播放次数 >= $cacheProtectionThreshold',
-                  ),
-                  _StatItem(
-                    icon: Icons.touch_app_outlined,
-                    label: '缓存命中次数',
-                    value: _formatInteger(stats.cachePlayCount),
-                  ),
-                  _StatItem(
-                    icon: Icons.network_check_outlined,
-                    label: '移动网络节省流量',
-                    value: _formatBytes(stats.cacheSavedTrafficBytes),
-                    subtitle: '仅统计移动网络缓存命中',
-                  ),
-                ]),
-                const SizedBox(height: 16),
-                _buildSectionTitle(context, '最多播放歌曲'),
-                _buildTopSongsCard(stats.topSongs),
-                const SizedBox(height: 16),
-                _buildSectionTitle(context, '最多播放歌手'),
-                _buildTopArtistsCard(stats.topArtists),
-                const SizedBox(height: 16),
-                _buildSectionTitle(context, '最多播放专辑'),
-                _buildTopAlbumsCard(stats.topAlbums),
-                const SizedBox(height: 16),
-                _buildSectionTitle(context, '最近播放专辑'),
-                _buildAlbumChipsCard(stats.recentAlbums, emptyText: '暂无最近播放专辑'),
-                const SizedBox(height: 16),
-                _buildSectionTitle(context, '常听专辑'),
-                _buildAlbumChipsCard(stats.frequentAlbums, emptyText: '暂无常听专辑'),
-              ],
-            ),
-          );
-        },
+            );
+          },
+        ),
       ),
     );
   }

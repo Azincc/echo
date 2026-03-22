@@ -4,6 +4,7 @@ import '../../../core/utils/network_error_notifier.dart';
 import '../../../data/models/playlist.dart';
 import '../../../data/models/song.dart';
 import '../../../providers/api_provider.dart';
+import '../../../providers/navigation_provider.dart';
 import '../../../providers/playlist_provider.dart';
 import '../../../providers/player_provider.dart';
 import '../../../providers/download_provider.dart';
@@ -14,6 +15,7 @@ import '../widgets/playlist_options_sheet.dart';
 import '../../../widgets/error_placeholder.dart';
 import '../../../widgets/song_list_item.dart';
 import '../../../widgets/skeleton_templates.dart';
+import '../../../widgets/visible_remote_retry_scope.dart';
 
 /// 歌单详情页
 class PlaylistDetailPage extends ConsumerWidget {
@@ -181,119 +183,125 @@ class PlaylistDetailPage extends ConsumerWidget {
       authStateProvider.select((s) => (s.currentLibrary?.id ?? '').isNotEmpty),
     );
 
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(currentPlaylist?.name ?? '歌单'),
-        actions: [
-          if (currentPlaylist != null)
-            IconButton(
-              tooltip: '歌单操作',
-              icon: const Icon(Icons.more_horiz),
-              onPressed: () async {
-                final action = await showPlaylistOptionsSheet(
-                  context: context,
-                  playlist: currentPlaylist,
-                  canDownload: hasActiveLibrary,
-                  hasSongs:
-                      (currentPlaylist.songs ?? const <Song>[]).isNotEmpty,
-                );
-                if (action == null || !context.mounted) return;
-                await _onMoreActionSelected(
-                  context,
-                  ref,
-                  currentPlaylist,
-                  action,
-                );
-              },
-            ),
-        ],
-      ),
-      body: playlistAsync.when(
-        data: (playlist) {
-          if (playlist == null) {
-            return Center(child: Text(loadFailed ? '网络异常，歌单加载失败' : '歌单不存在'));
-          }
+    return VisibleRemoteRetryScope(
+      branchIndex: libraryBranchIndex,
+      debugLabel: 'playlist_detail_page',
+      shouldRetry: (ref) => loadFailed || playlistAsync.hasError,
+      onRetry: (ref) => ref.invalidate(playlistDetailProvider(playlistId)),
+      child: Scaffold(
+        appBar: AppBar(
+          title: Text(currentPlaylist?.name ?? '歌单'),
+          actions: [
+            if (currentPlaylist != null)
+              IconButton(
+                tooltip: '歌单操作',
+                icon: const Icon(Icons.more_horiz),
+                onPressed: () async {
+                  final action = await showPlaylistOptionsSheet(
+                    context: context,
+                    playlist: currentPlaylist,
+                    canDownload: hasActiveLibrary,
+                    hasSongs:
+                        (currentPlaylist.songs ?? const <Song>[]).isNotEmpty,
+                  );
+                  if (action == null || !context.mounted) return;
+                  await _onMoreActionSelected(
+                    context,
+                    ref,
+                    currentPlaylist,
+                    action,
+                  );
+                },
+              ),
+          ],
+        ),
+        body: playlistAsync.when(
+          data: (playlist) {
+            if (playlist == null) {
+              return Center(child: Text(loadFailed ? '网络异常，歌单加载失败' : '歌单不存在'));
+            }
 
-          final songs = playlist.songs ?? [];
+            final songs = playlist.songs ?? [];
 
-          return Align(
-            alignment: Alignment.topCenter,
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 1400),
-              child: CustomScrollView(
-                slivers: [
-                  SliverToBoxAdapter(
-                    child: Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            playlist.name,
-                            style: Theme.of(context).textTheme.headlineSmall
-                                ?.copyWith(fontWeight: FontWeight.bold),
-                          ),
-                          const SizedBox(height: 8),
-                          if (playlist.comment != null &&
-                              playlist.comment!.isNotEmpty)
+            return Align(
+              alignment: Alignment.topCenter,
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 1400),
+                child: CustomScrollView(
+                  slivers: [
+                    SliverToBoxAdapter(
+                      child: Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
                             Text(
-                              playlist.comment!,
-                              style: Theme.of(context).textTheme.bodyMedium,
+                              playlist.name,
+                              style: Theme.of(context).textTheme.headlineSmall
+                                  ?.copyWith(fontWeight: FontWeight.bold),
                             ),
-                          const SizedBox(height: 8),
-                          Text(
-                            '${playlist.songCount} 首 · ${playlist.durationString}',
-                            style: Theme.of(context).textTheme.bodyMedium
-                                ?.copyWith(
-                                  color: Theme.of(
-                                    context,
-                                  ).colorScheme.onSurfaceVariant,
-                                ),
-                          ),
-                          const SizedBox(height: 16),
-                          FilledButton.icon(
-                            onPressed: songs.isEmpty
-                                ? null
-                                : () {
-                                    // 播放全部
-                                    ref
-                                        .read(playerProvider.notifier)
-                                        .playQueue(songs);
-                                  },
-                            icon: const Icon(Icons.play_arrow),
-                            label: const Text('播放全部'),
-                          ),
-                        ],
+                            const SizedBox(height: 8),
+                            if (playlist.comment != null &&
+                                playlist.comment!.isNotEmpty)
+                              Text(
+                                playlist.comment!,
+                                style: Theme.of(context).textTheme.bodyMedium,
+                              ),
+                            const SizedBox(height: 8),
+                            Text(
+                              '${playlist.songCount} 首 · ${playlist.durationString}',
+                              style: Theme.of(context).textTheme.bodyMedium
+                                  ?.copyWith(
+                                    color: Theme.of(
+                                      context,
+                                    ).colorScheme.onSurfaceVariant,
+                                  ),
+                            ),
+                            const SizedBox(height: 16),
+                            FilledButton.icon(
+                              onPressed: songs.isEmpty
+                                  ? null
+                                  : () {
+                                      // 播放全部
+                                      ref
+                                          .read(playerProvider.notifier)
+                                          .playQueue(songs);
+                                    },
+                              icon: const Icon(Icons.play_arrow),
+                              label: const Text('播放全部'),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
-                  ),
-                  SliverList(
-                    delegate: SliverChildBuilderDelegate((context, index) {
-                      final song = songs[index];
-                      return SongListItem(
-                        song: song,
-                        index: index,
-                        variant: SongListItemVariant.standard,
-                        onTap: () {
-                          // 播放歌曲
-                          ref
-                              .read(playerProvider.notifier)
-                              .playQueue(songs, startIndex: index);
-                        },
-                        onLongPress: () {
-                          _showSongContextMenu(context, ref, song);
-                        },
-                      );
-                    }, childCount: songs.length),
-                  ),
-                ],
+                    SliverList(
+                      delegate: SliverChildBuilderDelegate((context, index) {
+                        final song = songs[index];
+                        return SongListItem(
+                          song: song,
+                          index: index,
+                          variant: SongListItemVariant.standard,
+                          onTap: () {
+                            // 播放歌曲
+                            ref
+                                .read(playerProvider.notifier)
+                                .playQueue(songs, startIndex: index);
+                          },
+                          onLongPress: () {
+                            _showSongContextMenu(context, ref, song);
+                          },
+                        );
+                      }, childCount: songs.length),
+                    ),
+                  ],
+                ),
               ),
-            ),
-          );
-        },
-        loading: () => const PlaylistDetailSkeleton(),
-        error: (error, stack) =>
-            const ErrorPlaceholder(message: '歌单加载失败，请检查网络后重试'),
+            );
+          },
+          loading: () => const PlaylistDetailSkeleton(),
+          error: (error, stack) =>
+              const ErrorPlaceholder(message: '歌单加载失败，请检查网络后重试'),
+        ),
       ),
     );
   }

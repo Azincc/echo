@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../data/models/album.dart';
 import '../../../providers/music_provider.dart';
+import '../../../providers/navigation_provider.dart';
 import '../../../utils/az_item.dart';
 import '../../../utils/pinyin_helper.dart';
 import '../../../widgets/cover_art_image.dart';
@@ -12,6 +13,7 @@ import '../widgets/album_options_sheet.dart';
 import 'album_detail_page.dart';
 import '../../../widgets/error_placeholder.dart';
 import '../../../widgets/skeleton_templates.dart';
+import '../../../widgets/visible_remote_retry_scope.dart';
 
 /// 专辑列表页 - A-Z 分组 Grid (通过 List 模拟)
 class AlbumListPage extends ConsumerWidget {
@@ -72,97 +74,103 @@ class AlbumListPage extends ConsumerWidget {
     int itemsPerRow = (effectiveWidth / 180).floor();
     if (itemsPerRow < 2) itemsPerRow = 2;
 
-    return Scaffold(
-      appBar: AppBar(title: const Text('所有专辑')),
-      body: albumsAsync.when(
-        data: (albums) {
-          if (albums.isEmpty) {
-            return Center(child: Text(loadFailed ? '网络异常，专辑加载失败' : '暂无专辑'));
-          }
+    return VisibleRemoteRetryScope(
+      branchIndex: libraryBranchIndex,
+      debugLabel: 'album_list_page',
+      shouldRetry: (ref) => loadFailed || albumsAsync.hasError,
+      onRetry: (ref) => ref.invalidate(allAlbumsProvider),
+      child: Scaffold(
+        appBar: AppBar(title: const Text('所有专辑')),
+        body: albumsAsync.when(
+          data: (albums) {
+            if (albums.isEmpty) {
+              return Center(child: Text(loadFailed ? '网络异常，专辑加载失败' : '暂无专辑'));
+            }
 
-          final azAlbumRows = _buildAlbumRows(albums, itemsPerRow);
+            final azAlbumRows = _buildAlbumRows(albums, itemsPerRow);
 
-          return Align(
-            alignment: Alignment.topCenter,
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 1400),
-              child: AzListView(
-                data: azAlbumRows,
-                itemCount: azAlbumRows.length,
-                itemBuilder: (context, index) {
-                  final item = azAlbumRows[index];
-                  final rowAlbums = item.data;
+            return Align(
+              alignment: Alignment.topCenter,
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 1400),
+                child: AzListView(
+                  data: azAlbumRows,
+                  itemCount: azAlbumRows.length,
+                  itemBuilder: (context, index) {
+                    final item = azAlbumRows[index];
+                    final rowAlbums = item.data;
 
-                  // Build row
-                  return Column(
-                    children: [
-                      if (item.isShowSuspension)
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 16,
-                            vertical: 8,
+                    // Build row
+                    return Column(
+                      children: [
+                        if (item.isShowSuspension)
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 16,
+                              vertical: 8,
+                            ),
+                            color: Theme.of(
+                              context,
+                            ).colorScheme.surfaceContainerHighest,
+                            alignment: Alignment.centerLeft,
+                            child: Text(
+                              item.getSuspensionTag(),
+                              style: Theme.of(context).textTheme.labelLarge,
+                            ),
                           ),
-                          color: Theme.of(
-                            context,
-                          ).colorScheme.surfaceContainerHighest,
-                          alignment: Alignment.centerLeft,
-                          child: Text(
-                            item.getSuspensionTag(),
-                            style: Theme.of(context).textTheme.labelLarge,
+                        Padding(
+                          padding: const EdgeInsets.only(
+                            left: 16,
+                            right: 40, // Extra padding for IndexBar
+                            top: 6,
+                            bottom: 6,
                           ),
-                        ),
-                      Padding(
-                        padding: const EdgeInsets.only(
-                          left: 16,
-                          right: 40, // Extra padding for IndexBar
-                          top: 6,
-                          bottom: 6,
-                        ),
-                        child: Row(
-                          children: [
-                            for (int i = 0; i < rowAlbums.length; i++) ...[
-                              Expanded(
-                                child: _buildAlbumItem(
-                                  context,
-                                  ref,
-                                  rowAlbums[i],
+                          child: Row(
+                            children: [
+                              for (int i = 0; i < rowAlbums.length; i++) ...[
+                                Expanded(
+                                  child: _buildAlbumItem(
+                                    context,
+                                    ref,
+                                    rowAlbums[i],
+                                  ),
                                 ),
-                              ),
-                              if (i < rowAlbums.length - 1 ||
-                                  rowAlbums.length == 1)
-                                const SizedBox(width: 12),
+                                if (i < rowAlbums.length - 1 ||
+                                    rowAlbums.length == 1)
+                                  const SizedBox(width: 12),
+                              ],
+                              // If only 1 item, add Spacer to keep alignment
+                              if (rowAlbums.length == 1)
+                                const Expanded(child: SizedBox()),
                             ],
-                            // If only 1 item, add Spacer to keep alignment
-                            if (rowAlbums.length == 1)
-                              const Expanded(child: SizedBox()),
-                          ],
+                          ),
                         ),
-                      ),
-                    ],
-                  );
-                },
-                indexBarData: SuspensionUtil.getTagIndexList(azAlbumRows),
-                indexBarOptions: const IndexBarOptions(
-                  needRebuild: true,
-                  ignoreDragCancel: true,
-                  downTextStyle: TextStyle(fontSize: 12, color: Colors.white),
-                  downItemDecoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: Colors.green,
+                      ],
+                    );
+                  },
+                  indexBarData: SuspensionUtil.getTagIndexList(azAlbumRows),
+                  indexBarOptions: const IndexBarOptions(
+                    needRebuild: true,
+                    ignoreDragCancel: true,
+                    downTextStyle: TextStyle(fontSize: 12, color: Colors.white),
+                    downItemDecoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: Colors.green,
+                    ),
+                    indexHintAlignment: Alignment.centerRight,
+                    indexHintOffset: Offset(-20, 0),
                   ),
-                  indexHintAlignment: Alignment.centerRight,
-                  indexHintOffset: Offset(-20, 0),
                 ),
               ),
-            ),
-          );
-        },
-        loading: () => const Padding(
-          padding: EdgeInsets.all(16),
-          child: AlbumGridSkeleton(),
+            );
+          },
+          loading: () => const Padding(
+            padding: EdgeInsets.all(16),
+            child: AlbumGridSkeleton(),
+          ),
+          error: (error, stack) =>
+              const ErrorPlaceholder(message: '专辑列表加载失败，请检查网络后重试'),
         ),
-        error: (error, stack) =>
-            const ErrorPlaceholder(message: '专辑列表加载失败，请检查网络后重试'),
       ),
     );
   }

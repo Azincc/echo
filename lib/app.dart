@@ -19,6 +19,41 @@ import 'dart:io';
 class App extends ConsumerWidget {
   const App({super.key});
 
+  bool _isDesktopScaledPlatform() {
+    return Platform.isWindows || Platform.isMacOS;
+  }
+
+  double _resolveDesktopTextScale(MediaQueryData mediaQueryData) {
+    final width = mediaQueryData.size.width;
+    final shortestSide = mediaQueryData.size.shortestSide;
+    final longestPhysicalSide =
+        mediaQueryData.size.longestSide * mediaQueryData.devicePixelRatio;
+
+    if (longestPhysicalSide >= 3800 || width >= 2200 || shortestSide >= 1400) {
+      return 0.86;
+    }
+    if (longestPhysicalSide >= 3000 || width >= 1800 || shortestSide >= 1100) {
+      return 0.90;
+    }
+    if (longestPhysicalSide >= 2400 || width >= 1440 || shortestSide >= 900) {
+      return 0.95;
+    }
+    return 1.0;
+  }
+
+  VisualDensity _resolveDesktopVisualDensity(double scaleFactor) {
+    if (scaleFactor <= 0.86) {
+      return const VisualDensity(horizontal: -2, vertical: -2);
+    }
+    if (scaleFactor <= 0.90) {
+      return const VisualDensity(horizontal: -1.5, vertical: -1.5);
+    }
+    if (scaleFactor < 1.0) {
+      return const VisualDensity(horizontal: -1, vertical: -1);
+    }
+    return VisualDensity.standard;
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final router = ref.watch(routerProvider);
@@ -33,24 +68,29 @@ class App extends ConsumerWidget {
       debugShowCheckedModeBanner: false,
       builder: (context, child) {
         final mediaQueryData = MediaQuery.of(context);
-        final isWindows = Platform.isWindows;
+        if (!_isDesktopScaledPlatform()) {
+          return child!;
+        }
 
-        // Apply a global UI scale down specifically for Windows if needed
+        final desktopTextScale = _resolveDesktopTextScale(mediaQueryData);
+        final desktopVisualDensity = _resolveDesktopVisualDensity(
+          desktopTextScale,
+        );
+
+        // High-DPI desktop windows can feel oversized with the default Material
+        // metrics. Apply a mild adaptive scale-down for Windows/macOS based on
+        // the current viewport and DPR, while leaving smaller desktop windows
+        // untouched.
         return MediaQuery(
           data: mediaQueryData.copyWith(
-            textScaler: isWindows
-                ? TextScaler.linear(
-                    mediaQueryData.textScaler.scale(1.0) * 0.85,
-                  ) // Downscale text by 15%
-                : mediaQueryData.textScaler,
+            textScaler: TextScaler.linear(
+              mediaQueryData.textScaler.scale(1.0) * desktopTextScale,
+            ),
           ),
           child: Theme(
-            data: Theme.of(context).copyWith(
-              visualDensity: isWindows
-                  ? VisualDensity
-                        .compact // Use compact density to reduce element sizes
-                  : null,
-            ),
+            data: Theme.of(
+              context,
+            ).copyWith(visualDensity: desktopVisualDensity),
             child: child!,
           ),
         );

@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 
 import '../core/utils/logger.dart';
 import '../features/player/widgets/mini_player.dart';
+import '../providers/navigation_provider.dart';
 import '../providers/player_provider.dart';
 import 'app_drawer.dart';
 
@@ -31,6 +32,31 @@ class _MainScaffoldState extends ConsumerState<MainScaffold> {
   static const MethodChannel _appLifecycleChannel = MethodChannel(
     'cc.azin.echoes/app_lifecycle',
   );
+  int? _lastSyncedBranchIndex;
+
+  @override
+  void initState() {
+    super.initState();
+    _scheduleVisibleBranchSync();
+  }
+
+  @override
+  void didUpdateWidget(covariant MainScaffold oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    _scheduleVisibleBranchSync();
+  }
+
+  void _scheduleVisibleBranchSync() {
+    final currentIndex = widget.navigationShell.currentIndex;
+    if (_lastSyncedBranchIndex == currentIndex) {
+      return;
+    }
+    _lastSyncedBranchIndex = currentIndex;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      ref.read(currentVisibleBranchIndexProvider.notifier).state = currentIndex;
+    });
+  }
 
   Future<void> _handleBackPressed() async {
     final index = widget.navigationShell.currentIndex;
@@ -112,6 +138,7 @@ class _MainScaffoldState extends ConsumerState<MainScaffold> {
 
   @override
   Widget build(BuildContext context) {
+    _scheduleVisibleBranchSync();
     final hasMiniPlayer = ref.watch(
       playerProvider.select((state) => state.currentSong != null),
     );

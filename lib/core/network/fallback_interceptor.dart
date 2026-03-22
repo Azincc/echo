@@ -1,7 +1,7 @@
 import 'package:dio/dio.dart';
 import 'package:echoes/core/network/address_pool.dart';
 import 'package:echoes/core/utils/logger.dart';
-import 'package:fluttertoast/fluttertoast.dart';
+import 'package:echoes/core/utils/toast_notifier.dart';
 
 class FallbackInterceptor extends Interceptor {
   static const _tag = 'FALLBACK';
@@ -62,9 +62,7 @@ class FallbackInterceptor extends Interceptor {
             final success = await _addressPool.switchTo(next, manual: false);
             if (success) {
               _consecutiveFailures = 0;
-              Fluttertoast.showToast(
-                msg: "Switching to connection: ${next.label}",
-              );
+              ToastNotifier.show("Switching to connection: ${next.label}");
 
               // Retry with new address
               final opts = err.requestOptions;

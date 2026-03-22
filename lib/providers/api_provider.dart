@@ -42,23 +42,29 @@ final activeAddressProvider = StateProvider<ServerAddress?>((ref) => null);
 /// Ensure an active address is ready before making network requests.
 /// Waits briefly for startup synchronization to avoid transient false negatives.
 final ensureActiveAddressProvider = FutureProvider<ServerAddress>((ref) async {
-  final active = ref.watch(activeAddressProvider);
+  final active = ref.read(activeAddressProvider);
   if (active != null) return active;
 
   Logger.warnWithTag('API', 'no active address, probing before request');
-  final pool = ref.watch(addressPoolProvider);
-  final firstProbe = await pool.probeAll();
-  if (firstProbe != null) return firstProbe;
+  final pool = ref.read(addressPoolProvider);
+  unawaited(pool.probeAll());
 
   final start = DateTime.now();
-  while (DateTime.now().difference(start) < const Duration(seconds: 2)) {
-    await Future.delayed(const Duration(milliseconds: 200));
+  var ticks = 0;
+  while (DateTime.now().difference(start) < const Duration(seconds: 6)) {
     final current = ref.read(activeAddressProvider);
     if (current != null) return current;
 
-    final probed = await pool.probeAll();
-    if (probed != null) return probed;
+    if (ticks % 5 == 0 && pool.addresses.isNotEmpty) {
+      unawaited(pool.probeAll());
+    }
+    ticks++;
+
+    await Future.delayed(const Duration(milliseconds: 200));
   }
+
+  final probed = await pool.probeAll();
+  if (probed != null) return probed;
 
   Logger.errorWithTag('API', 'failed to acquire active server address');
   throw StateError('No active server address available');
@@ -209,7 +215,10 @@ final subsonicApiClientProvider = Provider<SubsonicApiClient>((ref) {
   // Set config from active library
   final activeLib = ref.watch(activeLibraryProvider);
   client.setLibrary(activeLib);
-  Logger.debugWithTag('API', 'client bound to library=${activeLib?.id ?? 'none'}');
+  Logger.debugWithTag(
+    'API',
+    'client bound to library=${activeLib?.id ?? 'none'}',
+  );
 
   return client;
 });

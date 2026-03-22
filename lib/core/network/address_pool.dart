@@ -1,3 +1,5 @@
+import 'dart:io' show InternetAddress;
+
 import 'package:dio/dio.dart';
 import 'package:echoes/data/models/server_address.dart';
 import 'package:echoes/core/utils/logger.dart';
@@ -9,6 +11,7 @@ class AddressPool {
 
   List<ServerAddress> _addresses = [];
   ServerAddress? _activeAddress;
+  Future<ServerAddress?>? _probeAllFuture;
 
   /// 自动回退开关：手动选择线路后，线路挂掉是否自动切换到可用线路
   bool autoFallback = true;
@@ -51,22 +54,42 @@ class AddressPool {
 
   /// 启动时全量探测，选择最优可达地址
   Future<ServerAddress?> probeAll() async {
+    final inFlight = _probeAllFuture;
+    if (inFlight != null) {
+      Logger.debugWithTag(_tag, 'probeAll joined: existing probe in progress');
+      return inFlight;
+    }
+
+    final future = _probeAllInternal();
+    _probeAllFuture = future;
+    future.whenComplete(() {
+      if (identical(_probeAllFuture, future)) {
+        _probeAllFuture = null;
+      }
+    });
+    return future;
+  }
+
+  Future<ServerAddress?> _probeAllInternal() async {
     if (_addresses.isEmpty) {
       Logger.warnWithTag(_tag, 'probeAll skipped: empty address list');
       return null;
     }
 
-    Logger.debugWithTag(_tag, 'probeAll start, count=${_addresses.length}');
-
-    final results = await Future.wait(
-      _addresses.map((addr) => probeAddress(addr)),
+    Logger.debugWithTag(
+      _tag,
+      'probeAll start, count=${_addresses.length} '
+      'manualMode=$isManualMode autoFallback=$autoFallback '
+      'active=${_activeAddress?.label ?? 'none'} '
+      'candidates=${_summarizeCandidates()}',
     );
 
-    // Update local list with new latencies/statuses
-    for (int i = 0; i < _addresses.length; i++) {
-      _addresses[i] = results[i];
-      onAddressUpdated?.call(_addresses[i]);
-    }
+    await Future.wait(
+      _addresses.map((addr) async {
+        final probed = await probeAddress(addr);
+        _applyProbeResult(probed, allowEarlyActiveSelection: true);
+      }),
+    );
 
     // 手动模式下只更新延迟数据，不切换活跃地址
     if (isManualMode) {
@@ -75,9 +98,7 @@ class AddressPool {
           .where((a) => a.id == _activeAddress!.id)
           .firstOrNull;
       if (updatedActive != null) {
-        _activeAddress = updatedActive;
-        // 通知 UI 状态已更新（即使 ID 未变，status 可能变化）
-        onActiveAddressChanged?.call(_activeAddress);
+        _setActiveAddress(updatedActive);
         Logger.infoWithTag(
           _tag,
           'manual mode keeps active address: ${updatedActive.label}'
@@ -90,22 +111,7 @@ class AddressPool {
 
     // 自动模式：选择最优可达地址
     final newActive = _getNextAvailable();
-    final oldActive = _activeAddress;
-    _activeAddress = newActive;
-    // 始终通知 UI：即使 ID 相同，status/latency 也可能已更新
-    if (newActive?.id != oldActive?.id ||
-        newActive?.status != oldActive?.status ||
-        newActive?.lastLatencyMs != oldActive?.lastLatencyMs) {
-      onActiveAddressChanged?.call(_activeAddress);
-      if (newActive?.id != oldActive?.id) {
-        final oldLabel = oldActive?.label ?? 'none';
-        final newLabel = newActive?.label ?? 'none';
-        Logger.infoWithTag(
-          _tag,
-          'active address changed: $oldLabel -> $newLabel',
-        );
-      }
-    }
+    _setActiveAddress(newActive);
     if (newActive == null) {
       Logger.warnWithTag(_tag, 'probeAll completed but no available address');
     }
@@ -114,11 +120,20 @@ class AddressPool {
 
   Future<ServerAddress> probeAddress(ServerAddress address) async {
     final start = DateTime.now();
-    Logger.debugWithTag(_tag, 'probing ${address.label} (${address.url})');
+    final uri = Uri.parse('${address.url}/rest/ping');
+    final port = uri.hasPort ? uri.port : (uri.scheme == 'https' ? 443 : 80);
+    Logger.debugWithTag(
+      _tag,
+      'probing ${address.label} url=${address.url} '
+      'host=${uri.host} port=$port scheme=${uri.scheme} path=${uri.path}',
+    );
+
+    await _debugResolveHost(address, uri);
+
     try {
       final response = await _dio
           .head(
-            '${address.url}/rest/ping',
+            uri.toString(),
             options: Options(
               validateStatus: (status) => status != null && status < 500,
               sendTimeout: const Duration(seconds: 5),
@@ -128,6 +143,14 @@ class AddressPool {
           .timeout(const Duration(seconds: 5));
 
       final latency = DateTime.now().difference(start).inMilliseconds;
+      final contentLength =
+          response.headers.value(Headers.contentLengthHeader) ?? '-';
+      Logger.debugWithTag(
+        _tag,
+        'probe response: ${address.label} status=${response.statusCode} '
+        'latency=${latency}ms realUri=${response.realUri} '
+        'contentLength=$contentLength',
+      );
       if (response.statusCode == 200) {
         Logger.debugWithTag(
           _tag,
@@ -148,7 +171,13 @@ class AddressPool {
         );
       }
     } catch (e) {
-      Logger.warnWithTag(_tag, 'probe exception for ${address.label}', e);
+      final latency = DateTime.now().difference(start).inMilliseconds;
+      Logger.warnWithTag(
+        _tag,
+        'probe exception for ${address.label} '
+        'latency=${latency}ms url=${uri.toString()}',
+        e,
+      );
       return address.copyWith(
         status: ServerAddressStatus.failed,
         lastLatencyMs: null,
@@ -156,8 +185,68 @@ class AddressPool {
     }
   }
 
-  /// 应用探测结果到内存状态并持久化（保留锁定状态）
-  void updateProbedAddress(ServerAddress probed) {
+  Future<void> _debugResolveHost(ServerAddress address, Uri uri) async {
+    final host = uri.host;
+    if (host.isEmpty) {
+      Logger.warnWithTag(
+        _tag,
+        'probe dns skipped: ${address.label} empty host',
+      );
+      return;
+    }
+
+    final literal = InternetAddress.tryParse(host);
+    if (literal != null) {
+      Logger.debugWithTag(
+        _tag,
+        'probe dns literal: ${address.label} host=$host type=${literal.type.name}',
+      );
+      return;
+    }
+
+    final start = DateTime.now();
+    try {
+      final addresses = await InternetAddress.lookup(
+        host,
+      ).timeout(const Duration(seconds: 3));
+      final latency = DateTime.now().difference(start).inMilliseconds;
+      final resolved = addresses.isEmpty
+          ? 'empty'
+          : addresses
+                .map((item) => '${item.type.name}:${item.address}')
+                .join(', ');
+      Logger.debugWithTag(
+        _tag,
+        'probe dns result: ${address.label} host=$host '
+        'count=${addresses.length} latency=${latency}ms resolved=$resolved',
+      );
+    } catch (e) {
+      final latency = DateTime.now().difference(start).inMilliseconds;
+      Logger.warnWithTag(
+        _tag,
+        'probe dns failed: ${address.label} host=$host latency=${latency}ms',
+        e,
+      );
+    }
+  }
+
+  String _summarizeCandidates() {
+    return _addresses
+        .map(
+          (address) =>
+              '${address.label}@${address.url}'
+              '[p=${address.priority},'
+              'status=${address.status.name},'
+              'locked=${address.isLocked},'
+              'lat=${address.lastLatencyMs ?? -1}]',
+        )
+        .join('; ');
+  }
+
+  void _applyProbeResult(
+    ServerAddress probed, {
+    bool allowEarlyActiveSelection = false,
+  }) {
     final index = _addresses.indexWhere((a) => a.id == probed.id);
     if (index == -1) return;
 
@@ -167,21 +256,69 @@ class AddressPool {
     onAddressUpdated?.call(updated);
 
     if (_activeAddress?.id == updated.id) {
-      final old = _activeAddress!;
-      _activeAddress = updated;
-      // Only notify listeners when something meaningful changed to avoid
-      // cascading provider invalidation on every health-check tick.
-      final changed = old.status != updated.status || old.url != updated.url;
-      if (changed) {
-        onActiveAddressChanged?.call(_activeAddress);
-      }
+      _setActiveAddress(updated);
+    } else if (allowEarlyActiveSelection) {
+      _promoteActiveAddressDuringProbe();
     }
+
     Logger.debugWithTag(
       _tag,
       'updated probe result: ${updated.label}'
       ' status=${updated.status.name}'
       ' latency=${updated.lastLatencyMs ?? -1}ms',
     );
+  }
+
+  void _promoteActiveAddressDuringProbe() {
+    if (isManualMode) return;
+
+    final current = _activeAddress;
+    final hasHealthyActive = current?.status == ServerAddressStatus.ok;
+    if (hasHealthyActive) return;
+
+    final next = _getNextAvailable();
+    if (next == null) return;
+    if (current?.id == next.id &&
+        current?.status == next.status &&
+        current?.lastLatencyMs == next.lastLatencyMs) {
+      return;
+    }
+
+    final oldLabel = current?.label ?? 'none';
+    _setActiveAddress(next);
+    if (current?.id != next.id) {
+      Logger.infoWithTag(
+        _tag,
+        'active address promoted during probe: $oldLabel -> ${next.label}',
+      );
+    }
+  }
+
+  void _setActiveAddress(ServerAddress? newActive) {
+    final oldActive = _activeAddress;
+    _activeAddress = newActive;
+
+    final changed =
+        newActive?.id != oldActive?.id ||
+        newActive?.status != oldActive?.status ||
+        newActive?.lastLatencyMs != oldActive?.lastLatencyMs ||
+        newActive?.url != oldActive?.url;
+    if (!changed) return;
+
+    onActiveAddressChanged?.call(_activeAddress);
+    if (newActive?.id != oldActive?.id) {
+      final oldLabel = oldActive?.label ?? 'none';
+      final newLabel = newActive?.label ?? 'none';
+      Logger.infoWithTag(
+        _tag,
+        'active address changed: $oldLabel -> $newLabel',
+      );
+    }
+  }
+
+  /// 应用探测结果到内存状态并持久化（保留锁定状态）
+  void updateProbedAddress(ServerAddress probed) {
+    _applyProbeResult(probed);
   }
 
   /// 标记某地址探测失败

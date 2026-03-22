@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../data/repositories/music_repository.dart';
 import '../../../providers/music_provider.dart';
+import '../../../providers/navigation_provider.dart';
 import '../../../providers/player_provider.dart';
 import '../../../widgets/cover_art_image.dart';
 import '../../player/widgets/song_options_sheet.dart';
@@ -12,6 +13,7 @@ import 'artist_detail_page.dart';
 import '../../../widgets/error_placeholder.dart';
 import '../../../widgets/song_list_item.dart';
 import '../../../widgets/skeleton_templates.dart';
+import '../../../widgets/visible_remote_retry_scope.dart';
 
 enum StarredTab { songs, albums, artists }
 
@@ -29,39 +31,46 @@ class StarredPage extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final starredAsync = ref.watch(starredProvider);
+    final loadFailed = ref.watch(starredLoadFailedProvider);
 
-    return DefaultTabController(
-      length: 3,
-      initialIndex: initialTab.index,
-      child: Scaffold(
-        appBar: AppBar(
-          title: const Text('收藏夹'),
-          bottom: const TabBar(
-            tabs: [
-              Tab(text: '歌曲'),
-              Tab(text: '专辑'),
-              Tab(text: '歌手'),
-            ],
-          ),
-        ),
-        body: starredAsync.when(
-          data: (starred) => Align(
-            alignment: Alignment.topCenter,
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 1400),
-              child: TabBarView(
-                children: [
-                  _buildSongsTab(context, ref, starred),
-                  _buildAlbumsTab(context, ref, starred),
-                  _buildArtistsTab(context, ref, starred),
-                ],
-              ),
+    return VisibleRemoteRetryScope(
+      branchIndex: libraryBranchIndex,
+      debugLabel: 'starred_page',
+      shouldRetry: (ref) => loadFailed || starredAsync.hasError,
+      onRetry: (ref) => ref.invalidate(starredProvider),
+      child: DefaultTabController(
+        length: 3,
+        initialIndex: initialTab.index,
+        child: Scaffold(
+          appBar: AppBar(
+            title: const Text('收藏夹'),
+            bottom: const TabBar(
+              tabs: [
+                Tab(text: '歌曲'),
+                Tab(text: '专辑'),
+                Tab(text: '歌手'),
+              ],
             ),
           ),
-          loading: () => const ListTileSkeleton(count: 6),
-          error: (error, stack) => ErrorPlaceholder(
-            message: '收藏加载失败，请检查网络后重试',
-            onRetry: () => ref.invalidate(starredProvider),
+          body: starredAsync.when(
+            data: (starred) => Align(
+              alignment: Alignment.topCenter,
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 1400),
+                child: TabBarView(
+                  children: [
+                    _buildSongsTab(context, ref, starred),
+                    _buildAlbumsTab(context, ref, starred),
+                    _buildArtistsTab(context, ref, starred),
+                  ],
+                ),
+              ),
+            ),
+            loading: () => const ListTileSkeleton(count: 6),
+            error: (error, stack) => ErrorPlaceholder(
+              message: '收藏加载失败，请检查网络后重试',
+              onRetry: () => ref.invalidate(starredProvider),
+            ),
           ),
         ),
       ),

@@ -95,7 +95,6 @@ flutter build web      # Web
 - [`gitbook/README.md`](gitbook/README.md)：快速上手，如何用 Echoes 登录第一条线路
 - [`gitbook/embed-deploy.md`](gitbook/embed-deploy.md)：Embed Service 部署与接入
 - [`gitbook/navidrome-recommended-config.md`](gitbook/navidrome-recommended-config.md)：Navidrome 推荐配置
-- 播放、下载、离线导入、设置与排障说明
 
 ## 项目结构
 

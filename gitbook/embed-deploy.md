@@ -1,38 +1,37 @@
 # Embed 部署教程
 
-这份文档只讲一件事：把 `gdstudio-embeded-service` 跑起来，并接进 Echoes。
+## 目的
 
-## 先说结论
+本文说明如何部署 `gdstudio-embeded-service`，并将其接入 Echoes。
 
-Embed Service 不是播放器，它的作用是：
+Embed Service 用于接收 Echoes 提交的离线导入任务，完成远程歌曲下载、标签写入、文件落盘以及 Navidrome 扫描触发。若仅使用 Navidrome 播放既有曲库，可不部署该服务。
 
-1. 接收 Echoes 提交的离线导入任务
-2. 下载远程歌曲
-3. 写入标签和封面
-4. 把文件放进服务器音乐目录
-5. 触发 Navidrome 扫描
+## 目录映射要求
 
-如果你只想听已经在 Navidrome 里的歌，不需要部署它。
-
-## 部署前必须理解的路径规则
-
-当前仓库默认配置里，Embed Service 的目标音乐目录是：
+当前仓库默认配置中，Embed Service 的目标音乐目录如下：
 
 ```yaml
 storage:
   music_dir: /music/library
 ```
 
-这意味着：
+若宿主机采用以下挂载：
 
-- 宿主机挂载 `./music-root:/music`
-- 最终文件会落到宿主机 `./music-root/library/...`
+```text
+./music-root:/music
+```
 
-所以 Navidrome 也必须读同一份 `./music-root`，否则导入成功后它看不到文件。
+则最终文件路径为：
 
-## 最小可用 Compose
+```text
+./music-root/library/...
+```
 
-假设你的 Navidrome 已经在同一个 Compose 网络里，服务名叫 `navidrome`：
+因此，Navidrome 必须读取同一份宿主机目录 `./music-root`。若目录不一致，导入完成后文件不会出现在 Navidrome 曲库中。
+
+## 最小部署示例
+
+以下示例假设 Navidrome 与 Embed Service 位于同一个 Compose 网络，且 Navidrome 服务名为 `navidrome`：
 
 ```yaml
 services:
@@ -58,50 +57,52 @@ services:
       - ./embed-work/work:/work:rw
 ```
 
-如果 Navidrome 不在同一个 Compose 里，把 `NAVIDROME_BASE_URL` 改成它实际可访问的地址，例如：
+若 Navidrome 不在同一 Compose 网络，应将 `NAVIDROME_BASE_URL` 设置为容器内可访问的实际地址，例如：
 
 ```text
 http://192.168.1.10:4533
 ```
 
-## 启动
+## 启动步骤
 
 ```bash
 docker compose up -d
 docker compose logs -f embed-service
 ```
 
-## 部署完成后先验三项
+## 部署后验证
 
-### 1. 健康检查
+建议至少执行以下验证：
+
+### 健康检查
 
 ```bash
 curl http://localhost:5434/healthz
 ```
 
-### 2. API Key 是否生效
+### API Key 验证
 
 ```bash
 curl http://localhost:5434/v1/jobs \
   -H "X-API-Key: change-this-api-key"
 ```
 
-### 3. 目录是否正确共享
+### 目录共享验证
 
-至少确认两件事：
+应确认以下两项：
 
-- Embed Service 能写宿主机 `./music-root`
-- Navidrome 读取的也是这份 `./music-root`
+- Embed Service 对宿主机 `./music-root` 具有写权限
+- Navidrome 读取的音乐目录同样指向 `./music-root`
 
-## Echoes 里怎么配置
+## Echoes 接入配置
 
-进入：
+在 Echoes 中进入以下路径：
 
 ```text
 侧边栏 -> 展开音乐库 -> 编辑音乐库 -> Embed Service 离线下载
 ```
 
-填写：
+按下表填写：
 
 | 字段 | 示例 |
 | --- | --- |
@@ -109,39 +110,39 @@ curl http://localhost:5434/v1/jobs \
 | API Key | `change-this-api-key` |
 | Library ID | `default` |
 
-然后点“测试连接”。
+完成后执行“测试连接”。若该步骤失败，应优先检查 URL、API Key 与端口配置，而不是继续排查任务执行问题。
 
-只要测试连接失败，就不要继续排下载问题，先把 URL 和 API Key 解决掉。
+## 功能验证
 
-## 跑通后的最短验证
+建议按以下顺序验证离线导入流程：
 
-1. 在 Echoes 里进入“探索”
-2. 切到远程搜索
-3. 搜一首服务器里没有的歌
-4. 加入离线下载队列
+1. 在 Echoes 中进入“探索”
+2. 切换到远程搜索
+3. 搜索一首当前曲库中不存在的歌曲
+4. 将其加入离线下载队列
 5. 打开“离线下载状态”
 6. 等待任务完成
-7. 回到 Navidrome 看新歌是否已经入库
+7. 返回 Navidrome 验证新文件是否已入库
 
-## 最常见的坑
+## 常见问题
 
-### 1. 把 Embed Service URL 填成 Navidrome URL
+### 将 Embed Service 地址误填为 Navidrome 地址
 
-会直接导致测试连接失败或 401/404。
+该错误通常会导致测试连接失败，或返回 `401` / `404`。
 
-### 2. 端口填错
+### 端口配置错误
 
-当前仓库里常见两种外部端口：
+当前仓库常见的外部端口为：
 
 - `8080`
 - `5434`
 
-客户端里必须填你自己实际暴露出去的那个。
+Echoes 中应填写实际对外暴露的端口。
 
-### 3. Navidrome 和 Embed Service 没共享同一份音乐目录
+### Navidrome 与 Embed Service 未共享同一宿主机音乐目录
 
-这是最常见的“任务成功但看不到歌”的原因。
+该问题通常表现为任务成功，但 Navidrome 曲库中无法看到新文件。
 
-### 4. `NAVIDROME_BASE_URL` 从容器内不可达
+### `NAVIDROME_BASE_URL` 对容器不可达
 
-如果你在容器里写 `http://localhost:4533`，通常就是错的。容器内的 `localhost` 只代表它自己。
+若在容器中填写 `http://localhost:4533`，通常表示配置错误。容器内的 `localhost` 仅指向当前容器自身。

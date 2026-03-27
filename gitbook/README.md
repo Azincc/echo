@@ -1,60 +1,121 @@
-# 项目总览
+# 快速上手
 
-Echoes 是一个基于 Flutter 的 Navidrome / Subsonic / OpenSubsonic 客户端，重点解决自建音乐服务在多线路访问、跨平台使用、歌词封面补全、本地下载和服务器侧离线导入上的实际问题。
+这份文档只解决一件事：如何用 Echoes 登录第一条线路。
 
-## 项目包含什么
+如果你还没部署服务端，先看：
 
-当前仓库主要由两部分组成：
+- [Navidrome 推荐配置](navidrome-recommended-config.md)
+- [Embed 部署教程](embed-deploy.md)
 
-- Echoes 客户端：负责播放、浏览、搜索、歌单、收藏、设置、本地下载
-- `gdstudio-embeded-service`：负责将远程搜索到的歌曲导入服务器音乐库
+## 先准备三项
 
-如果只想把 Navidrome 当作音乐服务器来听歌，只部署 Navidrome 就够了。
+登录前你至少要有：
 
-如果还想把远程找到的歌曲补进服务器曲库，再额外部署 Embed Service。
+1. 一个可访问的 Navidrome 地址
+2. 一个 Navidrome 用户名
+3. 该用户的密码或 API Key
 
-## 核心能力
+第一条线路就是你第一次填进 Echoes 的服务器地址，例如：
 
-- 支持 Navidrome / Subsonic / OpenSubsonic 登录
-- 支持多音乐库与多地址线路切换
-- 支持启动探测、故障切换和线路自动回退
-- 支持首页推荐、音乐库浏览、歌单、收藏和搜索
-- 支持歌词和封面多源获取
-- 支持客户端本地下载
-- 支持远程搜索、试听与服务器侧离线导入
+- `https://music.example.com`
+- `http://192.168.1.10:4533`
 
-## 适合谁看
+推荐优先用 HTTPS。
 
-- 想直接使用本项目的用户
-- 要部署 Navidrome 和 Embed Service 的维护者
-- 要本地运行或继续开发客户端的开发者
+## 第一次登录怎么填
 
-## 快速上手
+Echoes 首次进入会先让你填“服务器地址”。
 
-如果你想最快跑起来，直接看：
+建议按下面填写：
 
-- [快速上手](quick-start.md)
+| 字段 | 怎么填 | 示例 |
+| --- | --- | --- |
+| 服务器地址 | 你的 Navidrome 地址，必须带协议头 | `http://192.168.1.10:4533` |
+| 音乐库名称 | 本地显示名称，可选 | `家庭 NAS` |
+| 线路名称 | 当前这条地址的标签，可选 | `主线路` |
 
-## 推荐阅读顺序
+然后点“下一步”。
 
-1. [快速上手](quick-start.md)
-2. [系统架构](architecture.md)
-3. [部署 Navidrome](deploy-navidrome.md)
-4. [部署 Embed Service](deploy-embed-service.md)
-5. [首次登录与音乐库配置](login-and-library.md)
-6. [功能使用说明](feature-guide.md)
+客户端会先检测服务器能力，再进入认证页。
 
-## 推荐部署拓扑
+## 认证页怎么填
+
+第二步填认证信息：
+
+| 字段 | 说明 |
+| --- | --- |
+| 用户名 | 你的 Navidrome 用户名 |
+| API Key | 如果服务器支持，优先填这个 |
+| 密码 | 没有 API Key 时填密码 |
+
+建议：
+
+- 支持 API Key 时优先用 API Key
+- 如果你只填了 API Key，密码可以留空
+
+填完后点“登录”。
+
+## 登录成功后先确认什么
+
+进入首页后，建议先确认三件事：
+
+1. 首页能正常加载
+2. 点一首歌可以播放
+3. 打开侧边栏后能看到当前线路名称
+
+如果这三件事都正常，第一条线路就已经配置成功了。
+
+## 以后怎么加第二条线路
+
+第一条线路通了以后，再去做多线路，不要一开始就混着配。
+
+路径：
+
+1. 打开侧边栏
+2. 展开音乐库列表
+3. 进入“编辑音乐库”
+4. 添加新地址
+
+建议的线路命名方式：
+
+- `主线路`
+- `家里`
+- `公网`
+- `Tailscale`
+
+## 最常见的四个错误
+
+### 1. 地址没写协议头
+
+错误示例：
 
 ```text
-Echoes App
-  ├─ 播放 / 浏览 / 歌单 / 歌词 / 封面 -> Navidrome
-  ├─ 远程搜索 / 试听 -> GDStudio Public API
-  └─ 离线导入任务 -> Embed Service -> 写入音乐文件 -> 触发 Navidrome 扫描
+192.168.1.10:4533
 ```
 
-## 说明
+正确示例：
 
-- 文档以当前仓库实现为准。
-- 服务部署以 Docker 为主。
-- Navidrome Docker 示例参考官方文档：<https://www.navidrome.org/docs/installation/docker/>
+```text
+http://192.168.1.10:4533
+```
+
+### 2. 把 Embed Service 地址填成 Navidrome 地址
+
+登录 Echoes 时填的必须是 Navidrome 地址，不是 Embed Service 地址。
+
+### 3. 端口写错
+
+默认情况下：
+
+- Navidrome 常见端口是 `4533`
+- Embed Service 常见外部端口是 `5434` 或 `8080`
+
+### 4. HTTP 警告当成报错
+
+如果你填的是 HTTP，客户端会弹安全提示。这是提醒，不是登录失败。
+
+## 只保留三份文档
+
+- 本页：[快速上手](README.md)
+- [Embed 部署教程](embed-deploy.md)
+- [Navidrome 推荐配置](navidrome-recommended-config.md)

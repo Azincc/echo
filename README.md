@@ -90,11 +90,11 @@ flutter build web      # Web
 
 ## 使用文档
 
-项目的 GitBook 文档位于 [`gitbook/README.md`](gitbook/README.md)，主要包含：
+项目的文档已精简到 3 份，位于 `gitbook/`：
 
-- Navidrome 部署
-- Embed Service 部署与接入
-- 客户端登录、音乐库配置与多线路管理
+- [`gitbook/README.md`](gitbook/README.md)：快速上手，如何用 Echoes 登录第一条线路
+- [`gitbook/embed-deploy.md`](gitbook/embed-deploy.md)：Embed Service 部署与接入
+- [`gitbook/navidrome-recommended-config.md`](gitbook/navidrome-recommended-config.md)：Navidrome 推荐配置
 - 播放、下载、离线导入、设置与排障说明
 
 ## 项目结构

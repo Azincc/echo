@@ -8,9 +8,7 @@
 
 ## 使用文档
 
-文档入口位于 `gitbook/`，从快速上手开始即可：
-
-- [`gitbook/README.md`](gitbook/README.md)：快速上手，文内已包含 Embed Service 部署与 Navidrome 推荐配置的进一步链接
+- [`gitbook/README.md`](gitbook/README.md)：快速上手文档
 
 ## 仓库组成
 

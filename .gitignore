@@ -1,4 +1,5 @@
 # Miscellaneous
+.DS_Store
 *.class
 *.lock
 *.log
@@ -45,6 +46,16 @@ flutter_*.png
 linked_*.ds
 unlinked.ds
 unlinked_spec.ds
+analyze_output.txt
+devtools_options.yaml
+*.iml
+
+# IDE local state
+.idea/caches/
+.idea/deviceManager.xml
+.idea/libraries/Dart_Packages.xml
+.idea/libraries/Flutter_Plugins.xml
+.idea/workspace.xml
 
 # Android related
 **/android/**/gradle-wrapper.jar

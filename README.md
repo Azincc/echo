@@ -1,6 +1,16 @@
 # 回响/Echoes
 
+<p align="center">
+  <img src="web/icons/Icon-512.png" alt="Echoes Logo" width="180" />
+</p>
+
 一款基于 Flutter 的 Navidrome / Subsonic / OpenSubsonic 音乐客户端，面向自建音乐服务场景，重点解决多线路访问、跨设备播放、歌词封面补全、本地下载与服务器侧离线导入等实际问题。
+
+## 使用文档
+
+文档入口位于 `gitbook/`，从快速上手开始即可：
+
+- [`gitbook/README.md`](gitbook/README.md)：快速上手，文内已包含 Embed Service 部署与 Navidrome 推荐配置的进一步链接
 
 ## 仓库组成
 
@@ -49,6 +59,67 @@
 - 使用 Flutter 一套代码覆盖 Android、iOS、macOS、Windows、Linux、Web
 - 当前优先打磨 Android 与 iOS 体验，桌面端与 Web 仍在持续适配
 
+## 界面截图
+
+<table>
+  <tr>
+    <td align="center">
+      <img src="docs/screenshots/music-home.png" alt="音乐流首页" width="260" /><br />
+      音乐流首页
+    </td>
+    <td align="center">
+      <img src="docs/screenshots/explore-page.png" alt="探索" width="260" /><br />
+      探索
+    </td>
+    <td align="center">
+      <img src="docs/screenshots/profile-page.png" alt="我的页面" width="260" /><br />
+      我的页面
+    </td>
+  </tr>
+  <tr>
+    <td align="center">
+      <img src="docs/screenshots/multi-library-management.png" alt="多音乐库管理" width="260" /><br />
+      多音乐库管理
+    </td>
+    <td align="center">
+      <img src="docs/screenshots/edit-library-multi-endpoint.png" alt="编辑音乐库与多线路" width="260" /><br />
+      编辑音乐库与多线路
+    </td>
+    <td align="center">
+      <img src="docs/screenshots/stats-overview.png" alt="统计信息" width="260" /><br />
+      统计信息
+    </td>
+  </tr>
+  <tr>
+    <td align="center">
+      <img src="docs/screenshots/full-player.png" alt="全屏播放器" width="260" /><br />
+      全屏播放器
+    </td>
+    <td align="center">
+      <img src="docs/screenshots/lyrics-view.png" alt="歌词" width="260" /><br />
+      歌词
+    </td>
+    <td align="center">
+      <img src="docs/screenshots/download-manager.png" alt="下载管理" width="260" /><br />
+      下载管理
+    </td>
+  </tr>
+  <tr>
+    <td align="center">
+      <img src="docs/screenshots/offline-download-manager.png" alt="离线下载管理" width="260" /><br />
+      离线下载管理
+    </td>
+    <td align="center">
+      <img src="docs/screenshots/cache-management.png" alt="缓存管理" width="260" /><br />
+      缓存管理
+    </td>
+    <td align="center">
+      <img src="docs/screenshots/theme-settings.png" alt="主题设置" width="260" /><br />
+      主题设置
+    </td>
+  </tr>
+</table>
+
 ## 技术栈
 
 | 层级 | 技术方案 |
@@ -87,14 +158,6 @@ flutter build macos    # macOS
 flutter build linux    # Linux
 flutter build web      # Web
 ```
-
-## 使用文档
-
-项目的文档已精简到 3 份，位于 `gitbook/`：
-
-- [`gitbook/README.md`](gitbook/README.md)：快速上手，如何用 Echoes 登录第一条线路
-- [`gitbook/embed-deploy.md`](gitbook/embed-deploy.md)：Embed Service 部署与接入
-- [`gitbook/navidrome-recommended-config.md`](gitbook/navidrome-recommended-config.md)：Navidrome 推荐配置
 
 ## 项目结构
 

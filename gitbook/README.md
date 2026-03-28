@@ -106,11 +106,3 @@ Echoes 登录使用的地址必须是 Navidrome 地址，不应填写 Embed Serv
 ### 将 HTTP 风险提示误判为登录失败
 
 当服务器地址使用 HTTP 时，客户端会给出安全提示。该提示用于风险确认，不代表连接失败。
-
-## 文档索引
-
-当前项目 Wiki 仅保留以下 3 份核心文档：
-
-- 本页：[快速上手](README.md)
-- [Embed 部署教程](embed-deploy.md)
-- [Navidrome 推荐配置](navidrome-recommended-config.md)

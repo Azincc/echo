@@ -1,9 +1,5 @@
 # Navidrome 推荐配置
 
-## 目的
-
-本文提供面向 Echoes 的最小推荐配置。配置范围仅覆盖当前项目使用中实际需要的项，不追求完整列举。
-
 以下内容已参考 Navidrome 官方 Docker 安装文档和配置选项文档进行核对，核对日期为 2026-03-27：
 
 - <https://www.navidrome.org/docs/installation/docker/>
@@ -18,6 +14,32 @@
 3. 为后续接入 Embed Service 保留兼容性
 4. 改善中文搜索表现
 5. 适配反向代理及多线路访问场景
+
+## 飞牛版本说明
+
+如果使用飞牛应用中心安装的 Navidrome，建议额外根据以下教程启用 FFmpeg 转码支持：
+
+- <https://club.fnnas.com/forum.php?mod=viewthread&tid=4968>
+
+根据该教程，飞牛版本通常需要在 Navidrome 配置中显式开启转码界面配置，并指定 `ffmpeg` 路径，否则客户端在启用转码时可能无法正常播放。
+
+教程给出的关键配置如下：
+
+```toml
+# 启用用户界面中的转码配置
+ND_ENABLETRANSCODINGCONFIG = true
+
+# 配置 ffmpeg 路径
+FFmpegPath = "/usr/bin/ffmpeg"
+```
+
+对于飞牛应用中心安装的 Navidrome，教程中提到的配置文件路径为：
+
+```text
+/vol1/@appdata/navidrome/navidrome.toml
+```
+
+修改完成后，建议重新停用并启用 Navidrome，再到客户端中验证转码播放是否恢复正常。
 
 ## 推荐 Compose
 
@@ -105,38 +127,3 @@ stack/
   music-root/
   embed-work/
 ```
-
-## 面向 Echoes 的使用建议
-
-### 为客户端创建独立用户
-
-不建议长期在客户端中使用管理员账号。
-
-### 优先使用 API Key
-
-当 Navidrome 支持 API Key 时，建议将其作为 Echoes 的首选认证方式。
-
-### 优先配置稳定的第一条线路
-
-第一条线路建议使用最稳定、最常用的地址，例如：
-
-- 局域网：`http://192.168.1.10:4533`
-- 公网：`https://music.example.com`
-
-在第一条线路验证通过后，再配置附加线路。
-
-## 接入 Embed Service 时的要求
-
-若计划接入 Embed Service，应满足以下条件：
-
-1. Navidrome 读取宿主机 `./music-root`
-2. Embed Service 写入宿主机 `./music-root`
-3. 两个容器看到的是同一份文件
-
-在当前项目默认配置下，Embed Service 会将文件写入：
-
-```text
-./music-root/library/...
-```
-
-因此，只要 Navidrome 读取 `./music-root`，扫描后即可识别该目录中的新文件。

@@ -179,6 +179,11 @@ gitbook/                      # 使用与部署文档
 
 客户端主要通过 Subsonic / OpenSubsonic API 与 Navidrome 等兼容服务通信；远程试听与服务器侧离线导入依赖仓库内提供的可选 Embed Service。
 
+## 友情链接
+
+- [gdstudio 首页](https://music.gdstudio.org/)
+- [linux.do 论坛](https://linux.do/)
+
 ## 许可证
 
 本项目基于 [MIT](LICENSE) 许可证开源。

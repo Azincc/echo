@@ -1,4 +1,4 @@
-package cc.azin.echoes
+package com.az1n.echoes
 
 import android.content.Intent
 import com.ryanheise.audioservice.AudioServiceFragmentActivity
@@ -7,7 +7,7 @@ import io.flutter.plugin.common.MethodChannel
 
 class MainActivity : AudioServiceFragmentActivity() {
     companion object {
-        private const val APP_LIFECYCLE_CHANNEL = "cc.azin.echoes/app_lifecycle"
+        private const val APP_LIFECYCLE_CHANNEL = "com.az1n.echoes/app_lifecycle"
     }
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {

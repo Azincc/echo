@@ -60,7 +60,7 @@ class App extends ConsumerWidget {
     final themeSettings = ref.watch(themeSettingsProvider);
 
     return MaterialApp.router(
-      title: 'Echoes',
+      title: 'echoes',
       theme: AppTheme.light(seedColor: themeSettings.seedColor),
       darkTheme: AppTheme.dark(seedColor: themeSettings.seedColor),
       themeMode: themeSettings.mode,

@@ -30,7 +30,7 @@ class _MainScaffoldState extends ConsumerState<MainScaffold> {
   static const double _miniPlayerHeight = 72;
   static const _logTag = 'BACK';
   static const MethodChannel _appLifecycleChannel = MethodChannel(
-    'cc.azin.echoes/app_lifecycle',
+    'com.az1n.echoes/app_lifecycle',
   );
   int? _lastSyncedBranchIndex;
 

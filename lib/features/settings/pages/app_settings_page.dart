@@ -62,7 +62,7 @@ class _AppSettingsPageState extends ConsumerState<AppSettingsPage> {
 
       await Share.shareXFiles([
         XFile(file.path),
-      ], subject: 'Echoes 日志导出 $timestamp');
+      ], subject: 'echoes 日志导出 $timestamp');
     } catch (e) {
       Logger.errorWithTag('LOG_EXPORT', 'export failed', e);
       _showSnackBar('日志导出失败: $e');
@@ -465,9 +465,9 @@ class _AppSettingsPageState extends ConsumerState<AppSettingsPage> {
   void _showAppAboutDialog(BuildContext context) {
     showAboutDialog(
       context: context,
-      applicationName: 'Echoes 回响',
+      applicationName: 'echoes',
       applicationIcon: const FlutterLogo(size: 40),
-      applicationLegalese: '© 2026 Echoes 回响',
+      applicationLegalese: '© 2026 echoes',
       children: const [SizedBox(height: 12), Text('基于 Subsonic API 的音乐客户端。')],
     );
   }

@@ -1,6 +1,6 @@
 {
-    "name": "Echoes 回响",
-    "short_name": "Echoes 回响",
+    "name": "echoes",
+    "short_name": "echoes",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",

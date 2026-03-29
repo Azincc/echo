@@ -164,9 +164,9 @@ Future<EchoAudioHandler> initAudioService() async {
   final handler = await AudioService.init(
     builder: () => EchoAudioHandler(audioPlayer),
     config: const AudioServiceConfig(
-      androidNotificationChannelId: 'com.example.echo.audio',
-      androidNotificationChannelName: 'Echo Music Playback',
-      androidNotificationChannelDescription: 'Echo music player controls',
+      androidNotificationChannelId: 'com.az1n.echoes.audio',
+      androidNotificationChannelName: 'echoes Music Playback',
+      androidNotificationChannelDescription: 'echoes music player controls',
       // Android 通知进度条/强调元素使用的底色，避免浅色主题下不可见。
       notificationColor: AppColorScheme.defaultSeedColor,
       androidNotificationOngoing: false, // 允许用户手动关闭通知

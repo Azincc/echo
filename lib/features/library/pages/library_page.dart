@@ -18,13 +18,21 @@ import 'artist_list_page.dart';
 import 'playlist_detail_page.dart';
 import 'song_list_page.dart';
 import 'starred_page.dart';
+import '../utils/library_sorting.dart';
 import '../widgets/playlist_manage_dialogs.dart';
 import '../../../widgets/skeleton_templates.dart';
 import '../widgets/playlist_options_sheet.dart';
 
 /// 我的页面 - Tab 2
-class LibraryPage extends ConsumerWidget {
+class LibraryPage extends ConsumerStatefulWidget {
   const LibraryPage({super.key});
+
+  @override
+  ConsumerState<LibraryPage> createState() => _LibraryPageState();
+}
+
+class _LibraryPageState extends ConsumerState<LibraryPage> {
+  PlaylistSortOption _playlistSortOption = PlaylistSortOption.defaultOrder;
 
   Future<void> _createPlaylist(BuildContext context, WidgetRef ref) async {
     final repository = ref.read(playlistRepositoryProvider);
@@ -241,7 +249,7 @@ class LibraryPage extends ConsumerWidget {
   }
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     final playlistsAsync = ref.watch(playlistsProvider);
     final playlistsLoadFailed = ref.watch(playlistsLoadFailedProvider);
     final starredAsync = ref.watch(starredProvider);
@@ -353,6 +361,27 @@ class LibraryPage extends ConsumerWidget {
                               ?.copyWith(fontWeight: FontWeight.bold),
                         ),
                       ),
+                      PopupMenuButton<PlaylistSortOption>(
+                        tooltip: '歌单排序：${_playlistSortOption.label}',
+                        icon: const Icon(Icons.sort),
+                        initialValue: _playlistSortOption,
+                        onSelected: (option) {
+                          if (option == _playlistSortOption) return;
+                          setState(() {
+                            _playlistSortOption = option;
+                          });
+                        },
+                        itemBuilder: (context) => selectablePlaylistSortOptions
+                            .map(
+                              (option) =>
+                                  CheckedPopupMenuItem<PlaylistSortOption>(
+                                    value: option,
+                                    checked: option == _playlistSortOption,
+                                    child: Text(option.label),
+                                  ),
+                            )
+                            .toList(),
+                      ),
                       IconButton(
                         onPressed: () => _createPlaylist(context, ref),
                         icon: const Icon(Icons.add),
@@ -373,8 +402,12 @@ class LibraryPage extends ConsumerWidget {
                         ),
                       );
                     }
+                    final sortedPlaylists = sortPlaylists(
+                      playlists,
+                      _playlistSortOption,
+                    );
                     return Column(
-                      children: playlists.map((playlist) {
+                      children: sortedPlaylists.map((playlist) {
                         return ListTile(
                           leading: const Icon(Icons.playlist_play),
                           title: Text(playlist.name),

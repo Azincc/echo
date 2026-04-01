@@ -10,6 +10,7 @@ import '../../../providers/player_provider.dart';
 import '../../../providers/download_provider.dart';
 import '../../../providers/auth_provider.dart';
 import '../../player/widgets/song_options_sheet.dart';
+import '../utils/library_sorting.dart';
 import '../widgets/playlist_manage_dialogs.dart';
 import '../widgets/playlist_options_sheet.dart';
 import '../../../widgets/error_placeholder.dart';
@@ -18,23 +19,31 @@ import '../../../widgets/skeleton_templates.dart';
 import '../../../widgets/visible_remote_retry_scope.dart';
 
 /// 歌单详情页
-class PlaylistDetailPage extends ConsumerWidget {
+class PlaylistDetailPage extends ConsumerStatefulWidget {
   final String playlistId;
 
   const PlaylistDetailPage({super.key, required this.playlistId});
+
+  @override
+  ConsumerState<PlaylistDetailPage> createState() => _PlaylistDetailPageState();
+}
+
+class _PlaylistDetailPageState extends ConsumerState<PlaylistDetailPage> {
+  SongSortOption _sortOption = SongSortOption.defaultOrder;
 
   Future<void> _onMoreActionSelected(
     BuildContext context,
     WidgetRef ref,
     Playlist playlist,
     PlaylistOptionsAction action,
+    List<Song>? songsOverride,
   ) async {
     switch (action) {
       case PlaylistOptionsAction.download:
-        await _downloadPlaylist(context, ref, playlist);
+        await _downloadPlaylist(context, ref, playlist, songsOverride);
         return;
       case PlaylistOptionsAction.addToQueue:
-        await _addPlaylistToQueue(context, ref, playlist);
+        await _addPlaylistToQueue(context, ref, playlist, songsOverride);
         return;
       case PlaylistOptionsAction.edit:
         await _editPlaylist(context, ref, playlist);
@@ -49,8 +58,9 @@ class PlaylistDetailPage extends ConsumerWidget {
     BuildContext context,
     WidgetRef ref,
     Playlist playlist,
+    List<Song>? songsOverride,
   ) async {
-    final songs = playlist.songs ?? const <Song>[];
+    final songs = songsOverride ?? playlist.songs ?? const <Song>[];
     if (songs.isEmpty) {
       NetworkErrorNotifier.show('歌单暂无可用歌曲');
       return;
@@ -76,8 +86,9 @@ class PlaylistDetailPage extends ConsumerWidget {
     BuildContext context,
     WidgetRef ref,
     Playlist playlist,
+    List<Song>? songsOverride,
   ) async {
-    final songs = playlist.songs ?? const <Song>[];
+    final songs = songsOverride ?? playlist.songs ?? const <Song>[];
     if (songs.isEmpty) {
       NetworkErrorNotifier.show('歌单暂无可用歌曲');
       return;
@@ -175,9 +186,11 @@ class PlaylistDetailPage extends ConsumerWidget {
   }
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final playlistAsync = ref.watch(playlistDetailProvider(playlistId));
-    final loadFailed = ref.watch(playlistDetailLoadFailedProvider(playlistId));
+  Widget build(BuildContext context) {
+    final playlistAsync = ref.watch(playlistDetailProvider(widget.playlistId));
+    final loadFailed = ref.watch(
+      playlistDetailLoadFailedProvider(widget.playlistId),
+    );
     final currentPlaylist = playlistAsync.valueOrNull;
     final hasActiveLibrary = ref.watch(
       authStateProvider.select((s) => (s.currentLibrary?.id ?? '').isNotEmpty),
@@ -187,16 +200,42 @@ class PlaylistDetailPage extends ConsumerWidget {
       branchIndex: libraryBranchIndex,
       debugLabel: 'playlist_detail_page',
       shouldRetry: (ref) => loadFailed || playlistAsync.hasError,
-      onRetry: (ref) => ref.invalidate(playlistDetailProvider(playlistId)),
+      onRetry: (ref) =>
+          ref.invalidate(playlistDetailProvider(widget.playlistId)),
       child: Scaffold(
         appBar: AppBar(
           title: Text(currentPlaylist?.name ?? '歌单'),
           actions: [
             if (currentPlaylist != null)
+              PopupMenuButton<SongSortOption>(
+                tooltip: '歌曲排序：${_sortOption.label}',
+                icon: const Icon(Icons.sort),
+                initialValue: _sortOption,
+                onSelected: (option) {
+                  if (option == _sortOption) return;
+                  setState(() {
+                    _sortOption = option;
+                  });
+                },
+                itemBuilder: (context) => selectableSongSortOptions
+                    .map(
+                      (option) => CheckedPopupMenuItem<SongSortOption>(
+                        value: option,
+                        checked: option == _sortOption,
+                        child: Text(option.label),
+                      ),
+                    )
+                    .toList(),
+              ),
+            if (currentPlaylist != null)
               IconButton(
                 tooltip: '歌单操作',
                 icon: const Icon(Icons.more_horiz),
                 onPressed: () async {
+                  final sortedSongs = sortSongs(
+                    currentPlaylist.songs ?? const <Song>[],
+                    _sortOption,
+                  );
                   final action = await showPlaylistOptionsSheet(
                     context: context,
                     playlist: currentPlaylist,
@@ -210,6 +249,7 @@ class PlaylistDetailPage extends ConsumerWidget {
                     ref,
                     currentPlaylist,
                     action,
+                    sortedSongs,
                   );
                 },
               ),
@@ -221,7 +261,10 @@ class PlaylistDetailPage extends ConsumerWidget {
               return Center(child: Text(loadFailed ? '网络异常，歌单加载失败' : '歌单不存在'));
             }
 
-            final songs = playlist.songs ?? [];
+            final songs = sortSongs(
+              playlist.songs ?? const <Song>[],
+              _sortOption,
+            );
 
             return Align(
               alignment: Alignment.topCenter,

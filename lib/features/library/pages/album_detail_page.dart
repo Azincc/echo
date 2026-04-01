@@ -10,6 +10,7 @@ import '../../../providers/download_provider.dart';
 import '../../../providers/auth_provider.dart';
 import '../../../widgets/cover_art_image.dart';
 import '../../player/widgets/song_options_sheet.dart';
+import '../utils/library_sorting.dart';
 import '../widgets/album_options_sheet.dart';
 import 'package:marquee/marquee.dart';
 import '../../../widgets/error_placeholder.dart';
@@ -18,21 +19,28 @@ import '../../../widgets/skeleton_templates.dart';
 import '../../../widgets/visible_remote_retry_scope.dart';
 
 /// 专辑详情页
-class AlbumDetailPage extends ConsumerWidget {
+class AlbumDetailPage extends ConsumerStatefulWidget {
   final String albumId;
 
   const AlbumDetailPage({super.key, required this.albumId});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final albumDetailAsync = ref.watch(albumDetailProvider(albumId));
-    final loadFailed = ref.watch(albumDetailLoadFailedProvider(albumId));
+  ConsumerState<AlbumDetailPage> createState() => _AlbumDetailPageState();
+}
+
+class _AlbumDetailPageState extends ConsumerState<AlbumDetailPage> {
+  SongSortOption _sortOption = SongSortOption.defaultOrder;
+
+  @override
+  Widget build(BuildContext context) {
+    final albumDetailAsync = ref.watch(albumDetailProvider(widget.albumId));
+    final loadFailed = ref.watch(albumDetailLoadFailedProvider(widget.albumId));
 
     return VisibleRemoteRetryScope(
       branchIndex: libraryBranchIndex,
       debugLabel: 'album_detail_page',
       shouldRetry: (ref) => loadFailed || albumDetailAsync.hasError,
-      onRetry: (ref) => ref.invalidate(albumDetailProvider(albumId)),
+      onRetry: (ref) => ref.invalidate(albumDetailProvider(widget.albumId)),
       child: Scaffold(
         body: albumDetailAsync.when(
           data: (albumDetail) {
@@ -40,12 +48,15 @@ class AlbumDetailPage extends ConsumerWidget {
             final album =
                 albumDetail?.album ??
                 Album(
-                  id: albumId,
+                  id: widget.albumId,
                   name: loadFailed ? '专辑加载失败' : '专辑不存在',
                   songCount: 0,
                   duration: 0,
                 );
-            final songs = albumDetail?.songs ?? const [];
+            final songs = sortSongs(
+              albumDetail?.songs ?? const <Song>[],
+              _sortOption,
+            );
 
             return Align(
               alignment: Alignment.topCenter,
@@ -57,6 +68,27 @@ class AlbumDetailPage extends ConsumerWidget {
                       expandedHeight: 300,
                       pinned: true,
                       actions: [
+                        PopupMenuButton<SongSortOption>(
+                          tooltip: '歌曲排序：${_sortOption.label}',
+                          icon: const Icon(Icons.sort),
+                          initialValue: _sortOption,
+                          onSelected: (option) {
+                            if (option == _sortOption) return;
+                            setState(() {
+                              _sortOption = option;
+                            });
+                          },
+                          itemBuilder: (context) => selectableSongSortOptions
+                              .map(
+                                (option) =>
+                                    CheckedPopupMenuItem<SongSortOption>(
+                                      value: option,
+                                      checked: option == _sortOption,
+                                      child: Text(option.label),
+                                    ),
+                              )
+                              .toList(),
+                        ),
                         IconButton(
                           onPressed: hasAlbumData
                               ? () {
@@ -301,7 +333,9 @@ class AlbumDetailPage extends ConsumerWidget {
                                                 );
                                             // 刷新专辑详情和收藏列表
                                             ref.invalidate(
-                                              albumDetailProvider(albumId),
+                                              albumDetailProvider(
+                                                widget.albumId,
+                                              ),
                                             );
                                             ref.invalidate(starredProvider);
                                             ref.invalidate(

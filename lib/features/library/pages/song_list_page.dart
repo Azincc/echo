@@ -11,6 +11,7 @@ import '../../../providers/navigation_provider.dart';
 import '../../../providers/player_provider.dart';
 import '../../../utils/az_item.dart';
 import '../../../utils/pinyin_helper.dart';
+import '../utils/library_sorting.dart';
 import '../../player/widgets/song_options_sheet.dart';
 import '../../../widgets/error_placeholder.dart';
 import '../../../widgets/song_list_item.dart';
@@ -26,6 +27,8 @@ class SongListPage extends ConsumerStatefulWidget {
 
 class _SongListPageState extends ConsumerState<SongListPage> {
   List<AzItem<Song>> _azSongs = [];
+  List<Song> _displaySongs = [];
+  SongSortOption _sortOption = SongSortOption.alphabeticalAsc;
   int _songsSignature = 0;
   late final ItemPositionsListener _itemPositionsListener;
   int _coverLoadStart = 0;
@@ -47,7 +50,7 @@ class _SongListPageState extends ConsumerState<SongListPage> {
   }
 
   void _onItemPositionsChanged() {
-    if (!mounted || _azSongs.isEmpty) return;
+    if (!mounted || _displaySongs.isEmpty) return;
     final positions = _itemPositionsListener.itemPositions.value;
     if (positions.isEmpty) return;
 
@@ -71,7 +74,10 @@ class _SongListPageState extends ConsumerState<SongListPage> {
     final extraAfter = extraTotal - extraBefore;
 
     final nextStart = math.max(0, minVisibleIndex - extraBefore);
-    final nextEnd = math.min(_azSongs.length - 1, maxVisibleIndex + extraAfter);
+    final nextEnd = math.min(
+      _displaySongs.length - 1,
+      maxVisibleIndex + extraAfter,
+    );
 
     if (nextStart == _coverLoadStart && nextEnd == _coverLoadEnd) return;
 
@@ -82,32 +88,39 @@ class _SongListPageState extends ConsumerState<SongListPage> {
   }
 
   int _buildSongsSignature(List<Song> songs) {
-    return Object.hashAll(
-      songs.map(
-        (song) => Object.hash(
-          song.id,
-          song.title,
-          song.artist,
-          song.album,
-          song.duration,
-          song.starred,
+    return Object.hash(
+      _sortOption,
+      Object.hashAll(
+        songs.map(
+          (song) => Object.hash(
+            song.id,
+            song.title,
+            song.artist,
+            song.album,
+            song.duration,
+            song.created,
+            song.starred,
+          ),
         ),
       ),
     );
   }
 
   void _processSongs(List<Song> songs, int signature) {
-    _azSongs = songs.map((song) {
-      String tag = PinyinUtils.getFirstChar(song.title);
-      String pinyin = PinyinUtils.getPinyin(song.title);
-      return AzItem(data: song, tag: tag, namePinyin: pinyin);
-    }).toList();
+    if (_sortOption.usesAlphabeticalIndexBar) {
+      _azSongs = songs.map((song) {
+        final tag = PinyinUtils.getFirstChar(song.title);
+        final pinyin = PinyinUtils.getPinyin(song.title);
+        return AzItem(data: song, tag: tag, namePinyin: pinyin);
+      }).toList();
 
-    // Sort
-    SuspensionUtil.sortListBySuspensionTag(_azSongs);
-
-    // Show suspension tag logic
-    SuspensionUtil.setShowSuspensionStatus(_azSongs);
+      SuspensionUtil.sortListBySuspensionTag(_azSongs);
+      SuspensionUtil.setShowSuspensionStatus(_azSongs);
+      _displaySongs = _azSongs.map((item) => item.data).toList();
+    } else {
+      _displaySongs = sortSongs(songs, _sortOption);
+      _azSongs = const [];
+    }
     _songsSignature = signature;
   }
 
@@ -122,7 +135,31 @@ class _SongListPageState extends ConsumerState<SongListPage> {
       shouldRetry: (ref) => loadFailed || songsAsync.hasError,
       onRetry: (ref) => ref.invalidate(allSongsProvider),
       child: Scaffold(
-        appBar: AppBar(title: const Text('所有歌曲')),
+        appBar: AppBar(
+          title: const Text('所有歌曲'),
+          actions: [
+            PopupMenuButton<SongSortOption>(
+              tooltip: '歌曲排序：${_sortOption.label}',
+              icon: const Icon(Icons.sort),
+              initialValue: _sortOption,
+              onSelected: (option) {
+                if (option == _sortOption) return;
+                setState(() {
+                  _sortOption = option;
+                });
+              },
+              itemBuilder: (context) => selectableSongSortOptionsWithoutDefault
+                  .map(
+                    (option) => CheckedPopupMenuItem<SongSortOption>(
+                      value: option,
+                      checked: option == _sortOption,
+                      child: Text(option.label),
+                    ),
+                  )
+                  .toList(),
+            ),
+          ],
+        ),
         body: songsAsync.when(
           data: (songs) {
             if (songs.isEmpty) {
@@ -130,8 +167,11 @@ class _SongListPageState extends ConsumerState<SongListPage> {
             }
 
             final signature = _buildSongsSignature(songs);
+            final processedLength = _sortOption.usesAlphabeticalIndexBar
+                ? _azSongs.length
+                : _displaySongs.length;
             if (signature != _songsSignature ||
-                _azSongs.length != songs.length) {
+                processedLength != songs.length) {
               _processSongs(songs, signature);
             }
 
@@ -139,55 +179,44 @@ class _SongListPageState extends ConsumerState<SongListPage> {
               alignment: Alignment.topCenter,
               child: ConstrainedBox(
                 constraints: const BoxConstraints(maxWidth: 1400),
-                child: AzListView(
-                  data: _azSongs,
-                  itemCount: _azSongs.length,
-                  itemPositionsListener: _itemPositionsListener,
-                  itemBuilder: (context, index) {
-                    final item = _azSongs[index];
-                    final song = item.data;
-                    final shouldLoadCover =
-                        index >= _coverLoadStart && index <= _coverLoadEnd;
-
-                    return SongListItem(
-                      song: song,
-                      index: index,
-                      variant: SongListItemVariant.standard,
-                      coverArtId: shouldLoadCover ? song.coverArt : null,
-                      onTap: () {
-                        final queue = _azSongs.map((e) => e.data).toList();
-                        ref
-                            .read(playerProvider.notifier)
-                            .playQueue(queue, startIndex: index);
-                      },
-                      onLongPress: () {
-                        showSongOptionsSheet(context: context, song: song);
-                      },
-                    );
-                  },
-                  // Index Bar setup
-                  indexBarData: SuspensionUtil.getTagIndexList(_azSongs),
-                  indexBarOptions: IndexBarOptions(
-                    needRebuild: true,
-                    ignoreDragCancel: true,
-                    downTextStyle: TextStyle(fontSize: 12, color: Colors.white),
-                    downItemDecoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: Colors.green,
-                    ),
-                    indexHintWidth: 120 / 2,
-                    indexHintHeight: 100 / 2,
-                    indexHintDecoration: BoxDecoration(
-                      image: null,
-                      color: Colors.grey[700],
-                      shape: BoxShape.rectangle,
-                      borderRadius: BorderRadius.circular(5.0),
-                    ),
-                    indexHintAlignment: Alignment.centerRight,
-                    indexHintChildAlignment: Alignment(-0.25, 0.0),
-                    indexHintOffset: Offset(-20, 0),
-                  ),
-                ),
+                child: _sortOption.usesAlphabeticalIndexBar
+                    ? AzListView(
+                        data: _azSongs,
+                        itemCount: _azSongs.length,
+                        itemPositionsListener: _itemPositionsListener,
+                        itemBuilder: (context, index) =>
+                            _buildSongListItem(index),
+                        indexBarData: SuspensionUtil.getTagIndexList(_azSongs),
+                        indexBarOptions: IndexBarOptions(
+                          needRebuild: true,
+                          ignoreDragCancel: true,
+                          downTextStyle: TextStyle(
+                            fontSize: 12,
+                            color: Colors.white,
+                          ),
+                          downItemDecoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: Colors.green,
+                          ),
+                          indexHintWidth: 120 / 2,
+                          indexHintHeight: 100 / 2,
+                          indexHintDecoration: BoxDecoration(
+                            image: null,
+                            color: Colors.grey[700],
+                            shape: BoxShape.rectangle,
+                            borderRadius: BorderRadius.circular(5.0),
+                          ),
+                          indexHintAlignment: Alignment.centerRight,
+                          indexHintChildAlignment: Alignment(-0.25, 0.0),
+                          indexHintOffset: Offset(-20, 0),
+                        ),
+                      )
+                    : ScrollablePositionedList.builder(
+                        itemCount: _displaySongs.length,
+                        itemPositionsListener: _itemPositionsListener,
+                        itemBuilder: (context, index) =>
+                            _buildSongListItem(index),
+                      ),
               ),
             );
           },
@@ -196,6 +225,26 @@ class _SongListPageState extends ConsumerState<SongListPage> {
               const ErrorPlaceholder(message: '歌曲加载失败，请检查网络后重试'),
         ),
       ),
+    );
+  }
+
+  Widget _buildSongListItem(int index) {
+    final song = _displaySongs[index];
+    final shouldLoadCover = index >= _coverLoadStart && index <= _coverLoadEnd;
+
+    return SongListItem(
+      song: song,
+      index: index,
+      variant: SongListItemVariant.standard,
+      coverArtId: shouldLoadCover ? song.coverArt : null,
+      onTap: () {
+        ref
+            .read(playerProvider.notifier)
+            .playQueue(_displaySongs, startIndex: index);
+      },
+      onLongPress: () {
+        showSongOptionsSheet(context: context, song: song);
+      },
     );
   }
 }

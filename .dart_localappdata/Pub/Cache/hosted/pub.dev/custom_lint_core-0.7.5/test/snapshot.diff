@@ -1,0 +1,10 @@
+Message: `MyAssist`
+Priority: 1
+Diff for file `file.dart:2`:
+```
+void main() {
+-   print('Hello world');
++   Helloprint('Hello world');
+}
+```
+---

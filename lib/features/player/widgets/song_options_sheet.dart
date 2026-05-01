@@ -4,14 +4,17 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/utils/logger.dart';
 import '../../../core/utils/network_error_notifier.dart';
 import '../../../core/utils/toast_notifier.dart';
 import '../../../data/models/song.dart';
 import '../../../providers/api_provider.dart';
 import '../../../providers/auth_provider.dart';
 import '../../../providers/download_provider.dart';
+import '../../../providers/offline_download_provider.dart';
 import '../../../providers/player_provider.dart';
 import '../../../providers/playlist_provider.dart';
+import '../../library/pages/song_metadata_edit_page.dart';
 import '../../library/pages/album_detail_page.dart';
 import '../../library/pages/artist_detail_page.dart';
 
@@ -56,6 +59,7 @@ Future<void> showSongOptionsSheet({
 }
 
 class _SongOptionsSheet extends ConsumerWidget {
+  static const _logTag = 'METADATA_EDIT';
   final BuildContext hostContext;
   final Song song;
   final List<SongOptionsExtraAction> extraActions;
@@ -88,6 +92,11 @@ class _SongOptionsSheet extends ConsumerWidget {
       authStateProvider.select((s) => s.currentLibrary?.id ?? ''),
     );
     final canDownload = libraryId.isNotEmpty;
+    final embedConfig = ref.watch(activeEmbedServiceConfigProvider);
+    final canEditMetadata =
+        embedConfig.isEnabledAndConfigured &&
+        !song.isPreview &&
+        (song.path?.trim().isNotEmpty ?? false);
 
     if (mode == SongOptionsSheetMode.offlineOnly) {
       return SafeArea(
@@ -316,6 +325,32 @@ class _SongOptionsSheet extends ConsumerWidget {
                   ToastNotifier.show('已复制专辑: $albumName');
                 },
               ),
+              if (canEditMetadata)
+                _buildActionTile(
+                  context: context,
+                  icon: Icons.edit_note_outlined,
+                  title: '修改元数据',
+                  onTap: () async {
+                    Logger.infoWithTag(
+                      _logTag,
+                      'enter editor from options songId=${song.id} '
+                      'title="${song.title.trim()}" '
+                      'artist="${(song.artist ?? '').trim()}" '
+                      'album="${(song.album ?? '').trim()}" '
+                      'path="${(song.path ?? '').trim()}" '
+                      'albumId="${(song.albumId ?? '').trim()}" '
+                      'artistId="${(song.artistId ?? '').trim()}"',
+                    );
+                    await _closeAndRun(context, () async {
+                      if (!hostContext.mounted) return;
+                      await Navigator.of(hostContext).push<bool>(
+                        MaterialPageRoute(
+                          builder: (_) => SongMetadataEditPage(song: song),
+                        ),
+                      );
+                    });
+                  },
+                ),
               if (extraActions.isNotEmpty) const Divider(height: 1),
               for (final action in extraActions)
                 _buildActionTile(

@@ -1,0 +1,391 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Echoes UI Export</title>
+    <style>
+      :root {
+        --bg: #f4efe7;
+        --panel: rgba(255, 252, 247, 0.88);
+        --text: #1d1a16;
+        --muted: #6f665d;
+        --line: rgba(55, 41, 28, 0.12);
+        --accent: #b4502e;
+        --accent-2: #1d6b73;
+        --shadow: 0 18px 60px rgba(50, 35, 20, 0.12);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        font-family: "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+        color: var(--text);
+        background:
+          radial-gradient(circle at top left, rgba(180, 80, 46, 0.12), transparent 34%),
+          radial-gradient(circle at top right, rgba(29, 107, 115, 0.14), transparent 28%),
+          linear-gradient(180deg, #fbf6ee 0%, var(--bg) 100%);
+      }
+
+      .shell {
+        max-width: 1440px;
+        margin: 0 auto;
+        padding: 32px 24px 56px;
+      }
+
+      .hero {
+        padding: 28px;
+        border: 1px solid var(--line);
+        border-radius: 28px;
+        background: linear-gradient(135deg, rgba(255, 248, 240, 0.92), rgba(247, 251, 251, 0.9));
+        box-shadow: var(--shadow);
+      }
+
+      .eyebrow {
+        display: inline-block;
+        padding: 6px 10px;
+        border-radius: 999px;
+        font-size: 12px;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: #fff;
+        background: linear-gradient(135deg, var(--accent), var(--accent-2));
+      }
+
+      h1 {
+        margin: 18px 0 8px;
+        font-size: clamp(32px, 4vw, 56px);
+        line-height: 1.02;
+      }
+
+      .lead {
+        max-width: 920px;
+        margin: 0;
+        color: var(--muted);
+        font-size: 16px;
+        line-height: 1.7;
+      }
+
+      .meta {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+        gap: 12px;
+        margin-top: 24px;
+      }
+
+      .meta-card {
+        padding: 14px 16px;
+        border: 1px solid var(--line);
+        border-radius: 18px;
+        background: rgba(255, 255, 255, 0.62);
+      }
+
+      .meta-card strong {
+        display: block;
+        font-size: 13px;
+        color: var(--muted);
+      }
+
+      .meta-card span {
+        display: block;
+        margin-top: 6px;
+        font-size: 20px;
+        font-weight: 700;
+      }
+
+      .section {
+        margin-top: 34px;
+      }
+
+      .section-head {
+        display: flex;
+        align-items: end;
+        justify-content: space-between;
+        gap: 12px;
+        margin-bottom: 16px;
+      }
+
+      .section-head h2 {
+        margin: 0;
+        font-size: 24px;
+      }
+
+      .section-head p {
+        margin: 0;
+        color: var(--muted);
+        font-size: 14px;
+      }
+
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+        gap: 18px;
+      }
+
+      .card {
+        overflow: hidden;
+        border: 1px solid var(--line);
+        border-radius: 24px;
+        background: var(--panel);
+        box-shadow: var(--shadow);
+      }
+
+      .shot {
+        display: block;
+        width: 100%;
+        aspect-ratio: 4 / 7;
+        object-fit: cover;
+        background: #e8dfd5;
+      }
+
+      .body {
+        padding: 16px 16px 18px;
+      }
+
+      .tag {
+        display: inline-block;
+        padding: 5px 9px;
+        border-radius: 999px;
+        border: 1px solid rgba(180, 80, 46, 0.18);
+        background: rgba(180, 80, 46, 0.08);
+        color: var(--accent);
+        font-size: 12px;
+        font-weight: 700;
+      }
+
+      .title {
+        margin: 12px 0 8px;
+        font-size: 18px;
+        font-weight: 700;
+      }
+
+      .src {
+        margin: 0;
+        color: var(--muted);
+        font-size: 13px;
+        line-height: 1.6;
+        word-break: break-all;
+      }
+
+      .footer {
+        margin-top: 28px;
+        color: var(--muted);
+        font-size: 13px;
+      }
+
+      @media (max-width: 720px) {
+        .shell {
+          padding: 18px 14px 36px;
+        }
+
+        .hero {
+          padding: 22px 18px;
+          border-radius: 22px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="shell">
+      <section class="hero">
+        <span class="eyebrow">UI Export</span>
+        <h1>Echoes 界面导出</h1>
+        <p class="lead">
+          这份导出包整理了仓库里当前已有的 UI 截图，覆盖登录、主流程、音乐库、播放、下载与设置等核心界面，
+          可直接用于评审、演示、归档或发给设计与测试同学做快速浏览。
+        </p>
+        <div class="meta">
+          <div class="meta-card">
+            <strong>项目</strong>
+            <span>Echoes</span>
+          </div>
+          <div class="meta-card">
+            <strong>导出时间</strong>
+            <span>2026-03-30</span>
+          </div>
+          <div class="meta-card">
+            <strong>截图数量</strong>
+            <span>14</span>
+          </div>
+          <div class="meta-card">
+            <strong>来源</strong>
+            <span>docs/screenshots</span>
+          </div>
+        </div>
+      </section>
+
+      <section class="section">
+        <div class="section-head">
+          <h2>快速开始</h2>
+          <p>登录与服务配置入口</p>
+        </div>
+        <div class="grid">
+          <article class="card">
+            <img class="shot" src="screens/quickstart-login-credentials.png" alt="登录凭据" />
+            <div class="body">
+              <span class="tag">快速开始</span>
+              <h3 class="title">登录凭据</h3>
+              <p class="src">lib/features/auth/pages/login_page.dart</p>
+            </div>
+          </article>
+          <article class="card">
+            <img class="shot" src="screens/quickstart-server-address.png" alt="服务器地址配置" />
+            <div class="body">
+              <span class="tag">快速开始</span>
+              <h3 class="title">服务器地址配置</h3>
+              <p class="src">lib/features/auth/pages/login_page.dart<br />lib/features/library/pages/edit_library_page.dart</p>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section class="section">
+        <div class="section-head">
+          <h2>主流程</h2>
+          <p>首页、探索与个人入口</p>
+        </div>
+        <div class="grid">
+          <article class="card">
+            <img class="shot" src="screens/music-home.png" alt="音乐流首页" />
+            <div class="body">
+              <span class="tag">主流程</span>
+              <h3 class="title">音乐流首页</h3>
+              <p class="src">lib/features/discover/pages/discover_page.dart</p>
+            </div>
+          </article>
+          <article class="card">
+            <img class="shot" src="screens/explore-page.png" alt="探索页" />
+            <div class="body">
+              <span class="tag">主流程</span>
+              <h3 class="title">探索页</h3>
+              <p class="src">lib/features/explore/pages/explore_page.dart</p>
+            </div>
+          </article>
+          <article class="card">
+            <img class="shot" src="screens/profile-page.png" alt="我的页面" />
+            <div class="body">
+              <span class="tag">主流程</span>
+              <h3 class="title">我的页面</h3>
+              <p class="src">lib/features/library/pages/library_page.dart</p>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section class="section">
+        <div class="section-head">
+          <h2>音乐库</h2>
+          <p>多库与多线路配置</p>
+        </div>
+        <div class="grid">
+          <article class="card">
+            <img class="shot" src="screens/multi-library-management.png" alt="多音乐库管理" />
+            <div class="body">
+              <span class="tag">音乐库</span>
+              <h3 class="title">多音乐库管理</h3>
+              <p class="src">lib/features/library/pages/library_page.dart</p>
+            </div>
+          </article>
+          <article class="card">
+            <img class="shot" src="screens/edit-library-multi-endpoint.png" alt="编辑音乐库与多线路" />
+            <div class="body">
+              <span class="tag">音乐库</span>
+              <h3 class="title">编辑音乐库与多线路</h3>
+              <p class="src">lib/features/library/pages/edit_library_page.dart</p>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section class="section">
+        <div class="section-head">
+          <h2>播放</h2>
+          <p>主播放器与歌词面板</p>
+        </div>
+        <div class="grid">
+          <article class="card">
+            <img class="shot" src="screens/full-player.png" alt="全屏播放器" />
+            <div class="body">
+              <span class="tag">播放</span>
+              <h3 class="title">全屏播放器</h3>
+              <p class="src">lib/features/player/pages/full_player_page.dart</p>
+            </div>
+          </article>
+          <article class="card">
+            <img class="shot" src="screens/lyrics-view.png" alt="歌词视图" />
+            <div class="body">
+              <span class="tag">播放</span>
+              <h3 class="title">歌词视图</h3>
+              <p class="src">lib/features/player/pages/full_player_page.dart</p>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section class="section">
+        <div class="section-head">
+          <h2>下载与离线</h2>
+          <p>下载任务和离线资源管理</p>
+        </div>
+        <div class="grid">
+          <article class="card">
+            <img class="shot" src="screens/download-manager.png" alt="下载管理" />
+            <div class="body">
+              <span class="tag">下载与离线</span>
+              <h3 class="title">下载管理</h3>
+              <p class="src">lib/features/download/pages/download_manager_page.dart</p>
+            </div>
+          </article>
+          <article class="card">
+            <img class="shot" src="screens/offline-download-manager.png" alt="离线下载管理" />
+            <div class="body">
+              <span class="tag">下载与离线</span>
+              <h3 class="title">离线下载管理</h3>
+              <p class="src">lib/features/offline/pages/offline_download_status_page.dart</p>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section class="section">
+        <div class="section-head">
+          <h2>设置与诊断</h2>
+          <p>统计、缓存和主题配置</p>
+        </div>
+        <div class="grid">
+          <article class="card">
+            <img class="shot" src="screens/stats-overview.png" alt="统计信息" />
+            <div class="body">
+              <span class="tag">设置与诊断</span>
+              <h3 class="title">统计信息</h3>
+              <p class="src">lib/features/settings/pages/playback_stats_page.dart</p>
+            </div>
+          </article>
+          <article class="card">
+            <img class="shot" src="screens/cache-management.png" alt="缓存管理" />
+            <div class="body">
+              <span class="tag">设置与诊断</span>
+              <h3 class="title">缓存管理</h3>
+              <p class="src">lib/features/settings/pages/cache_management_page.dart</p>
+            </div>
+          </article>
+          <article class="card">
+            <img class="shot" src="screens/theme-settings.png" alt="主题设置" />
+            <div class="body">
+              <span class="tag">设置与诊断</span>
+              <h3 class="title">主题设置</h3>
+              <p class="src">lib/features/settings/pages/theme_settings_page.dart</p>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <p class="footer">
+        本导出使用仓库内现有截图生成。若需要完整补齐所有页面截图，需要先修复 Web 构建或在目标平台跑起应用后重新采集。
+      </p>
+    </main>
+  </body>
+</html>

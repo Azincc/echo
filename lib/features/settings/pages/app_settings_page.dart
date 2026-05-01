@@ -1,8 +1,9 @@
-import 'dart:io';
+import 'dart:convert';
 
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:path_provider/path_provider.dart';
+import 'package:go_router/go_router.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -46,23 +47,24 @@ class _AppSettingsPageState extends ConsumerState<AppSettingsPage> {
         return;
       }
 
-      final dir = await getTemporaryDirectory();
       final timestamp = DateTime.now()
           .toIso8601String()
           .replaceAll(':', '-')
           .split('.')
           .first;
-      final file = File('${dir.path}/echoes_log_$timestamp.txt');
-      await file.writeAsString(logContent);
+      await Share.shareXFiles([
+        XFile.fromData(
+          utf8.encode(logContent),
+          mimeType: 'text/plain',
+          name: 'echoes_log_$timestamp.txt',
+        ),
+      ], subject: 'echoes 日志导出 $timestamp');
 
       Logger.infoWithTag(
         'LOG_EXPORT',
-        'exported ${Logger.bufferedLineCount} lines to ${file.path}',
+        'exported ${Logger.bufferedLineCount} lines to share payload'
+            '${kIsWeb ? " (web)" : ""}',
       );
-
-      await Share.shareXFiles([
-        XFile(file.path),
-      ], subject: 'echoes 日志导出 $timestamp');
     } catch (e) {
       Logger.errorWithTag('LOG_EXPORT', 'export failed', e);
       _showSnackBar('日志导出失败: $e');
@@ -234,11 +236,26 @@ class _AppSettingsPageState extends ConsumerState<AppSettingsPage> {
           16 + MediaQuery.of(context).padding.bottom,
         ),
         children: [
-          Text(
-            '服务器信息',
-            style: Theme.of(
-              context,
-            ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  '服务器信息',
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+              IconButton(
+                tooltip: '编辑服务器设置',
+                icon: const Icon(Icons.edit_outlined),
+                onPressed: library == null
+                    ? null
+                    : () {
+                        context.push('/library/edit/${library.id}');
+                      },
+              ),
+            ],
           ),
           const SizedBox(height: 8),
           _buildInfoRow('当前连接', activeAddress?.label ?? '未连接'),

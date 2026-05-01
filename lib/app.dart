@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'core/utils/logger.dart';
 import 'core/theme/app_theme.dart';
+import 'package:flutter/foundation.dart'
+    show TargetPlatform, defaultTargetPlatform, kIsWeb;
 
 import 'features/auth/pages/login_page.dart';
 import 'providers/auth_provider.dart';
@@ -12,15 +14,14 @@ import 'features/discover/pages/discover_page.dart';
 import 'features/explore/pages/explore_page.dart';
 import 'features/library/pages/library_page.dart';
 import 'features/library/pages/edit_library_page.dart';
-
-import 'dart:io';
-
 /// 应用主入口 Widget
 class App extends ConsumerWidget {
   const App({super.key});
 
   bool _isDesktopScaledPlatform() {
-    return Platform.isWindows || Platform.isMacOS;
+    if (kIsWeb) return false;
+    return defaultTargetPlatform == TargetPlatform.windows ||
+        defaultTargetPlatform == TargetPlatform.macOS;
   }
 
   double _resolveDesktopTextScale(MediaQueryData mediaQueryData) {

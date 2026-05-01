@@ -1,7 +1,7 @@
-import 'dart:io' show File;
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:just_audio/just_audio.dart' hide PlayerState;
+import '../../core/platform/platform_file_bridge.dart';
 import '../../data/models/audio_quality.dart';
 import '../../data/sources/subsonic_api_client.dart';
 import '../../core/utils/logger.dart';
@@ -24,21 +24,21 @@ class CacheManagerHandler {
 
   /// 从缓存文件注册缓存元数据（downloadProgressStream 到 1.0 时调用）
   Future<void> registerCacheFromFile(
-    File cacheFile,
+    String cacheFilePath,
     String songId,
     String libraryId,
     AudioQualityLevel quality,
   ) async {
     try {
-      if (!await cacheFile.exists()) return;
-      final fileSize = await cacheFile.length();
+      if (!await fileExists(cacheFilePath)) return;
+      final fileSize = await fileLength(cacheFilePath);
       if (fileSize <= 0) return;
 
       final cacheService = _ref.read(audioCacheServiceProvider);
       await cacheService.registerCache(
         songId: songId,
         libraryId: libraryId,
-        filePath: cacheFile.path,
+        filePath: cacheFilePath,
         fileSize: fileSize,
         quality: quality,
       );
@@ -108,11 +108,10 @@ class CacheManagerHandler {
         libraryId: libraryId,
         quality: effectiveQuality,
       );
-      final cacheFile = File(cacheFilePath);
       // ignore: experimental_member_use
       final source = LockCachingAudioSource(
         Uri.parse(streamUrl),
-        cacheFile: cacheFile,
+        cacheFile: fileForPath(cacheFilePath),
       );
       Logger.info('Pre-caching next song: ${nextSong.title}');
 
@@ -121,7 +120,7 @@ class CacheManagerHandler {
       source.downloadProgressStream.listen((progress) {
         if (progress >= 1.0) {
           registerCacheFromFile(
-            cacheFile,
+            cacheFilePath,
             nextSong.id,
             libraryId,
             effectiveQuality,

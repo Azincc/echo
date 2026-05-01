@@ -1,5 +1,3 @@
-import 'dart:io' show InternetAddress;
-
 import 'package:dio/dio.dart';
 import 'package:echoes/data/models/server_address.dart';
 import 'package:echoes/core/utils/logger.dart';
@@ -195,39 +193,10 @@ class AddressPool {
       return;
     }
 
-    final literal = InternetAddress.tryParse(host);
-    if (literal != null) {
-      Logger.debugWithTag(
-        _tag,
-        'probe dns literal: ${address.label} host=$host type=${literal.type.name}',
-      );
-      return;
-    }
-
-    final start = DateTime.now();
-    try {
-      final addresses = await InternetAddress.lookup(
-        host,
-      ).timeout(const Duration(seconds: 3));
-      final latency = DateTime.now().difference(start).inMilliseconds;
-      final resolved = addresses.isEmpty
-          ? 'empty'
-          : addresses
-                .map((item) => '${item.type.name}:${item.address}')
-                .join(', ');
-      Logger.debugWithTag(
-        _tag,
-        'probe dns result: ${address.label} host=$host '
-        'count=${addresses.length} latency=${latency}ms resolved=$resolved',
-      );
-    } catch (e) {
-      final latency = DateTime.now().difference(start).inMilliseconds;
-      Logger.warnWithTag(
-        _tag,
-        'probe dns failed: ${address.label} host=$host latency=${latency}ms',
-        e,
-      );
-    }
+    Logger.debugWithTag(
+      _tag,
+      'probe dns skipped: ${address.label} host=$host (platform-neutral build)',
+    );
   }
 
   String _summarizeCandidates() {

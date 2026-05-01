@@ -1,8 +1,8 @@
 import 'dart:async';
 import 'dart:math';
-import 'dart:io' show File, Platform;
 import 'package:audio_service/audio_service.dart';
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart'
+    show TargetPlatform, defaultTargetPlatform, kIsWeb;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:just_audio/just_audio.dart' hide PlayerState;
 import '../data/models/song.dart';
@@ -13,6 +13,7 @@ import '../data/sources/local_storage.dart';
 import '../data/repositories/music_repository.dart';
 
 import '../core/network/connectivity_monitor.dart';
+import '../core/platform/platform_file_bridge.dart';
 import '../core/utils/logger.dart';
 import '../core/utils/network_error_notifier.dart';
 import '../core/services/audio_handler_service.dart';
@@ -34,6 +35,17 @@ import 'player/cache_manager_handler.dart';
 
 const _playerLogTag = 'PLAYER';
 const _playDbgTag = 'PLAYDBG';
+
+bool get _isDesktopPlatform =>
+    !kIsWeb &&
+    (defaultTargetPlatform == TargetPlatform.windows ||
+        defaultTargetPlatform == TargetPlatform.linux ||
+        defaultTargetPlatform == TargetPlatform.macOS);
+
+bool get _isApplePlatform =>
+    !kIsWeb &&
+    (defaultTargetPlatform == TargetPlatform.iOS ||
+        defaultTargetPlatform == TargetPlatform.macOS);
 
 /// 播放器 Provider
 
@@ -121,10 +133,8 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
     AudioPlayer player;
 
     // 初始化 AudioService（仅在移动平台，桌面端不支持且可能干扰播放）
-    final isDesktop =
-        !kIsWeb && (Platform.isWindows || Platform.isLinux || Platform.isMacOS);
     try {
-      if (isDesktop) throw UnsupportedError('Desktop platform');
+      if (_isDesktopPlatform) throw UnsupportedError('Desktop platform');
       _audioHandler = await initAudioService();
       player = _audioHandler!.audioPlayer;
       Logger.info('AudioService initialized');
@@ -536,7 +546,7 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
         song.id,
         libraryId,
       );
-      if (downloadedPath != null && File(downloadedPath).existsSync()) {
+      if (downloadedPath != null && fileExistsSync(downloadedPath)) {
         Logger.info('Playing from download: ${song.title}');
         _playDbg(
           'sid=$debugSession source=download setFilePath path=$downloadedPath',
@@ -572,7 +582,7 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
         libraryId: libraryId,
         quality: effectiveQuality,
       );
-      if (cachedPath != null && File(cachedPath).existsSync()) {
+      if (cachedPath != null && fileExistsSync(cachedPath)) {
         Logger.info('Playing from cache: ${song.title}');
         _playDbg(
           'sid=$debugSession source=cache setFilePath path=$cachedPath '
@@ -657,9 +667,7 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
         maxBitRate: maxBitRate,
       );
       final isAppleHttpStream =
-          !kIsWeb &&
-          (Platform.isIOS || Platform.isMacOS) &&
-          streamUrl.startsWith('http://');
+          _isApplePlatform && streamUrl.startsWith('http://');
       _playDbg(
         'sid=$debugSession stream_resolved '
         'quality=${effectiveQuality.name} transcode=${transcodeFormat ?? 'none'} '
@@ -710,11 +718,10 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
             libraryId: libraryId,
             quality: effectiveQuality,
           );
-          final cacheFile = File(cacheFilePath);
           // ignore: experimental_member_use
           final audioSource = LockCachingAudioSource(
             Uri.parse(streamUrl),
-            cacheFile: cacheFile,
+            cacheFile: fileForPath(cacheFilePath),
           );
           _playDbg(
             'sid=$debugSession source=lock_cache setAudioSource '
@@ -753,7 +760,7 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
           final capSongId = song.id;
           final capLibraryId = libraryId;
           final capQuality = effectiveQuality;
-          final capCacheFile = cacheFile;
+          final capCacheFilePath = cacheFilePath;
           // ignore: experimental_member_use
           _downloadProgressSubscription = audioSource.downloadProgressStream
               .listen((progress) {
@@ -767,7 +774,7 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
                 // 下载完成 → 注册缓存
                 if (progress >= 1.0) {
                   _registerCacheFromFile(
-                    capCacheFile,
+                    capCacheFilePath,
                     capSongId,
                     capLibraryId,
                     capQuality,
@@ -850,11 +857,10 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
             libraryId: libraryId,
             quality: effectiveQuality,
           );
-          final cacheFile = File(cacheFilePath);
           // ignore: experimental_member_use
           final audioSource = LockCachingAudioSource(
             Uri.parse(streamUrl),
-            cacheFile: cacheFile,
+            cacheFile: fileForPath(cacheFilePath),
           );
           _playDbg(
             'sid=$debugSession source=lock_cache_from_direct_fallback '
@@ -991,9 +997,8 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
         format: 'mp3', // 转码为 MP3
         maxBitRate: 320,
       );
-      final isApplePlatform = !kIsWeb && (Platform.isIOS || Platform.isMacOS);
       final isAppleHttpStream =
-          isApplePlatform && streamUrl.startsWith('http://');
+          _isApplePlatform && streamUrl.startsWith('http://');
 
       Logger.info('Retrying with MP3 transcoding: ${song.title}');
       _playDbg(
@@ -1049,7 +1054,7 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
         // ignore: experimental_member_use
         final audioSource = LockCachingAudioSource(
           Uri.parse(streamUrl),
-          cacheFile: File(cacheFilePath),
+          cacheFile: fileForPath(cacheFilePath),
         );
         _playDbg(
           'sid=${debugSession ?? _playDebugSession} '
@@ -1124,8 +1129,6 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
     final lowerSuffix = suffix.toLowerCase();
 
     // macOS/iOS 原生支持 m4a/alac（AVFoundation/CoreAudio），无需转码
-    final isApplePlatform = !kIsWeb && (Platform.isMacOS || Platform.isIOS);
-
     // 所有平台都不支持的格式
     const universallyUnsupported = [
       'ape', // Monkey's Audio
@@ -1141,7 +1144,7 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
     }
 
     // Android 上 m4a/alac 支持不完整，需要转码
-    if (!isApplePlatform) {
+    if (!_isApplePlatform) {
       const androidUnsupported = [
         'm4a', // 可能包含 ALAC 编码，Android 支持不完整
         'alac', // Apple Lossless
@@ -2558,6 +2561,39 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
     return newStarred;
   }
 
+  Future<void> refreshSongMetadata(String songId) async {
+    if (songId.trim().isEmpty) return;
+
+    try {
+      final fullSong = await _musicRepository.getSong(songId);
+      if (fullSong == null) return;
+
+      final currentSong = state.currentSong;
+      final updatedQueue = List<Song>.from(state.queue);
+      var queueChanged = false;
+      for (var i = 0; i < updatedQueue.length; i++) {
+        if (updatedQueue[i].id != songId) continue;
+        updatedQueue[i] = fullSong;
+        queueChanged = true;
+      }
+
+      if (currentSong != null && currentSong.id == songId) {
+        state = state.copyWith(
+          currentSong: fullSong,
+          queue: queueChanged ? updatedQueue : state.queue,
+        );
+        _updateMediaItem(fullSong);
+        return;
+      }
+
+      if (queueChanged) {
+        state = state.copyWith(queue: updatedQueue);
+      }
+    } catch (e) {
+      Logger.warnWithTag(_playerLogTag, 'failed to refresh song metadata', e);
+    }
+  }
+
   Duration _normalizeSeekPosition(Duration position) {
     if (position < Duration.zero) return Duration.zero;
     final duration = state.duration;
@@ -2784,7 +2820,7 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
     // ignore: experimental_member_use
     final audioSource = LockCachingAudioSource(
       Uri.parse(reloadUrl),
-      cacheFile: File(cacheFilePath),
+      cacheFile: fileForPath(cacheFilePath),
     );
     await player.setAudioSource(audioSource);
     _usingLockCachingSource = true;
@@ -2823,7 +2859,7 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
 
   bool _isAppleHttpUrl(String? url) {
     if (url == null || url.isEmpty || kIsWeb) return false;
-    return (Platform.isIOS || Platform.isMacOS) && url.startsWith('http://');
+    return _isApplePlatform && url.startsWith('http://');
   }
 
   void _clearPendingSeek() {
@@ -3002,12 +3038,12 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
 
   /// 从缓存文件注册缓存元数据（downloadProgressStream 到 1.0 时调用）
   Future<void> _registerCacheFromFile(
-    File cacheFile,
+    String cacheFilePath,
     String songId,
     String libraryId,
     AudioQualityLevel quality,
   ) => _cacheHandler.registerCacheFromFile(
-    cacheFile,
+    cacheFilePath,
     songId,
     libraryId,
     quality,

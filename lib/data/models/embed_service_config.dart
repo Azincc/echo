@@ -15,6 +15,8 @@ class EmbedServiceConfig {
   bool get isConfigured =>
       baseUrl.trim().isNotEmpty && apiKey.trim().isNotEmpty;
 
+  bool get isEnabledAndConfigured => enabled && isConfigured;
+
   EmbedServiceConfig copyWith({
     bool? enabled,
     String? baseUrl,
@@ -49,7 +51,8 @@ class EmbedServiceConfig {
   }
 
   static EmbedServiceConfig fromLibraryExtensions(
-      Map<String, dynamic>? extensions) {
+    Map<String, dynamic>? extensions,
+  ) {
     if (extensions == null) return const EmbedServiceConfig();
     final raw = extensions['embedService'];
     if (raw is! Map<String, dynamic>) return const EmbedServiceConfig();

@@ -1,8 +1,9 @@
 import 'dart:async';
-import 'dart:io';
 import 'dart:ui';
 
 import 'package:echoes/core/utils/logger.dart';
+import 'package:flutter/foundation.dart'
+    show TargetPlatform, defaultTargetPlatform, kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:just_audio_media_kit/just_audio_media_kit.dart';
@@ -12,7 +13,11 @@ void main() {
   runZonedGuarded(
     () {
       WidgetsFlutterBinding.ensureInitialized();
-      if (Platform.isLinux || Platform.isWindows) {
+      final isDesktopMediaKitPlatform =
+          !kIsWeb &&
+          (defaultTargetPlatform == TargetPlatform.linux ||
+              defaultTargetPlatform == TargetPlatform.windows);
+      if (isDesktopMediaKitPlatform) {
         JustAudioMediaKit.ensureInitialized();
       }
 

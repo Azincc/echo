@@ -1,0 +1,4 @@
+./artist_values.go
+./flac.go
+./mp3.go
+./tagger.go

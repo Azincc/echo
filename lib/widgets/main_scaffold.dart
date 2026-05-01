@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 import '../core/utils/logger.dart';
 import '../features/player/widgets/mini_player.dart';
 import '../providers/navigation_provider.dart';
+import '../providers/offline_download_provider.dart';
 import '../providers/player_provider.dart';
 import 'app_drawer.dart';
 
@@ -142,6 +143,25 @@ class _MainScaffoldState extends ConsumerState<MainScaffold> {
     final hasMiniPlayer = ref.watch(
       playerProvider.select((state) => state.currentSong != null),
     );
+    final showExploreTab = ref.watch(
+      activeEmbedServiceConfigProvider.select((config) {
+        return config.isEnabledAndConfigured;
+      }),
+    );
+    final currentBranchIndex = widget.navigationShell.currentIndex;
+    final visibleBranchIndices = <int>[
+      discoverBranchIndex,
+      if (showExploreTab) exploreBranchIndex,
+      libraryBranchIndex,
+    ];
+    final selectedIndex = visibleBranchIndices.indexOf(currentBranchIndex);
+
+    if (selectedIndex == -1) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        widget.navigationShell.goBranch(discoverBranchIndex);
+      });
+    }
 
     return BackButtonListener(
       onBackButtonPressed: () async {
@@ -161,25 +181,27 @@ class _MainScaffoldState extends ConsumerState<MainScaffold> {
         ),
         bottomSheet: const MiniPlayer(),
         bottomNavigationBar: NavigationBar(
-          selectedIndex: widget.navigationShell.currentIndex,
+          selectedIndex: selectedIndex == -1 ? 0 : selectedIndex,
           onDestinationSelected: (index) {
+            final branchIndex = visibleBranchIndices[index];
             widget.navigationShell.goBranch(
-              index,
-              initialLocation: index == widget.navigationShell.currentIndex,
+              branchIndex,
+              initialLocation: branchIndex == currentBranchIndex,
             );
           },
-          destinations: const [
-            NavigationDestination(
+          destinations: [
+            const NavigationDestination(
               icon: Icon(Icons.explore_outlined),
               selectedIcon: Icon(Icons.explore),
               label: '音乐流',
             ),
-            NavigationDestination(
-              icon: Icon(Icons.travel_explore_outlined),
-              selectedIcon: Icon(Icons.travel_explore),
-              label: '探索',
-            ),
-            NavigationDestination(
+            if (showExploreTab)
+              const NavigationDestination(
+                icon: Icon(Icons.travel_explore_outlined),
+                selectedIcon: Icon(Icons.travel_explore),
+                label: '探索',
+              ),
+            const NavigationDestination(
               icon: Icon(Icons.library_music_outlined),
               selectedIcon: Icon(Icons.library_music),
               label: '我的',

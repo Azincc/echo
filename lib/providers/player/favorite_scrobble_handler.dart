@@ -1,4 +1,4 @@
-import 'dart:io' show File;
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../data/models/song.dart';
 import '../../data/sources/subsonic_api_client.dart';
@@ -6,6 +6,7 @@ import '../../data/sources/local_storage.dart';
 import '../../data/repositories/music_repository.dart';
 import '../../core/constants/api_constants.dart';
 import '../../core/network/connectivity_monitor.dart';
+import '../../core/platform/platform_file_bridge.dart';
 import '../../core/utils/logger.dart';
 import '../music_provider.dart';
 import '../api_provider.dart';
@@ -49,6 +50,7 @@ class FavoriteScrobbleHandler {
     required String cacheFilePath,
     required String libraryId,
   }) async {
+    if (kIsWeb) return;
     if (libraryId.isEmpty) return;
 
     try {
@@ -57,10 +59,8 @@ class FavoriteScrobbleHandler {
           .currentNetworkType;
       if (networkType != NetworkType.mobile) return;
 
-      final cacheFile = File(cacheFilePath);
-      if (!await cacheFile.exists()) return;
-
-      final savedBytes = await cacheFile.length();
+      if (!await fileExists(cacheFilePath)) return;
+      final savedBytes = await fileLength(cacheFilePath);
       if (savedBytes <= 0) return;
 
       await LocalStorage.addMobileCacheSavedBytes(

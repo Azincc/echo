@@ -5,6 +5,8 @@ import '../models/album.dart';
 import '../models/artist.dart';
 import '../sources/subsonic_api_client.dart';
 
+const _musicRepoLogTag = 'MUSIC_REPO';
+
 /// 音乐数据仓库
 class MusicRepository {
   final SubsonicApiClient _apiClient;
@@ -365,7 +367,16 @@ class MusicRepository {
       final songData = response['song'];
       if (songData == null) return null;
 
-      return Song.fromJson(songData as Map<String, dynamic>);
+      final song = Song.fromJson(songData as Map<String, dynamic>);
+      Logger.infoWithTag(
+        _musicRepoLogTag,
+        'getSong loaded songId=$songId '
+        'title="${song.title.trim()}" '
+        'artist="${(song.artist ?? '').trim()}" '
+        'album="${(song.album ?? '').trim()}" '
+        'path="${(song.path ?? '').trim()}"',
+      );
+      return song;
     } catch (e) {
       Logger.error('Failed to get song: $songId', e);
       return null;

@@ -1,0 +1,17 @@
+name: safe_local_storage
+description: A safe caching library to read/write values on local storage.
+homepage: https://github.com/alexmercerind/safe_local_storage.git
+repository: https://github.com/alexmercerind/safe_local_storage.git
+version: 2.0.3
+
+environment:
+  sdk: ">=2.16.0 <4.0.0"
+
+dependencies:
+  path: ^1.8.2
+  synchronized: ^3.0.0+2
+
+dev_dependencies:
+  lints: ^2.0.0
+  test: ^1.16.0
+  collection: ^1.16.0

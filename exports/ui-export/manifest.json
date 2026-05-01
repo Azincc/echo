@@ -1,0 +1,120 @@
+{
+  "project": "Echoes",
+  "generatedAt": "2026-03-30",
+  "sourceScreenshotDir": "docs/screenshots",
+  "items": [
+    {
+      "title": "登录凭据",
+      "group": "快速开始",
+      "file": "screens/quickstart-login-credentials.png",
+      "sources": [
+        "lib/features/auth/pages/login_page.dart"
+      ]
+    },
+    {
+      "title": "服务器地址配置",
+      "group": "快速开始",
+      "file": "screens/quickstart-server-address.png",
+      "sources": [
+        "lib/features/auth/pages/login_page.dart",
+        "lib/features/library/pages/edit_library_page.dart"
+      ]
+    },
+    {
+      "title": "音乐流首页",
+      "group": "主流程",
+      "file": "screens/music-home.png",
+      "sources": [
+        "lib/features/discover/pages/discover_page.dart"
+      ]
+    },
+    {
+      "title": "探索页",
+      "group": "主流程",
+      "file": "screens/explore-page.png",
+      "sources": [
+        "lib/features/explore/pages/explore_page.dart"
+      ]
+    },
+    {
+      "title": "我的页面",
+      "group": "主流程",
+      "file": "screens/profile-page.png",
+      "sources": [
+        "lib/features/library/pages/library_page.dart"
+      ]
+    },
+    {
+      "title": "多音乐库管理",
+      "group": "音乐库",
+      "file": "screens/multi-library-management.png",
+      "sources": [
+        "lib/features/library/pages/library_page.dart"
+      ]
+    },
+    {
+      "title": "编辑音乐库与多线路",
+      "group": "音乐库",
+      "file": "screens/edit-library-multi-endpoint.png",
+      "sources": [
+        "lib/features/library/pages/edit_library_page.dart"
+      ]
+    },
+    {
+      "title": "统计信息",
+      "group": "设置与诊断",
+      "file": "screens/stats-overview.png",
+      "sources": [
+        "lib/features/settings/pages/playback_stats_page.dart"
+      ]
+    },
+    {
+      "title": "全屏播放器",
+      "group": "播放",
+      "file": "screens/full-player.png",
+      "sources": [
+        "lib/features/player/pages/full_player_page.dart"
+      ]
+    },
+    {
+      "title": "歌词视图",
+      "group": "播放",
+      "file": "screens/lyrics-view.png",
+      "sources": [
+        "lib/features/player/pages/full_player_page.dart"
+      ]
+    },
+    {
+      "title": "下载管理",
+      "group": "下载与离线",
+      "file": "screens/download-manager.png",
+      "sources": [
+        "lib/features/download/pages/download_manager_page.dart"
+      ]
+    },
+    {
+      "title": "离线下载管理",
+      "group": "下载与离线",
+      "file": "screens/offline-download-manager.png",
+      "sources": [
+        "lib/features/offline/pages/offline_download_status_page.dart"
+      ]
+    },
+    {
+      "title": "缓存管理",
+      "group": "设置与诊断",
+      "file": "screens/cache-management.png",
+      "sources": [
+        "lib/features/settings/pages/cache_management_page.dart"
+      ]
+    },
+    {
+      "title": "主题设置",
+      "group": "设置与诊断",
+      "file": "screens/theme-settings.png",
+      "sources": [
+        "lib/features/settings/pages/theme_settings_page.dart"
+      ]
+    }
+  ]
+}

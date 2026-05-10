@@ -51,6 +51,7 @@ devtools_options.yaml
 *.iml
 
 # IDE local state
+.idea/
 .idea/caches/
 .idea/deviceManager.xml
 .idea/libraries/Dart_Packages.xml

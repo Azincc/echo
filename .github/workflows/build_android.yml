@@ -103,6 +103,12 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           RELEASE_NAME: ${{ github.ref_name }}
         run: |
+          assets=(
+            "build/app/outputs/flutter-apk/app-arm64-v8a-release.apk"
+            "build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk"
+            "build/app/outputs/flutter-apk/app-x86_64-release.apk"
+          )
+
           release_body="$(git for-each-ref "refs/tags/$RELEASE_NAME" --format='%(contents)')"
           if [[ -z "$release_body" ]]; then
             release_body="$(git log --format=%s -n 1)"
@@ -110,16 +116,39 @@ jobs:
 
           if gh release view "$RELEASE_NAME" >/dev/null 2>&1; then
             gh release edit "$RELEASE_NAME" --title "$RELEASE_NAME" --notes "$release_body"
-            gh release upload "$RELEASE_NAME" \
-              build/app/outputs/flutter-apk/app-arm64-v8a-release.apk \
-              build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk \
-              build/app/outputs/flutter-apk/app-x86_64-release.apk \
-              --clobber
-          else
-            gh release create "$RELEASE_NAME" \
-              build/app/outputs/flutter-apk/app-arm64-v8a-release.apk \
-              build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk \
-              build/app/outputs/flutter-apk/app-x86_64-release.apk \
-              --title "$RELEASE_NAME" \
-              --notes "$release_body"
+          elif ! gh release create "$RELEASE_NAME" --title "$RELEASE_NAME" --notes "$release_body"; then
+            gh release view "$RELEASE_NAME" >/dev/null
+            gh release edit "$RELEASE_NAME" --title "$RELEASE_NAME" --notes "$release_body"
           fi
+
+          asset_exists() {
+            local asset_name="$1"
+            gh release view "$RELEASE_NAME" --json assets --jq '.assets[].name' | grep -Fxq "$asset_name"
+          }
+
+          upload_asset() {
+            local asset_path="$1"
+            local asset_name
+            asset_name="$(basename "$asset_path")"
+
+            if asset_exists "$asset_name"; then
+              echo "Release asset already exists, skipping: $asset_name"
+              return 0
+            fi
+
+            if gh release upload "$RELEASE_NAME" "$asset_path"; then
+              return 0
+            fi
+
+            if asset_exists "$asset_name"; then
+              echo "Release asset appeared during upload, skipping: $asset_name"
+              return 0
+            fi
+
+            echo "Failed to upload release asset: $asset_name"
+            return 1
+          }
+
+          for asset in "${assets[@]}"; do
+            upload_asset "$asset"
+          done

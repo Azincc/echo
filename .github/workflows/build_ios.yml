@@ -2,6 +2,12 @@ name: Build iOS
 
 on:
   workflow_dispatch:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
 
 env:
   FLUTTER_VERSION: 3.38.9
@@ -30,14 +36,32 @@ jobs:
       - name: Install dependencies
         run: flutter pub get
 
+      - name: Verify tag matches pubspec version
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          pubspec_version=$(grep '^version:' pubspec.yaml | head -n1 | awk '{print $2}' | cut -d'+' -f1)
+          if [[ -z "$pubspec_version" ]]; then
+            echo "Cannot find version in pubspec.yaml"
+            exit 1
+          fi
+          expected_tag="v${pubspec_version}"
+          if [[ "${GITHUB_REF_NAME}" != "${expected_tag}" ]]; then
+            echo "Tag ${GITHUB_REF_NAME} does not match pubspec version ${pubspec_version}"
+            exit 1
+          fi
+
       - name: Run code generation
         run: dart run build_runner build --delete-conflicting-outputs
 
       - name: Get version name
         id: version
         run: |
-          version=$(grep '^version:' pubspec.yaml | head -n1 | awk '{print $2}' | cut -d'+' -f1)
-          echo "name=v${version}" >> $GITHUB_OUTPUT
+          if [[ "${{ github.ref_type }}" == "tag" ]]; then
+            echo "name=${{ github.ref_name }}" >> $GITHUB_OUTPUT
+          else
+            version=$(grep '^version:' pubspec.yaml | head -n1 | awk '{print $2}' | cut -d'+' -f1)
+            echo "name=v${version}" >> $GITHUB_OUTPUT
+          fi
 
       - name: Build iOS (No Codesign)
         run: flutter build ios --release --no-codesign
@@ -54,3 +78,57 @@ jobs:
           name: app-release-ipa-unsigned-${{ steps.version.outputs.name }}
           path: app-release-unsigned.ipa
           retention-days: 5
+
+      - name: Publish GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_NAME: ${{ github.ref_name }}
+        run: |
+          assets=(
+            "app-release-unsigned.ipa"
+          )
+
+          release_body="$(git for-each-ref "refs/tags/$RELEASE_NAME" --format='%(contents)')"
+          if [[ -z "$release_body" ]]; then
+            release_body="$(git log --format=%s -n 1)"
+          fi
+
+          if gh release view "$RELEASE_NAME" >/dev/null 2>&1; then
+            gh release edit "$RELEASE_NAME" --title "$RELEASE_NAME" --notes "$release_body"
+          elif ! gh release create "$RELEASE_NAME" --title "$RELEASE_NAME" --notes "$release_body"; then
+            gh release view "$RELEASE_NAME" >/dev/null
+            gh release edit "$RELEASE_NAME" --title "$RELEASE_NAME" --notes "$release_body"
+          fi
+
+          asset_exists() {
+            local asset_name="$1"
+            gh release view "$RELEASE_NAME" --json assets --jq '.assets[].name' | grep -Fxq "$asset_name"
+          }
+
+          upload_asset() {
+            local asset_path="$1"
+            local asset_name
+            asset_name="$(basename "$asset_path")"
+
+            if asset_exists "$asset_name"; then
+              echo "Release asset already exists, skipping: $asset_name"
+              return 0
+            fi
+
+            if gh release upload "$RELEASE_NAME" "$asset_path"; then
+              return 0
+            fi
+
+            if asset_exists "$asset_name"; then
+              echo "Release asset appeared during upload, skipping: $asset_name"
+              return 0
+            fi
+
+            echo "Failed to upload release asset: $asset_name"
+            return 1
+          }
+
+          for asset in "${assets[@]}"; do
+            upload_asset "$asset"
+          done

@@ -320,19 +320,22 @@ class _MiniPlayerState extends ConsumerState<MiniPlayer> {
                                                   .round() /
                                               pixelRatio;
 
-                                          return AnimatedContainer(
-                                            duration: _settlingSwipe
-                                                ? _swipeSettleDuration
-                                                : Duration.zero,
-                                            curve: Curves.easeOutCubic,
-                                            transform:
-                                                Matrix4.translationValues(
-                                                  translateX,
-                                                  0,
-                                                  0,
-                                                ),
-                                            child: SizedBox(
+                                          return OverflowBox(
+                                            alignment: Alignment.centerLeft,
+                                            minWidth: width * 3,
+                                            maxWidth: width * 3,
+                                            child: AnimatedContainer(
                                               width: width * 3,
+                                              duration: _settlingSwipe
+                                                  ? _swipeSettleDuration
+                                                  : Duration.zero,
+                                              curve: Curves.easeOutCubic,
+                                              transform:
+                                                  Matrix4.translationValues(
+                                                    translateX,
+                                                    0,
+                                                    0,
+                                                  ),
                                               child: Row(
                                                 children: [
                                                   SizedBox(

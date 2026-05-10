@@ -300,65 +300,66 @@ class _EditLibraryPageState extends ConsumerState<EditLibraryPage> {
             ),
           ],
         ),
-        const SizedBox(height: 8),
-        TextFormField(
-          controller: _embedBaseUrlController,
-          decoration: const InputDecoration(
-            labelText: 'Embed Service URL',
-            hintText: 'http://localhost:8080',
-            border: OutlineInputBorder(),
-            prefixIcon: Icon(Icons.cloud),
+        if (_embedEnabled) ...[
+          const SizedBox(height: 8),
+          TextFormField(
+            controller: _embedBaseUrlController,
+            decoration: const InputDecoration(
+              labelText: 'Embed Service URL',
+              hintText: 'http://localhost:8080',
+              border: OutlineInputBorder(),
+              prefixIcon: Icon(Icons.cloud),
+            ),
+            validator: (value) {
+              if (!_embedEnabled) return null;
+              return value == null || value.trim().isEmpty
+                  ? '请输入 Embed Service URL'
+                  : null;
+            },
           ),
-          validator: (value) {
-            if (!_embedEnabled) return null;
-            return value == null || value.trim().isEmpty
-                ? '请输入 Embed Service URL'
-                : null;
-          },
-          enabled: _embedEnabled,
-        ),
-        const SizedBox(height: 12),
-        TextFormField(
-          controller: _embedApiKeyController,
-          obscureText: true,
-          decoration: const InputDecoration(
-            labelText: 'API Key',
-            hintText: 'your-api-key',
-            border: OutlineInputBorder(),
-            prefixIcon: Icon(Icons.key),
+          const SizedBox(height: 12),
+          TextFormField(
+            controller: _embedApiKeyController,
+            obscureText: true,
+            decoration: const InputDecoration(
+              labelText: 'API Key',
+              hintText: 'your-api-key',
+              border: OutlineInputBorder(),
+              prefixIcon: Icon(Icons.key),
+            ),
+            validator: (value) {
+              if (!_embedEnabled) return null;
+              return value == null || value.trim().isEmpty
+                  ? '请输入 API Key'
+                  : null;
+            },
           ),
-          validator: (value) {
-            if (!_embedEnabled) return null;
-            return value == null || value.trim().isEmpty ? '请输入 API Key' : null;
-          },
-          enabled: _embedEnabled,
-        ),
-        const SizedBox(height: 12),
-        TextFormField(
-          controller: _embedLibraryIdController,
-          decoration: const InputDecoration(
-            labelText: 'Library ID',
-            hintText: 'default',
-            border: OutlineInputBorder(),
-            prefixIcon: Icon(Icons.library_music),
+          const SizedBox(height: 12),
+          TextFormField(
+            controller: _embedLibraryIdController,
+            decoration: const InputDecoration(
+              labelText: 'Library ID',
+              hintText: 'default',
+              border: OutlineInputBorder(),
+              prefixIcon: Icon(Icons.library_music),
+            ),
           ),
-          enabled: _embedEnabled,
-        ),
-        const SizedBox(height: 12),
-        Align(
-          alignment: Alignment.centerLeft,
-          child: OutlinedButton.icon(
-            onPressed: _isTestingEmbed ? null : _testEmbedConnection,
-            icon: _isTestingEmbed
-                ? const SizedBox(
-                    width: 16,
-                    height: 16,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : const Icon(Icons.wifi_tethering),
-            label: Text(_isTestingEmbed ? '测试中...' : '测试连接'),
+          const SizedBox(height: 12),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: OutlinedButton.icon(
+              onPressed: _isTestingEmbed ? null : _testEmbedConnection,
+              icon: _isTestingEmbed
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.wifi_tethering),
+              label: Text(_isTestingEmbed ? '测试中...' : '测试连接'),
+            ),
           ),
-        ),
+        ],
       ],
     );
   }

@@ -208,10 +208,20 @@ class _MiniPlayerState extends ConsumerState<MiniPlayer> {
 
   Song? _adjacentSong(PlayerState playerState, int offset) {
     if (playerState.queue.isEmpty) return null;
+    if (playerState.queue.length == 1) return playerState.queue.first;
+
     final queueLength = playerState.queue.length;
-    final targetIndex =
-        (playerState.currentIndex + offset + queueLength) % queueLength;
-    if (targetIndex == playerState.currentIndex) return null;
+    final currentIndex = playerState.currentIndex;
+    final normalizedCurrentIndex =
+        currentIndex >= 0 && currentIndex < queueLength
+        ? currentIndex
+        : playerState.queue.indexWhere(
+            (song) => song.id == playerState.currentSong?.id,
+          );
+    final safeCurrentIndex = normalizedCurrentIndex >= 0
+        ? normalizedCurrentIndex
+        : 0;
+    final targetIndex = (safeCurrentIndex + offset + queueLength) % queueLength;
     return playerState.queue[targetIndex];
   }
 

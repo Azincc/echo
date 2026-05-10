@@ -350,19 +350,37 @@ class FrequentAlbumsSection extends ConsumerWidget {
           );
         }
 
-        return GridView.builder(
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-            maxCrossAxisExtent: 180,
-            childAspectRatio: 0.75, // 调整比例以容纳文字
-            crossAxisSpacing: 12,
-            mainAxisSpacing: 12,
-          ),
-          itemCount: albums.length > 6 ? 6 : albums.length,
-          itemBuilder: (context, index) {
-            final album = albums[index];
-            return AlbumGridItem(album: album);
+        return LayoutBuilder(
+          builder: (context, constraints) {
+            if (constraints.maxWidth < 600) {
+              return SizedBox(
+                height: 200,
+                child: ListView.builder(
+                  scrollDirection: Axis.horizontal,
+                  itemCount: albums.length,
+                  itemBuilder: (context, index) {
+                    final album = albums[index];
+                    return AlbumCard(album: album);
+                  },
+                ),
+              );
+            }
+
+            return GridView.builder(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+                maxCrossAxisExtent: 180,
+                childAspectRatio: 0.75,
+                crossAxisSpacing: 12,
+                mainAxisSpacing: 12,
+              ),
+              itemCount: albums.length > 6 ? 6 : albums.length,
+              itemBuilder: (context, index) {
+                final album = albums[index];
+                return AlbumGridItem(album: album);
+              },
+            );
           },
         );
       },

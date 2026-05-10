@@ -120,16 +120,16 @@
 
 ## 技术栈
 
-| 层级 | 技术方案 |
-| --- | --- |
-| 框架 | Flutter |
-| 状态管理 | Riverpod |
-| 音频引擎 | just_audio + audio_service |
-| 网络 | Dio + 自定义 Fallback 拦截器 |
-| 本地数据库 | Drift (SQLite) |
-| 本地配置 | SharedPreferences |
+| 层级     | 技术方案                        |
+|--------|-----------------------------|
+| 框架     | Flutter                     |
+| 状态管理   | Riverpod                    |
+| 音频引擎   | just_audio + audio_service  |
+| 网络     | Dio + 自定义 Fallback 拦截器      |
+| 本地数据库  | Drift (SQLite)              |
+| 本地配置   | SharedPreferences           |
 | API 协议 | Subsonic / OpenSubsonic API |
-| 设计 | Material 3 + 自定义主题色 |
+| 设计     | Material 3 + 自定义主题色         |
 
 ## 后续规划
 

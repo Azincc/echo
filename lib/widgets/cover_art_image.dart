@@ -1,5 +1,6 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import 'package:echoes/core/theme/app_icons.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../core/utils/cover_ref_security.dart';
@@ -98,7 +99,7 @@ class CoverArtImage extends ConsumerWidget {
       height: size,
       color: bgColor,
       child: Icon(
-        Icons.music_note,
+        AppIcons.music_note,
         size: _getIconSize(),
         color: Theme.of(context).colorScheme.onSurfaceVariant,
       ),

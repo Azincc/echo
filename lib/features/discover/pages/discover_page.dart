@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:echoes/core/theme/app_icons.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../providers/music_provider.dart';
 import '../../../providers/navigation_provider.dart';
 import '../../../providers/player_provider.dart';
 import '../../../widgets/cover_art_image.dart';
 import '../../../widgets/main_scaffold.dart';
+import '../../../widgets/music_chrome.dart';
 import '../../../widgets/visible_remote_retry_scope.dart';
 import '../../library/pages/album_detail_page.dart';
 import '../../player/widgets/song_options_sheet.dart';
@@ -49,66 +51,68 @@ class _DiscoverPageState extends ConsumerState<DiscoverPage> {
         ref.invalidate(frequentAlbumsProvider);
       },
       child: Scaffold(
-        appBar: AppBar(
-          leading: IconButton(
-            icon: const Icon(Icons.menu),
-            onPressed: () {
-              // 使用 GlobalKey 打开侧栏
-              scaffoldKey.currentState?.openDrawer();
+        body: SafeArea(
+          bottom: false,
+          child: RefreshIndicator(
+            onRefresh: () async {
+              ref.invalidate(randomSongsProvider);
+              ref.invalidate(newestAlbumsProvider);
+              ref.invalidate(recentAlbumsProvider);
+              ref.invalidate(frequentAlbumsProvider);
             },
-          ),
-          title: const Text('音乐流'),
-          actions: [
-            IconButton(
-              icon: const Icon(Icons.search),
-              onPressed: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (context) => const SearchPage()),
-                );
-              },
-            ),
-          ],
-        ),
-        body: RefreshIndicator(
-          onRefresh: () async {
-            // 刷新数据
-            ref.invalidate(randomSongsProvider);
-            ref.invalidate(newestAlbumsProvider);
-            ref.invalidate(recentAlbumsProvider);
-            ref.invalidate(frequentAlbumsProvider);
-          },
-          child: Align(
-            alignment: Alignment.topCenter,
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 1400),
-              child: ListView(
-                cacheExtent: 1500, // 保持更多离屏内容，避免频繁重建
-                padding: const EdgeInsets.all(16),
-                children: [
-                  // 随机推荐
-                  const SectionHeader(title: '随机推荐', icon: Icons.shuffle),
-                  const SizedBox(height: 12),
-                  const RandomSongsSection(),
-                  const SizedBox(height: 24),
-
-                  // 最近入库的专辑
-                  const SectionHeader(title: '最近入库', icon: Icons.library_add),
-                  const SizedBox(height: 12),
-                  const NewestAlbumsSection(),
-                  const SizedBox(height: 24),
-
-                  // 最近播放的专辑
-                  const SectionHeader(title: '最近播放', icon: Icons.history),
-                  const SizedBox(height: 12),
-                  const RecentAlbumsSection(),
-                  const SizedBox(height: 24),
-
-                  // 常听的专辑
-                  const SectionHeader(title: '经常听的专辑', icon: Icons.whatshot),
-                  const SizedBox(height: 12),
-                  const FrequentAlbumsSection(),
-                ],
+            child: Align(
+              alignment: Alignment.topCenter,
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(
+                  maxWidth: MusicChrome.maxContentWidth,
+                ),
+                child: ListView(
+                  cacheExtent: 1500,
+                  padding: const EdgeInsets.fromLTRB(20, 0, 20, 28),
+                  children: [
+                    MusicPageHeader(
+                      padding: const EdgeInsets.fromLTRB(0, 14, 0, 14),
+                      title: '音乐流',
+                      subtitle: '从你的资料库里继续发现熟悉和意外的声音',
+                      leading: MusicIconButton(
+                        icon: AppIcons.menu,
+                        tooltip: '菜单',
+                        onPressed: () => scaffoldKey.currentState?.openDrawer(),
+                      ),
+                      actions: [
+                        MusicIconButton(
+                          icon: AppIcons.search,
+                          tooltip: '搜索',
+                          onPressed: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => const SearchPage(),
+                              ),
+                            );
+                          },
+                        ),
+                      ],
+                    ),
+                    const MusicSectionHeader(
+                      title: '随机推荐',
+                      subtitle: '快速开始一组来自资料库的歌曲',
+                    ),
+                    const RandomSongsSection(),
+                    const MusicSectionHeader(title: '最近入库', subtitle: '新加入的专辑'),
+                    const NewestAlbumsSection(),
+                    const MusicSectionHeader(
+                      title: '最近播放',
+                      subtitle: '接着听你停下的地方',
+                    ),
+                    const RecentAlbumsSection(),
+                    const MusicSectionHeader(
+                      title: '经常听的专辑',
+                      subtitle: '资料库里的高频回访',
+                    ),
+                    const FrequentAlbumsSection(),
+                  ],
+                ),
               ),
             ),
           ),
@@ -203,69 +207,85 @@ class _RandomSongsSectionState extends ConsumerState<RandomSongsSection> {
               physics: const NeverScrollableScrollPhysics(),
               gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                 crossAxisCount: crossAxisCount,
-                mainAxisExtent: 64,
+                mainAxisExtent: 74,
                 crossAxisSpacing: 12,
                 mainAxisSpacing: 8,
               ),
               itemCount: displayCount,
               itemBuilder: (context, index) {
                 final song = songs[index];
-                return InkWell(
+                return Material(
+                  color: colorScheme.surfaceContainerLow.withValues(
+                    alpha: Theme.of(context).brightness == Brightness.dark
+                        ? 0.7
+                        : 0.9,
+                  ),
                   borderRadius: BorderRadius.circular(8),
-                  onTap: () {
-                    ref
-                        .read(playerProvider.notifier)
-                        .playQueue(songs, startIndex: index);
-                  },
-                  onLongPress: () {
-                    showSongOptionsSheet(context: context, song: song);
-                  },
-                  child: Row(
-                    children: [
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(6),
-                        child: CoverArtImage(
-                          coverArtId: song.coverArt,
-                          size: 48,
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              song.title,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                fontWeight: FontWeight.w500,
-                                fontSize: 13,
-                                color: titleColor,
-                              ),
+                  clipBehavior: Clip.antiAlias,
+                  child: InkWell(
+                    onTap: () {
+                      ref
+                          .read(playerProvider.notifier)
+                          .playQueue(songs, startIndex: index);
+                    },
+                    onLongPress: () {
+                      showSongOptionsSheet(context: context, song: song);
+                    },
+                    child: Padding(
+                      padding: const EdgeInsets.all(8),
+                      child: Row(
+                        children: [
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(8),
+                            child: CoverArtImage(
+                              coverArtId: song.coverArt,
+                              size: 52,
                             ),
-                            const SizedBox(height: 2),
-                            Text(
-                              song.artist ?? 'Unknown Artist',
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                fontSize: 11,
-                                color: subtitleColor,
-                              ),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  song.title,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.w700,
+                                    fontSize: 13,
+                                    color: titleColor,
+                                  ),
+                                ),
+                                const SizedBox(height: 3),
+                                Text(
+                                  song.artist ?? 'Unknown Artist',
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    color: subtitleColor,
+                                  ),
+                                ),
+                              ],
                             ),
-                          ],
-                        ),
+                          ),
+                          Icon(
+                            AppIcons.play_arrow_rounded,
+                            size: 20,
+                            color: colorScheme.primary.withValues(alpha: 0.9),
+                          ),
+                        ],
                       ),
-                    ],
+                    ),
                   ),
                 );
               },
             ),
             if (songs.length > 6)
               Padding(
-                padding: const EdgeInsets.only(top: 8),
+                padding: const EdgeInsets.only(top: 12),
                 child: TextButton.icon(
                   onPressed: () {
                     setState(() {
@@ -274,8 +294,8 @@ class _RandomSongsSectionState extends ConsumerState<RandomSongsSection> {
                   },
                   icon: Icon(
                     _expanded
-                        ? Icons.keyboard_arrow_up
-                        : Icons.keyboard_arrow_down,
+                        ? AppIcons.keyboard_arrow_up
+                        : AppIcons.keyboard_arrow_down,
                     size: 18,
                   ),
                   label: Text(_expanded ? '收起' : '更多歌曲'),
@@ -312,7 +332,7 @@ class RecentAlbumsSection extends ConsumerWidget {
         }
 
         return SizedBox(
-          height: 200,
+          height: 226,
           child: ListView.builder(
             scrollDirection: Axis.horizontal,
             itemCount: albums.length,
@@ -354,7 +374,7 @@ class FrequentAlbumsSection extends ConsumerWidget {
           builder: (context, constraints) {
             if (constraints.maxWidth < 600) {
               return SizedBox(
-                height: 200,
+                height: 226,
                 child: ListView.builder(
                   scrollDirection: Axis.horizontal,
                   itemCount: albums.length,
@@ -370,10 +390,10 @@ class FrequentAlbumsSection extends ConsumerWidget {
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
               gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-                maxCrossAxisExtent: 180,
-                childAspectRatio: 0.75,
-                crossAxisSpacing: 12,
-                mainAxisSpacing: 12,
+                maxCrossAxisExtent: 190,
+                childAspectRatio: 0.72,
+                crossAxisSpacing: 16,
+                mainAxisSpacing: 18,
               ),
               itemCount: albums.length > 6 ? 6 : albums.length,
               itemBuilder: (context, index) {
@@ -412,7 +432,7 @@ class NewestAlbumsSection extends ConsumerWidget {
         }
 
         return SizedBox(
-          height: 200,
+          height: 226,
           child: ListView.builder(
             scrollDirection: Axis.horizontal,
             itemCount: albums.length,
@@ -446,9 +466,10 @@ class AlbumCard extends StatelessWidget {
         : colorScheme.onSurfaceVariant;
 
     return Container(
-      width: 140,
-      margin: const EdgeInsets.only(right: 12),
+      width: 156,
+      margin: const EdgeInsets.only(right: 16),
       child: InkWell(
+        borderRadius: BorderRadius.circular(12),
         onTap: () {
           Navigator.push(
             context,
@@ -460,16 +481,34 @@ class AlbumCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            ClipRRect(
-              borderRadius: BorderRadius.circular(8),
-              child: CoverArtImage(coverArtId: album.coverArt, size: 140),
+            Container(
+              width: 156,
+              height: 156,
+              decoration: BoxDecoration(
+                borderRadius: MusicChrome.albumRadius,
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(
+                      alpha: Theme.of(context).brightness == Brightness.dark
+                          ? 0.22
+                          : 0.12,
+                    ),
+                    blurRadius: 14,
+                    offset: const Offset(0, 7),
+                  ),
+                ],
+              ),
+              child: ClipRRect(
+                borderRadius: MusicChrome.albumRadius,
+                child: CoverArtImage(coverArtId: album.coverArt, size: 156),
+              ),
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 10),
             Text(
               album.name,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: TextStyle(fontWeight: FontWeight.w500, color: titleColor),
+              style: TextStyle(fontWeight: FontWeight.w700, color: titleColor),
             ),
             if (album.artist != null)
               Text(
@@ -518,19 +557,19 @@ class AlbumGridItem extends StatelessWidget {
           AspectRatio(
             aspectRatio: 1.0,
             child: ClipRRect(
-              borderRadius: BorderRadius.circular(8),
+              borderRadius: MusicChrome.albumRadius,
               child: CoverArtImage(
                 coverArtId: album.coverArt,
                 fit: BoxFit.cover,
               ),
             ),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 10),
           Text(
             album.name,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: TextStyle(fontWeight: FontWeight.w500, color: titleColor),
+            style: TextStyle(fontWeight: FontWeight.w700, color: titleColor),
           ),
           if (album.artist != null)
             Text(

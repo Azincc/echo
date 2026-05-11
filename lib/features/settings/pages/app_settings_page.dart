@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:echoes/core/theme/app_icons.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:share_plus/share_plus.dart';
@@ -14,6 +15,7 @@ import '../../../data/sources/local_storage.dart';
 import '../../../providers/api_provider.dart';
 import '../../../providers/auth_provider.dart';
 import '../../../providers/theme_provider.dart';
+import '../../../widgets/music_chrome.dart';
 import 'audio_quality_page.dart';
 import 'cache_management_page.dart';
 import 'cover_providers_page.dart';
@@ -103,7 +105,7 @@ class _AppSettingsPageState extends ConsumerState<AppSettingsPage> {
         title: Row(
           children: [
             Icon(
-              Icons.system_update,
+              AppIcons.system_update,
               color: Theme.of(context).colorScheme.primary,
             ),
             const SizedBox(width: 8),
@@ -148,7 +150,7 @@ class _AppSettingsPageState extends ConsumerState<AppSettingsPage> {
                   return ListTile(
                     contentPadding: EdgeInsets.zero,
                     dense: true,
-                    leading: const Icon(Icons.download, size: 20),
+                    leading: const Icon(AppIcons.download, size: 20),
                     title: Text(
                       asset.name,
                       style: const TextStyle(fontSize: 13),
@@ -227,236 +229,388 @@ class _AppSettingsPageState extends ConsumerState<AppSettingsPage> {
     final themeSettings = ref.watch(themeSettingsProvider);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('设置')),
-      body: ListView(
-        padding: EdgeInsets.fromLTRB(
-          16,
-          16,
-          16,
-          16 + MediaQuery.of(context).padding.bottom,
-        ),
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  '服务器信息',
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.bold,
+      body: SafeArea(
+        bottom: false,
+        child: Align(
+          alignment: Alignment.topCenter,
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(
+              maxWidth: MusicChrome.maxContentWidth,
+            ),
+            child: ListView(
+              padding: EdgeInsets.fromLTRB(
+                20,
+                0,
+                20,
+                24 + MediaQuery.of(context).padding.bottom,
+              ),
+              children: [
+                MusicPageHeader(
+                  padding: const EdgeInsets.fromLTRB(0, 14, 0, 16),
+                  title: '设置',
+                  subtitle: '连接、播放、外观与诊断',
+                  leading: MusicIconButton(
+                    icon: AppIcons.arrow_back_ios_new,
+                    tooltip: '返回',
+                    onPressed: () => Navigator.pop(context),
                   ),
                 ),
-              ),
-              IconButton(
-                tooltip: '编辑服务器设置',
-                icon: const Icon(Icons.edit_outlined),
-                onPressed: library == null
-                    ? null
-                    : () {
-                        context.push('/library/edit/${library.id}');
-                      },
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          _buildInfoRow('当前连接', activeAddress?.label ?? '未连接'),
-          _buildInfoRow('服务器地址', activeAddress?.url ?? '未设置'),
-          _buildInfoRow('用户名', library?.username ?? '未设置'),
-          _buildInfoRow(
-            '认证方式',
-            library?.authType == MusicLibraryAuthType.apiKey ? 'API Key' : '密码',
-          ),
-          const Divider(height: 24),
-          Text(
-            '应用设置',
-            style: Theme.of(
-              context,
-            ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(height: 8),
-          SwitchListTile(
-            contentPadding: EdgeInsets.zero,
-            title: const Text('线路自动回退'),
-            subtitle: const Text(
-              '手动选择线路后，若该线路不可用，自动切换到其他可用线路',
-              style: TextStyle(fontSize: 12),
-            ),
-            value: autoFallback,
-            onChanged: (value) async {
-              ref.read(autoFallbackProvider.notifier).state = value;
-              ref.read(addressPoolProvider).autoFallback = value;
-              await LocalStorage.setAutoFallback(value);
-            },
-          ),
-          ListTile(
-            contentPadding: EdgeInsets.zero,
-            leading: const Icon(Icons.palette_outlined),
-            title: const Text('主题设置'),
-            subtitle: Text(
-              '${_themeModeText(themeSettings.mode)} · ${_colorHex(themeSettings.seedColor)}',
-              style: const TextStyle(fontSize: 12),
-            ),
-            trailing: const Icon(Icons.chevron_right),
-            onTap: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => const ThemeSettingsPage(),
-                ),
-              );
-            },
-          ),
-          ListTile(
-            contentPadding: EdgeInsets.zero,
-            leading: const Icon(Icons.high_quality_outlined),
-            title: const Text('音质设置'),
-            trailing: const Icon(Icons.chevron_right),
-            onTap: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => const AudioQualityPage(),
-                ),
-              );
-            },
-          ),
-          Consumer(
-            builder: (context, ref, _) {
-              final crossfadeMs = ref.watch(crossfadeDurationMsProvider);
-              final label = crossfadeMs <= 0
-                  ? '关闭'
-                  : '${(crossfadeMs / 1000).toStringAsFixed(1)} 秒';
-              return Column(
-                children: [
-                  ListTile(
-                    contentPadding: EdgeInsets.zero,
-                    leading: const Icon(Icons.swap_horiz_outlined),
-                    title: const Text('切歌淡入淡出'),
-                    subtitle: Text(label, style: const TextStyle(fontSize: 12)),
+                _settingsSection(
+                  context,
+                  title: '服务器信息',
+                  action: IconButton(
+                    tooltip: '编辑服务器设置',
+                    icon: const Icon(AppIcons.edit_outlined),
+                    onPressed: library == null
+                        ? null
+                        : () {
+                            context.push('/library/edit/${library.id}');
+                          },
                   ),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    child: Row(
-                      children: [
-                        const Text('关闭', style: TextStyle(fontSize: 12)),
-                        Expanded(
-                          child: Slider(
-                            value: crossfadeMs.toDouble(),
-                            min: 0,
-                            max: 3000,
-                            divisions: 6,
-                            label: label,
-                            onChanged: (value) {
-                              ref
-                                  .read(crossfadeDurationMsProvider.notifier)
-                                  .setDuration(value.round());
-                            },
-                          ),
-                        ),
-                        const Text('3 秒', style: TextStyle(fontSize: 12)),
-                      ],
+                  children: [
+                    _buildInfoRow('当前连接', activeAddress?.label ?? '未连接'),
+                    _buildInfoRow('服务器地址', activeAddress?.url ?? '未设置'),
+                    _buildInfoRow('用户名', library?.username ?? '未设置'),
+                    _buildInfoRow(
+                      '认证方式',
+                      library?.authType == MusicLibraryAuthType.apiKey
+                          ? 'API Key'
+                          : '密码',
                     ),
-                  ),
-                ],
-              );
-            },
-          ),
-          ListTile(
-            contentPadding: EdgeInsets.zero,
-            leading: const Icon(Icons.lyrics_outlined),
-            title: const Text('歌词提供商'),
-            trailing: const Icon(Icons.chevron_right),
-            onTap: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => const LyricsProvidersPage(),
+                  ],
                 ),
-              );
-            },
-          ),
-          ListTile(
-            contentPadding: EdgeInsets.zero,
-            leading: const Icon(Icons.image_outlined),
-            title: const Text('封面提供商'),
-            trailing: const Icon(Icons.chevron_right),
-            onTap: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => const CoverProvidersPage(),
+                _settingsSection(
+                  context,
+                  title: '应用设置',
+                  children: [
+                    _settingsRow(
+                      context,
+                      icon: AppIcons.route_outlined,
+                      title: '线路自动回退',
+                      subtitle: '手动选择线路不可用时，自动切换到其他可用线路',
+                      trailing: Switch(
+                        value: autoFallback,
+                        onChanged: (value) async {
+                          ref.read(autoFallbackProvider.notifier).state = value;
+                          ref.read(addressPoolProvider).autoFallback = value;
+                          await LocalStorage.setAutoFallback(value);
+                        },
+                      ),
+                      onTap: () async {
+                        final value = !autoFallback;
+                        ref.read(autoFallbackProvider.notifier).state = value;
+                        ref.read(addressPoolProvider).autoFallback = value;
+                        await LocalStorage.setAutoFallback(value);
+                      },
+                    ),
+                    _settingsRow(
+                      context,
+                      icon: AppIcons.palette_outlined,
+                      title: '主题设置',
+                      subtitle:
+                          '${_themeModeText(themeSettings.mode)} · ${_colorHex(themeSettings.seedColor)}',
+                      trailing: _colorPreview(context, themeSettings.seedColor),
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => const ThemeSettingsPage(),
+                          ),
+                        );
+                      },
+                    ),
+                    _settingsRow(
+                      context,
+                      icon: AppIcons.high_quality_outlined,
+                      title: '音质设置',
+                      trailing: const Icon(AppIcons.chevron_right),
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => const AudioQualityPage(),
+                          ),
+                        );
+                      },
+                    ),
+                    Consumer(
+                      builder: (context, ref, _) {
+                        final crossfadeMs = ref.watch(
+                          crossfadeDurationMsProvider,
+                        );
+                        final label = crossfadeMs <= 0
+                            ? '关闭'
+                            : '${(crossfadeMs / 1000).toStringAsFixed(1)} 秒';
+                        return Column(
+                          children: [
+                            _settingsRow(
+                              context,
+                              icon: AppIcons.swap_horiz_outlined,
+                              title: '切歌淡入淡出',
+                              subtitle: label,
+                            ),
+                            Padding(
+                              padding: const EdgeInsets.fromLTRB(58, 0, 12, 8),
+                              child: Row(
+                                children: [
+                                  Text(
+                                    '关闭',
+                                    style: Theme.of(
+                                      context,
+                                    ).textTheme.labelSmall,
+                                  ),
+                                  Expanded(
+                                    child: Slider(
+                                      value: crossfadeMs.toDouble(),
+                                      min: 0,
+                                      max: 3000,
+                                      divisions: 6,
+                                      label: label,
+                                      onChanged: (value) {
+                                        ref
+                                            .read(
+                                              crossfadeDurationMsProvider
+                                                  .notifier,
+                                            )
+                                            .setDuration(value.round());
+                                      },
+                                    ),
+                                  ),
+                                  Text(
+                                    '3 秒',
+                                    style: Theme.of(
+                                      context,
+                                    ).textTheme.labelSmall,
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        );
+                      },
+                    ),
+                  ],
                 ),
-              );
-            },
-          ),
-          const Divider(height: 24),
-          _buildCacheManager(context, ref),
-          const Divider(height: 24),
-          Text(
-            '诊断与更新',
-            style: Theme.of(
-              context,
-            ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(height: 8),
-          ListTile(
-            contentPadding: EdgeInsets.zero,
-            leading: const Icon(Icons.description_outlined),
-            title: const Text('导出日志'),
-            subtitle: Text(
-              '共缓存 ${Logger.bufferedLineCount} 条日志',
-              style: const TextStyle(fontSize: 12),
+                _settingsSection(
+                  context,
+                  title: '内容来源',
+                  children: [
+                    _settingsRow(
+                      context,
+                      icon: AppIcons.lyrics_outlined,
+                      title: '歌词提供商',
+                      trailing: const Icon(AppIcons.chevron_right),
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => const LyricsProvidersPage(),
+                          ),
+                        );
+                      },
+                    ),
+                    _settingsRow(
+                      context,
+                      icon: AppIcons.image_outlined,
+                      title: '封面提供商',
+                      trailing: const Icon(AppIcons.chevron_right),
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => const CoverProvidersPage(),
+                          ),
+                        );
+                      },
+                    ),
+                    _buildCacheManager(context, ref),
+                  ],
+                ),
+                _settingsSection(
+                  context,
+                  title: '诊断与更新',
+                  children: [
+                    _settingsRow(
+                      context,
+                      icon: AppIcons.description_outlined,
+                      title: '导出日志',
+                      subtitle: '共缓存 ${Logger.bufferedLineCount} 条日志',
+                      trailing: _isExportingLogs
+                          ? const SizedBox(
+                              width: 20,
+                              height: 20,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(AppIcons.chevron_right),
+                      onTap: _isExportingLogs ? null : _exportLogs,
+                    ),
+                    _settingsRow(
+                      context,
+                      icon: AppIcons.system_update_outlined,
+                      title: '检查更新',
+                      subtitle: '从 GitHub Releases 检查最新版本',
+                      trailing: _isCheckingUpdate
+                          ? const SizedBox(
+                              width: 20,
+                              height: 20,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(AppIcons.chevron_right),
+                      onTap: _isCheckingUpdate ? null : _checkForUpdates,
+                    ),
+                    _settingsRow(
+                      context,
+                      icon: AppIcons.info_outline,
+                      title: '关于',
+                      trailing: const Icon(AppIcons.chevron_right),
+                      onTap: () => _showAppAboutDialog(context),
+                    ),
+                  ],
+                ),
+              ],
             ),
-            trailing: _isExportingLogs
-                ? const SizedBox(
-                    width: 20,
-                    height: 20,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : const Icon(Icons.chevron_right),
-            onTap: _isExportingLogs ? null : _exportLogs,
           ),
-          ListTile(
-            contentPadding: EdgeInsets.zero,
-            leading: const Icon(Icons.system_update_outlined),
-            title: const Text('检查更新'),
-            subtitle: const Text(
-              '从 GitHub Releases 检查最新版本',
-              style: TextStyle(fontSize: 12),
-            ),
-            trailing: _isCheckingUpdate
-                ? const SizedBox(
-                    width: 20,
-                    height: 20,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : const Icon(Icons.chevron_right),
-            onTap: _isCheckingUpdate ? null : _checkForUpdates,
-          ),
-          ListTile(
-            contentPadding: EdgeInsets.zero,
-            leading: const Icon(Icons.info_outline),
-            title: const Text('关于'),
-            trailing: const Icon(Icons.chevron_right),
-            onTap: () => _showAppAboutDialog(context),
-          ),
-        ],
+        ),
       ),
     );
   }
 
   Widget _buildCacheManager(BuildContext context, WidgetRef ref) {
-    return ListTile(
-      contentPadding: EdgeInsets.zero,
-      leading: const Icon(Icons.storage_outlined),
-      title: const Text('缓存管理'),
-      subtitle: const Text('音频、图片、歌词缓存'),
-      trailing: const Icon(Icons.chevron_right),
+    return _settingsRow(
+      context,
+      icon: AppIcons.storage_outlined,
+      title: '缓存管理',
+      subtitle: '音频、图片、歌词缓存',
+      trailing: const Icon(AppIcons.chevron_right),
       onTap: () {
         Navigator.push(
           context,
           MaterialPageRoute(builder: (context) => const CacheManagementPage()),
         );
       },
+    );
+  }
+
+  Widget _settingsSection(
+    BuildContext context, {
+    required String title,
+    required List<Widget> children,
+    Widget? action,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(2, 0, 2, 8),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    title,
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ),
+                if (action != null) action,
+              ],
+            ),
+          ),
+          MusicGlassSurface(
+            borderRadius: BorderRadius.circular(18),
+            padding: const EdgeInsets.symmetric(vertical: 6),
+            child: Column(children: children),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _settingsRow(
+    BuildContext context, {
+    required IconData icon,
+    required String title,
+    String? subtitle,
+    Widget? trailing,
+    VoidCallback? onTap,
+  }) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+          child: Row(
+            children: [
+              Container(
+                width: 38,
+                height: 38,
+                decoration: BoxDecoration(
+                  color: colorScheme.primary.withValues(
+                    alpha: theme.brightness == Brightness.dark ? 0.18 : 0.1,
+                  ),
+                  borderRadius: BorderRadius.circular(11),
+                ),
+                child: Icon(icon, color: colorScheme.primary, size: 21),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.bodyLarge?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    if (subtitle != null && subtitle.isNotEmpty) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        subtitle,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              if (trailing != null) ...[const SizedBox(width: 12), trailing],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _colorPreview(BuildContext context, Color color) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 24,
+          height: 24,
+          decoration: BoxDecoration(
+            color: color,
+            shape: BoxShape.circle,
+            border: Border.all(
+              color: Theme.of(context).colorScheme.outlineVariant,
+            ),
+          ),
+        ),
+        const SizedBox(width: 8),
+        const Icon(AppIcons.chevron_right),
+      ],
     );
   }
 

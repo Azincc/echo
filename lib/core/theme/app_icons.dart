@@ -1,0 +1,133 @@
+// ignore_for_file: constant_identifier_names
+
+import 'package:flutter/cupertino.dart' show CupertinoIcons;
+import 'package:flutter/widgets.dart' show IconData;
+import 'package:remixicon/remixicon.dart';
+
+/// Central icon aliases for the app.
+///
+/// Remix Icon is the default visual language. Cupertino Icons are reserved for
+/// platform-feeling primitives such as chevrons, close buttons, and ellipses.
+class AppIcons {
+  const AppIcons._();
+
+  static const IconData add = Remix.add_line;
+  static const IconData add_circle_outline = Remix.add_circle_line;
+  static const IconData album = Remix.album_fill;
+  static const IconData album_outlined = Remix.album_line;
+  static const IconData analytics_outlined = Remix.bar_chart_grouped_line;
+  static const IconData arrow_back_ios_new = CupertinoIcons.chevron_back;
+  static const IconData auto_graph_outlined = Remix.line_chart_line;
+  static const IconData broken_image_outlined = Remix.image_line;
+  static const IconData cancel = Remix.close_circle_fill;
+  static const IconData check = Remix.check_line;
+  static const IconData check_circle = Remix.checkbox_circle_fill;
+  static const IconData check_circle_outline = Remix.checkbox_circle_line;
+  static const IconData checklist = Remix.list_check_3;
+  static const IconData chevron_right = CupertinoIcons.chevron_right;
+  static const IconData circle = Remix.checkbox_blank_circle_fill;
+  static const IconData clear = CupertinoIcons.xmark;
+  static const IconData clear_all = Remix.delete_back_2_line;
+  static const IconData close = CupertinoIcons.xmark;
+  static const IconData cloud = Remix.cloud_line;
+  static const IconData cloud_off_rounded = Remix.cloud_off_line;
+  static const IconData cloud_outlined = Remix.cloud_line;
+  static const IconData cloud_queue = Remix.cloud_line;
+  static const IconData collections_bookmark_outlined = Remix.bookmark_3_line;
+  static const IconData delete = Remix.delete_bin_fill;
+  static const IconData delete_outline = Remix.delete_bin_line;
+  static const IconData description_outlined = Remix.file_text_line;
+  static const IconData download = Remix.download_fill;
+  static const IconData download_done = Remix.checkbox_circle_fill;
+  static const IconData download_done_outlined = Remix.checkbox_circle_line;
+  static const IconData download_for_offline_outlined =
+      Remix.download_cloud_line;
+  static const IconData download_outlined = Remix.download_line;
+  static const IconData downloading = Remix.download_cloud_line;
+  static const IconData drag_handle = Remix.draggable;
+  static const IconData edit = Remix.edit_line;
+  static const IconData edit_note_outlined = Remix.file_edit_line;
+  static const IconData edit_outlined = Remix.edit_2_line;
+  static const IconData equalizer_outlined = Remix.equalizer_3_line;
+  static const IconData error = Remix.error_warning_fill;
+  static const IconData favorite = Remix.heart_fill;
+  static const IconData favorite_border = Remix.heart_line;
+  static const IconData favorite_outline = Remix.heart_line;
+  static const IconData find_in_page_outlined = Remix.file_search_line;
+  static const IconData folder_open = Remix.folder_open_line;
+  static const IconData folder_outlined = Remix.folder_line;
+  static const IconData hdr_auto = Remix.magic_line;
+  static const IconData headphones = Remix.headphone_line;
+  static const IconData help = Remix.question_line;
+  static const IconData high_quality_outlined = Remix.speed_up_line;
+  static const IconData image_outlined = Remix.image_line;
+  static const IconData info_outline = Remix.information_line;
+  static const IconData key = Remix.key_line;
+  static const IconData keyboard_arrow_down = CupertinoIcons.chevron_down;
+  static const IconData keyboard_arrow_up = CupertinoIcons.chevron_up;
+  static const IconData library_music = Remix.music_2_fill;
+  static const IconData library_music_outlined = Remix.music_2_line;
+  static const IconData lyrics = Remix.file_text_fill;
+  static const IconData lyrics_outlined = Remix.file_text_line;
+  static const IconData menu = Remix.menu_2_line;
+  static const IconData more_horiz = CupertinoIcons.ellipsis;
+  static const IconData more_vert = CupertinoIcons.ellipsis_vertical;
+  static const IconData music_note = Remix.music_2_fill;
+  static const IconData music_note_outlined = Remix.music_2_line;
+  static const IconData music_off = Remix.volume_mute_line;
+  static const IconData music_video_outlined = Remix.music_line;
+  static const IconData network_check_outlined = Remix.network_line;
+  static const IconData offline_pin = Remix.download_cloud_fill;
+  static const IconData offline_pin_outlined = Remix.download_cloud_line;
+  static const IconData palette_outlined = Remix.palette_line;
+  static const IconData pause = Remix.pause_fill;
+  static const IconData people_outline = Remix.group_line;
+  static const IconData person = Remix.user_fill;
+  static const IconData person_outline = Remix.user_line;
+  static const IconData play_arrow = Remix.play_fill;
+  static const IconData play_arrow_rounded = Remix.play_fill;
+  static const IconData play_circle = Remix.play_circle_fill;
+  static const IconData play_circle_outline = Remix.play_circle_line;
+  static const IconData playlist_add = Remix.play_list_add_line;
+  static const IconData playlist_play = Remix.play_list_2_line;
+  static const IconData queue_music = Remix.play_list_fill;
+  static const IconData queue_music_outlined = Remix.play_list_line;
+  static const IconData queue_music_rounded = Remix.play_list_fill;
+  static const IconData queue_play_next = Remix.play_list_add_line;
+  static const IconData radio_button_checked = Remix.radio_button_fill;
+  static const IconData radio_button_unchecked =
+      Remix.checkbox_blank_circle_line;
+  static const IconData refresh = Remix.refresh_line;
+  static const IconData remove_circle_outline = Remix.indeterminate_circle_line;
+  static const IconData repeat = Remix.repeat_line;
+  static const IconData repeat_one = Remix.repeat_one_line;
+  static const IconData route_outlined = Remix.route_line;
+  static const IconData router = Remix.router_line;
+  static const IconData save_outlined = Remix.save_3_line;
+  static const IconData schedule_outlined = Remix.time_line;
+  static const IconData sd_storage_outlined = Remix.sd_card_line;
+  static const IconData search = Remix.search_line;
+  static const IconData search_off = Remix.search_line;
+  static const IconData search_outlined = Remix.search_line;
+  static const IconData select_all = Remix.checkbox_multiple_line;
+  static const IconData settings_outlined = Remix.settings_3_line;
+  static const IconData shield_outlined = Remix.shield_line;
+  static const IconData shuffle = Remix.shuffle_line;
+  static const IconData signal_cellular_alt = Remix.signal_cellular_3_line;
+  static const IconData signal_wifi_off = Remix.signal_wifi_off_line;
+  static const IconData skip_next = Remix.skip_forward_fill;
+  static const IconData skip_previous = Remix.skip_back_fill;
+  static const IconData sort = Remix.sort_asc;
+  static const IconData storage_outlined = Remix.database_2_line;
+  static const IconData swap_horiz_outlined = Remix.arrow_left_right_line;
+  static const IconData system_update = Remix.download_cloud_fill;
+  static const IconData system_update_outlined = Remix.download_cloud_line;
+  static const IconData timer_outlined = Remix.timer_line;
+  static const IconData touch_app_outlined = Remix.fingerprint_line;
+  static const IconData tune = Remix.sound_module_line;
+  static const IconData warning_amber_rounded = Remix.error_warning_line;
+  static const IconData whatshot = Remix.fire_line;
+  static const IconData wifi = Remix.wifi_line;
+  static const IconData wifi_off = Remix.wifi_off_line;
+  static const IconData wifi_tethering = Remix.signal_tower_line;
+}

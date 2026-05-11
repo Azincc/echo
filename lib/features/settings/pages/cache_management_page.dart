@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:echoes/widgets/app_back_button.dart';
+import 'package:echoes/core/theme/app_icons.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../providers/audio_cache_provider.dart';
@@ -12,7 +14,7 @@ class CacheManagementPage extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     return Scaffold(
-      appBar: AppBar(title: const Text('缓存管理')),
+      appBar: AppBar(leading: const AppBackButton(), title: const Text('缓存管理')),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
@@ -46,7 +48,7 @@ class CacheManagementPage extends ConsumerWidget {
             Row(
               children: [
                 Icon(
-                  Icons.music_note_outlined,
+                  AppIcons.music_note_outlined,
                   size: 20,
                   color: Theme.of(context).colorScheme.primary,
                 ),
@@ -159,7 +161,7 @@ class CacheManagementPage extends ConsumerWidget {
                     ref.invalidate(audioCacheSizeProvider);
                   },
                 ),
-                icon: const Icon(Icons.delete_outline, size: 18),
+                icon: const Icon(AppIcons.delete_outline, size: 18),
                 label: const Text('清除音频缓存'),
               ),
             ),
@@ -198,7 +200,7 @@ class CacheManagementPage extends ConsumerWidget {
       margin: EdgeInsets.zero,
       child: ListTile(
         leading: Icon(
-          Icons.image_outlined,
+          AppIcons.image_outlined,
           color: Theme.of(context).colorScheme.primary,
         ),
         title: const Text('图片与资源缓存'),
@@ -225,7 +227,7 @@ class CacheManagementPage extends ConsumerWidget {
             ),
             const SizedBox(width: 4),
             IconButton(
-              icon: const Icon(Icons.delete_outline, size: 20),
+              icon: const Icon(AppIcons.delete_outline, size: 20),
               tooltip: '清除图片缓存',
               onPressed: () => _confirmClear(
                 context,
@@ -255,7 +257,7 @@ class CacheManagementPage extends ConsumerWidget {
       margin: EdgeInsets.zero,
       child: ListTile(
         leading: Icon(
-          Icons.lyrics_outlined,
+          AppIcons.lyrics_outlined,
           color: Theme.of(context).colorScheme.primary,
         ),
         title: const Text('歌词缓存'),
@@ -282,7 +284,7 @@ class CacheManagementPage extends ConsumerWidget {
             ),
             const SizedBox(width: 4),
             IconButton(
-              icon: const Icon(Icons.delete_outline, size: 20),
+              icon: const Icon(AppIcons.delete_outline, size: 20),
               tooltip: '清除歌词缓存',
               onPressed: () => _confirmClear(
                 context,
@@ -317,7 +319,7 @@ class CacheManagementPage extends ConsumerWidget {
             Row(
               children: [
                 Icon(
-                  Icons.download_done_outlined,
+                  AppIcons.download_done_outlined,
                   size: 20,
                   color: Theme.of(context).colorScheme.primary,
                 ),
@@ -359,7 +361,7 @@ class CacheManagementPage extends ConsumerWidget {
                     ),
                   );
                 },
-                icon: const Icon(Icons.folder_open, size: 18),
+                icon: const Icon(AppIcons.folder_open, size: 18),
                 label: const Text('管理下载'),
               ),
             ),

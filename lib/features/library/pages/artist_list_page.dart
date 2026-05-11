@@ -1,5 +1,7 @@
 import 'package:azlistview/azlistview.dart';
 import 'package:flutter/material.dart';
+import 'package:echoes/widgets/app_back_button.dart';
+import 'package:echoes/core/theme/app_icons.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../data/models/artist.dart';
@@ -53,7 +55,10 @@ class _ArtistListPageState extends ConsumerState<ArtistListPage> {
       shouldRetry: (ref) => loadFailed || artistsAsync.hasError,
       onRetry: (ref) => ref.invalidate(allArtistsProvider),
       child: Scaffold(
-        appBar: AppBar(title: const Text('所有歌手')),
+        appBar: AppBar(
+          leading: const AppBackButton(),
+          title: const Text('所有歌手'),
+        ),
         body: artistsAsync.when(
           data: (artists) {
             if (artists.isEmpty) {
@@ -109,7 +114,7 @@ class _ArtistListPageState extends ConsumerState<ArtistListPage> {
                           subtitle: artist.albumCount != null
                               ? Text('${artist.albumCount} 张专辑')
                               : null,
-                          trailing: const Icon(Icons.chevron_right),
+                          trailing: const Icon(AppIcons.chevron_right),
                           onTap: () {
                             Navigator.push(
                               context,
@@ -128,10 +133,13 @@ class _ArtistListPageState extends ConsumerState<ArtistListPage> {
                   indexBarOptions: IndexBarOptions(
                     needRebuild: true,
                     ignoreDragCancel: true,
-                    downTextStyle: TextStyle(fontSize: 12, color: Colors.white),
+                    downTextStyle: const TextStyle(
+                      fontSize: 12,
+                      color: Colors.white,
+                    ),
                     downItemDecoration: BoxDecoration(
                       shape: BoxShape.circle,
-                      color: Colors.green,
+                      color: Theme.of(context).colorScheme.primary,
                     ),
                     indexHintWidth: 120 / 2,
                     indexHintHeight: 100 / 2,
@@ -142,8 +150,8 @@ class _ArtistListPageState extends ConsumerState<ArtistListPage> {
                       borderRadius: BorderRadius.circular(5.0),
                     ),
                     indexHintAlignment: Alignment.centerRight,
-                    indexHintChildAlignment: Alignment(-0.25, 0.0),
-                    indexHintOffset: Offset(-20, 0),
+                    indexHintChildAlignment: const Alignment(-0.25, 0.0),
+                    indexHintOffset: const Offset(-20, 0),
                   ),
                 ),
               ),

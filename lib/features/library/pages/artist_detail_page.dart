@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:echoes/widgets/app_back_button.dart';
+import 'package:echoes/core/theme/app_icons.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../data/models/album.dart';
 import '../../../data/models/song.dart';
@@ -87,12 +89,13 @@ class ArtistDetailPage extends ConsumerWidget {
       },
       child: Scaffold(
         appBar: AppBar(
+          leading: const AppBackButton(),
           title: const Text('歌手详情'),
           actions: [
             IconButton(
               tooltip: '歌曲来源说明',
               onPressed: () => _showSongSourceInfo(context),
-              icon: const Icon(Icons.info_outline),
+              icon: const Icon(AppIcons.info_outline),
             ),
           ],
         ),
@@ -156,8 +159,8 @@ class ArtistDetailPage extends ConsumerWidget {
                                       ),
                                       icon: Icon(
                                         artist.starred
-                                            ? Icons.favorite
-                                            : Icons.favorite_border,
+                                            ? AppIcons.favorite
+                                            : AppIcons.favorite_border,
                                         color: artist.starred
                                             ? Colors.red
                                             : null,
@@ -243,7 +246,7 @@ class ArtistDetailPage extends ConsumerWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.album_outlined, size: 64, color: Colors.grey[400]),
+            Icon(AppIcons.album_outlined, size: 64, color: Colors.grey[400]),
             const SizedBox(height: 16),
             const Text('暂无专辑'),
           ],
@@ -315,7 +318,7 @@ class ArtistDetailPage extends ConsumerWidget {
                                       borderRadius: BorderRadius.circular(10),
                                     ),
                                     child: const Icon(
-                                      Icons.favorite,
+                                      AppIcons.favorite,
                                       size: 14,
                                       color: Colors.red,
                                     ),
@@ -396,7 +399,7 @@ class _ArtistSongsTabState extends ConsumerState<_ArtistSongsTab> {
                       children: [
                         Row(
                           children: [
-                            const Icon(Icons.whatshot),
+                            const Icon(AppIcons.whatshot),
                             const SizedBox(width: 8),
                             Text(
                               '热门歌曲 (${topSongs.length})',
@@ -463,7 +466,11 @@ class _ArtistSongsTabState extends ConsumerState<_ArtistSongsTab> {
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(Icons.music_off, size: 64, color: Colors.grey[400]),
+                      Icon(
+                        AppIcons.music_off,
+                        size: 64,
+                        color: Colors.grey[400],
+                      ),
                       const SizedBox(height: 16),
                       const Text('暂无歌曲'),
                     ],
@@ -476,7 +483,7 @@ class _ArtistSongsTabState extends ConsumerState<_ArtistSongsTab> {
                   padding: const EdgeInsets.all(16),
                   child: Row(
                     children: [
-                      const Icon(Icons.library_music),
+                      const Icon(AppIcons.library_music),
                       const SizedBox(width: 8),
                       Text(
                         '所有歌曲 (${widget.songs.length})',
@@ -488,7 +495,7 @@ class _ArtistSongsTabState extends ConsumerState<_ArtistSongsTab> {
                         onPressed: () => ref
                             .read(playerProvider.notifier)
                             .playQueue(widget.songs),
-                        icon: const Icon(Icons.play_arrow, size: 18),
+                        icon: const Icon(AppIcons.play_arrow, size: 18),
                         label: const Text('播放全部'),
                       ),
                     ],

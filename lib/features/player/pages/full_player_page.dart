@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:echoes/widgets/app_back_button.dart';
+import 'package:echoes/core/theme/app_icons.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:just_audio/just_audio.dart';
@@ -196,7 +198,7 @@ class _FullPlayerPageState extends ConsumerState<FullPlayerPage>
         errorBuilder: (context, error, stackTrace) => Container(
           color: Theme.of(context).colorScheme.surfaceContainerHighest,
           alignment: Alignment.center,
-          child: const Icon(Icons.music_note, size: 64),
+          child: const Icon(AppIcons.music_note, size: 64),
         ),
       );
     }
@@ -280,7 +282,10 @@ class _FullPlayerPageState extends ConsumerState<FullPlayerPage>
 
     if (currentSong == null) {
       return Scaffold(
-        appBar: AppBar(title: const Text('正在播放')),
+        appBar: AppBar(
+          leading: const AppBackButton(),
+          title: const Text('正在播放'),
+        ),
         body: const Center(child: Text('暂无播放内容')),
       );
     }
@@ -291,15 +296,26 @@ class _FullPlayerPageState extends ConsumerState<FullPlayerPage>
     // 而不是在 Hero 降落那一帧突然跳变。
     final miniPlayerBgColor = Theme.of(context).colorScheme.surfaceContainer;
     final Color backgroundColor;
+    final Color middleBackgroundColor;
     final Color scaffoldBackgroundColor;
 
     final paletteReady =
         _routeAnimComplete && paletteGenerator?.dominantColor?.color != null;
 
     if (paletteReady) {
+      final dominant = paletteGenerator!.dominantColor!.color;
+      final muted = paletteGenerator.darkMutedColor?.color ?? dominant;
+      final vibrant =
+          paletteGenerator.vibrantColor?.color ??
+          paletteGenerator.lightVibrantColor?.color ??
+          dominant;
       backgroundColor = _limitBackgroundLuminance(
-        paletteGenerator!.dominantColor!.color,
+        Color.lerp(dominant, vibrant, 0.18) ?? dominant,
         maxLuminance: 0.32,
+      );
+      middleBackgroundColor = _limitBackgroundLuminance(
+        Color.lerp(muted, dominant, 0.28) ?? muted,
+        maxLuminance: 0.24,
       );
       scaffoldBackgroundColor = _limitBackgroundLuminance(
         Theme.of(context).scaffoldBackgroundColor,
@@ -307,6 +323,7 @@ class _FullPlayerPageState extends ConsumerState<FullPlayerPage>
       );
     } else {
       backgroundColor = miniPlayerBgColor;
+      middleBackgroundColor = miniPlayerBgColor;
       scaffoldBackgroundColor = miniPlayerBgColor;
     }
     const primaryTextColor = Colors.white;
@@ -367,9 +384,11 @@ class _FullPlayerPageState extends ConsumerState<FullPlayerPage>
                         begin: Alignment.topCenter,
                         end: Alignment.bottomCenter,
                         colors: [
-                          backgroundColor.withValues(alpha: 0.85),
+                          backgroundColor.withValues(alpha: 0.92),
+                          middleBackgroundColor.withValues(alpha: 0.78),
                           scaffoldBackgroundColor,
                         ],
+                        stops: const [0.0, 0.48, 1.0],
                       ),
                     ),
                   ),
@@ -394,7 +413,9 @@ class _FullPlayerPageState extends ConsumerState<FullPlayerPage>
                               mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               children: [
                                 IconButton(
-                                  icon: const Icon(Icons.keyboard_arrow_down),
+                                  icon: const Icon(
+                                    AppIcons.keyboard_arrow_down,
+                                  ),
                                   onPressed: _closeToMini,
                                 ),
                                 Text(
@@ -403,7 +424,7 @@ class _FullPlayerPageState extends ConsumerState<FullPlayerPage>
                                       ?.copyWith(color: primaryTextColor),
                                 ),
                                 IconButton(
-                                  icon: const Icon(Icons.more_vert),
+                                  icon: const Icon(AppIcons.more_vert),
                                   onPressed: () {
                                     if (currentSong.isPreview) {
                                       showSongOptionsSheet(
@@ -412,7 +433,7 @@ class _FullPlayerPageState extends ConsumerState<FullPlayerPage>
                                         mode: SongOptionsSheetMode.offlineOnly,
                                         extraActions: [
                                           SongOptionsExtraAction(
-                                            icon: Icons.download_outlined,
+                                            icon: AppIcons.download_outlined,
                                             title: '添加到离线下载队列',
                                             onPressed: () async {
                                               await _enqueuePreviewSong(
@@ -495,7 +516,7 @@ class _FullPlayerPageState extends ConsumerState<FullPlayerPage>
                                         // 歌词按钮
                                         IconButton(
                                           icon: Icon(
-                                            Icons.lyrics,
+                                            AppIcons.lyrics,
                                             color: _showLyrics
                                                 ? Colors.white
                                                 : Colors.white.withValues(
@@ -518,7 +539,7 @@ class _FullPlayerPageState extends ConsumerState<FullPlayerPage>
                                         // 播放队列按钮
                                         IconButton(
                                           icon: Icon(
-                                            Icons.queue_music,
+                                            AppIcons.queue_music,
                                             color: Colors.white.withValues(
                                               alpha: 0.78,
                                             ),
@@ -825,7 +846,7 @@ class _FullPlayerPageState extends ConsumerState<FullPlayerPage>
             mainAxisSize: MainAxisSize.min,
             children: [
               Icon(
-                Icons.headphones,
+                AppIcons.headphones,
                 size: 12,
                 color: Colors.white.withValues(alpha: 0.76),
               ),
@@ -861,12 +882,12 @@ class _FullPlayerPageState extends ConsumerState<FullPlayerPage>
     switch (source) {
       case PlaybackSource.downloaded:
         parts.add('本地已下载');
-        icon = Icons.offline_pin;
+        icon = AppIcons.offline_pin;
         color = Colors.green;
         break;
       case PlaybackSource.cached:
         parts.add('本地缓存');
-        icon = Icons.check_circle_outline;
+        icon = AppIcons.check_circle_outline;
         color = Colors.blue;
         break;
       case PlaybackSource.stream:
@@ -878,8 +899,8 @@ class _FullPlayerPageState extends ConsumerState<FullPlayerPage>
         };
         parts.add(netName);
         icon = networkType == NetworkType.none
-            ? Icons.offline_pin
-            : Icons.cloud_queue;
+            ? AppIcons.offline_pin
+            : AppIcons.cloud_queue;
         color = networkType == NetworkType.none ? Colors.orange : null;
         break;
     }
@@ -1216,7 +1237,7 @@ class PlaybackControls extends ConsumerWidget {
         // 上一首按钮
         IconButton(
           iconSize: 36,
-          icon: Icon(Icons.skip_previous, color: inactiveControlColor),
+          icon: Icon(AppIcons.skip_previous, color: inactiveControlColor),
           onPressed: playerState.hasPrevious
               ? () {
                   ref.read(playerProvider.notifier).previous();
@@ -1235,7 +1256,7 @@ class PlaybackControls extends ConsumerWidget {
           child: IconButton(
             iconSize: 48,
             icon: Icon(
-              playerState.isPlaying ? Icons.pause : Icons.play_arrow,
+              playerState.isPlaying ? AppIcons.pause : AppIcons.play_arrow,
               color: Theme.of(context).colorScheme.onPrimary,
             ),
             onPressed: () {
@@ -1249,7 +1270,7 @@ class PlaybackControls extends ConsumerWidget {
         // 下一首按钮
         IconButton(
           iconSize: 36,
-          icon: Icon(Icons.skip_next, color: inactiveControlColor),
+          icon: Icon(AppIcons.skip_next, color: inactiveControlColor),
           onPressed: playerState.hasNext
               ? () {
                   ref.read(playerProvider.notifier).next();
@@ -1262,7 +1283,7 @@ class PlaybackControls extends ConsumerWidget {
         // 收藏按钮
         IconButton(
           icon: Icon(
-            currentSong.starred ? Icons.favorite : Icons.favorite_border,
+            currentSong.starred ? AppIcons.favorite : AppIcons.favorite_border,
             color: currentSong.starred ? Colors.red : inactiveControlColor,
           ),
           onPressed: () {
@@ -1275,9 +1296,9 @@ class PlaybackControls extends ConsumerWidget {
 
   IconData _getPlaybackModeIcon(PlaybackMode mode) {
     return switch (mode) {
-      PlaybackMode.shuffle => Icons.shuffle,
-      PlaybackMode.repeatAll => Icons.repeat,
-      PlaybackMode.repeatOne => Icons.repeat_one,
+      PlaybackMode.shuffle => AppIcons.shuffle,
+      PlaybackMode.repeatAll => AppIcons.repeat,
+      PlaybackMode.repeatOne => AppIcons.repeat_one,
     };
   }
 }

@@ -5,11 +5,15 @@ import 'package:echoes/features/library/widgets/address_dialog.dart';
 import 'package:echoes/providers/library_provider.dart';
 import 'package:echoes/providers/offline_download_provider.dart';
 import 'package:flutter/material.dart';
+import 'package:echoes/widgets/app_back_button.dart';
+import 'package:echoes/core/theme/app_icons.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:echoes/providers/api_provider.dart';
 import 'package:echoes/providers/auth_provider.dart';
 import 'package:echoes/providers/player_provider.dart';
 import 'package:go_router/go_router.dart';
+
+import '../../../widgets/music_chrome.dart';
 
 class EditLibraryPage extends ConsumerStatefulWidget {
   final String libraryId;
@@ -31,6 +35,8 @@ class _EditLibraryPageState extends ConsumerState<EditLibraryPage> {
   late TextEditingController _embedLibraryIdController;
   bool _embedEnabled = false;
   bool _isTestingEmbed = false;
+  String? _initializedLibraryId;
+  bool _isPreparingForm = false;
 
   @override
   void initState() {
@@ -47,8 +53,6 @@ class _EditLibraryPageState extends ConsumerState<EditLibraryPage> {
     _embedApiKeyController = TextEditingController();
     _embedLibraryIdController = TextEditingController();
   }
-
-  bool _initialized = false;
 
   @override
   void dispose() {
@@ -75,33 +79,21 @@ class _EditLibraryPageState extends ConsumerState<EditLibraryPage> {
 
         // 库已被删除，等待导航跳转
         if (library == null) {
-          return const Scaffold(
-            body: Center(child: CircularProgressIndicator()),
-          );
+          return const Scaffold(body: MusicLoadingPane(message: '正在等待音乐库状态'));
         }
 
-        if (!_initialized) {
-          _nameController.text = library.name;
-          _usernameController.text = library.username ?? '';
-          _passwordController.text =
-              library.password ?? ''; // Be careful showing password
-          _apiKeyController.text = library.apiKey ?? '';
-          final embedConfig = EmbedServiceConfig.fromLibraryExtensions(
-            library.extensions,
-          );
-          _embedEnabled = embedConfig.enabled;
-          _embedBaseUrlController.text = embedConfig.baseUrl;
-          _embedApiKeyController.text = embedConfig.apiKey;
-          _embedLibraryIdController.text = embedConfig.libraryId;
-          _initialized = true;
+        if (_initializedLibraryId != library.id) {
+          _scheduleFormPreparation(library);
+          return const Scaffold(body: MusicLoadingPane(message: '正在准备编辑表单'));
         }
 
         return Scaffold(
           appBar: AppBar(
+            leading: const AppBackButton(),
             title: const Text('编辑音乐库'),
             actions: [
               IconButton(
-                icon: const Icon(Icons.check),
+                icon: const Icon(AppIcons.check),
                 onPressed: () => _saveLibrary(library),
               ),
             ],
@@ -126,10 +118,40 @@ class _EditLibraryPageState extends ConsumerState<EditLibraryPage> {
           ),
         );
       },
-      loading: () =>
-          const Scaffold(body: Center(child: CircularProgressIndicator())),
+      loading: () => const Scaffold(body: MusicLoadingPane(message: '正在读取音乐库')),
       error: (err, stack) => Scaffold(body: Center(child: Text('Error: $err'))),
     );
+  }
+
+  void _scheduleFormPreparation(MusicLibrary library) {
+    if (_isPreparingForm) return;
+    _isPreparingForm = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      if (widget.libraryId != library.id) {
+        setState(() => _isPreparingForm = false);
+        return;
+      }
+      _populateForm(library);
+      setState(() {
+        _initializedLibraryId = library.id;
+        _isPreparingForm = false;
+      });
+    });
+  }
+
+  void _populateForm(MusicLibrary library) {
+    _nameController.text = library.name;
+    _usernameController.text = library.username ?? '';
+    _passwordController.text = library.password ?? '';
+    _apiKeyController.text = library.apiKey ?? '';
+    final embedConfig = EmbedServiceConfig.fromLibraryExtensions(
+      library.extensions,
+    );
+    _embedEnabled = embedConfig.enabled;
+    _embedBaseUrlController.text = embedConfig.baseUrl;
+    _embedApiKeyController.text = embedConfig.apiKey;
+    _embedLibraryIdController.text = embedConfig.libraryId;
   }
 
   Widget _buildBasicInfoSection(BuildContext context) {
@@ -187,7 +209,7 @@ class _EditLibraryPageState extends ConsumerState<EditLibraryPage> {
                 ),
                 if (library.isActive)
                   IconButton(
-                    icon: const Icon(Icons.refresh, size: 20),
+                    icon: const Icon(AppIcons.refresh, size: 20),
                     tooltip: '检测延迟',
                     onPressed: () async {
                       await ref.read(addressPoolProvider).probeAll();
@@ -198,7 +220,7 @@ class _EditLibraryPageState extends ConsumerState<EditLibraryPage> {
               ],
             ),
             IconButton(
-              icon: const Icon(Icons.add_circle_outline),
+              icon: const Icon(AppIcons.add_circle_outline),
               onPressed: () => _showAddressDialog(context),
             ),
           ],
@@ -253,19 +275,19 @@ class _EditLibraryPageState extends ConsumerState<EditLibraryPage> {
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       IconButton(
-                        icon: const Icon(Icons.edit, size: 20),
+                        icon: const Icon(AppIcons.edit, size: 20),
                         onPressed: () =>
                             _showAddressDialog(context, address: address),
                       ),
                       IconButton(
                         icon: const Icon(
-                          Icons.delete,
+                          AppIcons.delete,
                           size: 20,
                           color: Colors.red,
                         ),
                         onPressed: () => _deleteAddress(address),
                       ),
-                      const Icon(Icons.drag_handle),
+                      const Icon(AppIcons.drag_handle),
                     ],
                   ),
                 ),
@@ -308,7 +330,7 @@ class _EditLibraryPageState extends ConsumerState<EditLibraryPage> {
               labelText: 'Embed Service URL',
               hintText: 'http://localhost:8080',
               border: OutlineInputBorder(),
-              prefixIcon: Icon(Icons.cloud),
+              prefixIcon: Icon(AppIcons.cloud),
             ),
             validator: (value) {
               if (!_embedEnabled) return null;
@@ -325,7 +347,7 @@ class _EditLibraryPageState extends ConsumerState<EditLibraryPage> {
               labelText: 'API Key',
               hintText: 'your-api-key',
               border: OutlineInputBorder(),
-              prefixIcon: Icon(Icons.key),
+              prefixIcon: Icon(AppIcons.key),
             ),
             validator: (value) {
               if (!_embedEnabled) return null;
@@ -341,7 +363,7 @@ class _EditLibraryPageState extends ConsumerState<EditLibraryPage> {
               labelText: 'Library ID',
               hintText: 'default',
               border: OutlineInputBorder(),
-              prefixIcon: Icon(Icons.library_music),
+              prefixIcon: Icon(AppIcons.library_music),
             ),
           ),
           const SizedBox(height: 12),
@@ -355,7 +377,7 @@ class _EditLibraryPageState extends ConsumerState<EditLibraryPage> {
                       height: 16,
                       child: CircularProgressIndicator(strokeWidth: 2),
                     )
-                  : const Icon(Icons.wifi_tethering),
+                  : const Icon(AppIcons.wifi_tethering),
               label: Text(_isTestingEmbed ? '测试中...' : '测试连接'),
             ),
           ),
@@ -447,7 +469,7 @@ class _EditLibraryPageState extends ConsumerState<EditLibraryPage> {
     return Center(
       child: TextButton.icon(
         onPressed: () => _confirmDelete(library),
-        icon: const Icon(Icons.delete, color: Colors.red),
+        icon: const Icon(AppIcons.delete, color: Colors.red),
         label: const Text('删除此音乐库', style: TextStyle(color: Colors.red)),
       ),
     );

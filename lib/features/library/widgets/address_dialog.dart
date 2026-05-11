@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:echoes/core/theme/app_icons.dart';
 import 'package:uuid/uuid.dart';
 
 import 'package:echoes/core/utils/server_url_security.dart';
@@ -129,7 +130,7 @@ class _AddressDialogState extends State<AddressDialog> {
                       ? IconButton(
                           tooltip: 'HTTP 使用提示',
                           icon: const Icon(
-                            Icons.warning_amber_rounded,
+                            AppIcons.warning_amber_rounded,
                             color: Colors.orange,
                           ),
                           onPressed: _showHttpHint,

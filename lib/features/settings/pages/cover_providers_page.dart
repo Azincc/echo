@@ -2,7 +2,10 @@ import 'package:echoes/data/models/provider_config.dart';
 import 'package:echoes/data/sources/database/database_provider.dart';
 import 'package:echoes/providers/lyrics_cover_provider.dart';
 import 'package:flutter/material.dart';
+import 'package:echoes/widgets/app_back_button.dart';
+import 'package:echoes/core/theme/app_icons.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../widgets/music_chrome.dart';
 
 class CoverProvidersPage extends ConsumerStatefulWidget {
   const CoverProvidersPage({super.key});
@@ -17,7 +20,10 @@ class _CoverProvidersPageState extends ConsumerState<CoverProvidersPage> {
     final configsAsync = ref.watch(coverProviderConfigsProvider);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('封面提供商')),
+      appBar: AppBar(
+        leading: const AppBackButton(),
+        title: const Text('封面提供商'),
+      ),
       body: configsAsync.when(
         data: (configs) {
           final currentConfigs = List<ProviderConfig>.from(configs);
@@ -41,7 +47,7 @@ class _CoverProvidersPageState extends ConsumerState<CoverProvidersPage> {
                 key: ValueKey(config.id),
                 leading: ReorderableDragStartListener(
                   index: index,
-                  child: const Icon(Icons.drag_handle),
+                  child: const Icon(AppIcons.drag_handle),
                 ),
                 title: Text(_getProviderName(config.sourceId)),
                 subtitle: Text(_buildProviderSubtitle(config)),
@@ -52,7 +58,7 @@ class _CoverProvidersPageState extends ConsumerState<CoverProvidersPage> {
                     if (_isConfigurable(config.sourceId))
                       IconButton(
                         tooltip: '配置',
-                        icon: const Icon(Icons.settings_outlined),
+                        icon: const Icon(AppIcons.settings_outlined),
                         onPressed: () => _openProviderConfigDialog(config),
                       ),
                     Switch(
@@ -69,7 +75,7 @@ class _CoverProvidersPageState extends ConsumerState<CoverProvidersPage> {
             },
           );
         },
-        loading: () => const Center(child: CircularProgressIndicator()),
+        loading: () => const MusicLoadingPane(minHeight: 120),
         error: (err, stack) => Center(child: Text('Error: $err')),
       ),
     );

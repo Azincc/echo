@@ -82,6 +82,7 @@ dependencies:
   just_audio_media_kit: ^2.1.0
   media_kit_libs_linux: ^1.2.1
   media_kit_libs_windows_audio: ^1.0.9
+  remixicon: ^4.9.3
 
 dev_dependencies:
   drift_dev: ^2.22.1
@@ -105,10 +106,9 @@ dev_dependencies:
 
 # The following section is specific to Flutter packages.
 flutter:
-  # The following line ensures that the Material Icons font is
-  # included with your application, so that you can use the icons in
-  # the material Icons class.
-  uses-material-design: true
+  # Material widgets are still used, but app iconography comes from
+  # Remix Icon plus a small Cupertino system-action set.
+  uses-material-design: false
 
   # To add assets to your application, add an assets section, like this:
   # assets:

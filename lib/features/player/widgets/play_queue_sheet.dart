@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:echoes/core/theme/app_icons.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../providers/player_provider.dart';
 import 'song_options_sheet.dart';
@@ -82,7 +83,7 @@ class PlayQueueSheet extends ConsumerWidget {
                               song: song,
                               extraActions: [
                                 SongOptionsExtraAction(
-                                  icon: Icons.remove_circle_outline,
+                                  icon: AppIcons.remove_circle_outline,
                                   title: '从队列移除',
                                   isDestructive: true,
                                   onPressed: () {
@@ -98,7 +99,7 @@ class PlayQueueSheet extends ConsumerWidget {
                           return ListTile(
                             leading: isPlaying
                                 ? Icon(
-                                    Icons.play_arrow,
+                                    AppIcons.play_arrow,
                                     color: Theme.of(
                                       context,
                                     ).colorScheme.primary,
@@ -120,7 +121,7 @@ class PlayQueueSheet extends ConsumerWidget {
                                 ? Text(song.artist!)
                                 : null,
                             trailing: IconButton(
-                              icon: const Icon(Icons.more_vert),
+                              icon: const Icon(AppIcons.more_vert),
                               onPressed: openSongMenu,
                             ),
                             onTap: () {
@@ -151,7 +152,7 @@ class PlayQueueSheet extends ConsumerWidget {
                         ref.read(playerProvider.notifier).clearQueue();
                         Navigator.pop(context);
                       },
-                      icon: const Icon(Icons.clear_all),
+                      icon: const Icon(AppIcons.clear_all),
                       label: const Text('清空队列'),
                     ),
                   ],

@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:echoes/widgets/app_back_button.dart';
+import 'package:echoes/core/theme/app_icons.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../providers/music_provider.dart';
 import '../../../providers/navigation_provider.dart';
@@ -64,6 +66,7 @@ class _SearchPageState extends ConsumerState<SearchPage> {
       },
       child: Scaffold(
         appBar: AppBar(
+          leading: const AppBackButton(),
           title: TextField(
             controller: _searchController,
             autofocus: true,
@@ -77,7 +80,7 @@ class _SearchPageState extends ConsumerState<SearchPage> {
           actions: [
             if (_searchController.text.isNotEmpty)
               IconButton(
-                icon: const Icon(Icons.clear),
+                icon: const Icon(AppIcons.clear),
                 onPressed: () {
                   _searchController.clear();
                   setState(() {
@@ -93,7 +96,7 @@ class _SearchPageState extends ConsumerState<SearchPage> {
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     Icon(
-                      Icons.search,
+                      AppIcons.search,
                       size: 64,
                       color: Theme.of(context).colorScheme.onSurfaceVariant,
                     ),
@@ -120,7 +123,7 @@ class _SearchPageState extends ConsumerState<SearchPage> {
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          const Icon(Icons.search_off, size: 64),
+                          const Icon(AppIcons.search_off, size: 64),
                           const SizedBox(height: 16),
                           Text('未找到 "$_query" 的相关结果'),
                         ],
@@ -136,7 +139,7 @@ class _SearchPageState extends ConsumerState<SearchPage> {
                           padding: const EdgeInsets.all(16),
                           child: Row(
                             children: [
-                              const Icon(Icons.music_note),
+                              const Icon(AppIcons.music_note),
                               const SizedBox(width: 8),
                               Text(
                                 '歌曲 (${result.songs.length})',
@@ -175,7 +178,7 @@ class _SearchPageState extends ConsumerState<SearchPage> {
                           padding: const EdgeInsets.all(16),
                           child: Row(
                             children: [
-                              const Icon(Icons.album),
+                              const Icon(AppIcons.album),
                               const SizedBox(width: 8),
                               Text(
                                 '专辑 (${result.albums.length})',
@@ -219,7 +222,7 @@ class _SearchPageState extends ConsumerState<SearchPage> {
                           padding: const EdgeInsets.all(16),
                           child: Row(
                             children: [
-                              const Icon(Icons.person),
+                              const Icon(AppIcons.person),
                               const SizedBox(width: 8),
                               Text(
                                 '歌手 (${result.artists.length})',
@@ -239,7 +242,7 @@ class _SearchPageState extends ConsumerState<SearchPage> {
                                         size: 40,
                                       ),
                                     )
-                                  : const Icon(Icons.person),
+                                  : const Icon(AppIcons.person),
                             ),
                             title: Text(artist.name),
                             subtitle: Text('${artist.albumCount} 张专辑'),

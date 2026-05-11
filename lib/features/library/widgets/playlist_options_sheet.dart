@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:echoes/core/theme/app_icons.dart';
 
 import '../../../data/models/playlist.dart';
 
@@ -81,7 +82,7 @@ class _PlaylistOptionsSheet extends StatelessWidget {
               const Divider(height: 1),
               _buildActionTile(
                 context: context,
-                icon: Icons.download_outlined,
+                icon: AppIcons.download_outlined,
                 title: '下载歌单',
                 enabled: hasSongs && canDownload,
                 onTap: () =>
@@ -89,7 +90,7 @@ class _PlaylistOptionsSheet extends StatelessWidget {
               ),
               _buildActionTile(
                 context: context,
-                icon: Icons.queue_music_outlined,
+                icon: AppIcons.queue_music_outlined,
                 title: '添加到播放列表',
                 enabled: hasSongs,
                 onTap: () =>
@@ -97,14 +98,14 @@ class _PlaylistOptionsSheet extends StatelessWidget {
               ),
               _buildActionTile(
                 context: context,
-                icon: Icons.edit_outlined,
+                icon: AppIcons.edit_outlined,
                 title: '修改歌单',
                 onTap: () =>
                     Navigator.of(context).pop(PlaylistOptionsAction.edit),
               ),
               _buildActionTile(
                 context: context,
-                icon: Icons.delete_outline,
+                icon: AppIcons.delete_outline,
                 title: '删除歌单',
                 iconColor: Theme.of(context).colorScheme.error,
                 textColor: Theme.of(context).colorScheme.error,

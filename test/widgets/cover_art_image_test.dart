@@ -2,6 +2,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:echoes/core/utils/cover_ref_security.dart';
 import 'package:echoes/widgets/cover_art_image.dart';
 import 'package:flutter/material.dart';
+import 'package:echoes/core/theme/app_icons.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -21,13 +22,13 @@ void main() {
     await tester.pump();
 
     expect(find.byType(CachedNetworkImage), findsNothing);
-    expect(find.byIcon(Icons.music_note), findsOneWidget);
+    expect(find.byIcon(AppIcons.music_note), findsOneWidget);
 
     await tester.pumpWidget(buildSubject('https://evil.example/cover.jpg'));
     await tester.pump();
 
     expect(find.byType(CachedNetworkImage), findsNothing);
-    expect(find.byIcon(Icons.music_note), findsOneWidget);
+    expect(find.byIcon(AppIcons.music_note), findsOneWidget);
   });
 
   testWidgets('allows trusted direct cover url refs', (tester) async {

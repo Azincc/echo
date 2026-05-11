@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:echoes/core/theme/app_icons.dart';
+import 'package:echoes/widgets/app_back_button.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/utils/logger.dart';
@@ -7,6 +9,7 @@ import '../../../data/sources/remote/embed_service_client.dart';
 import '../../../providers/music_provider.dart';
 import '../../../providers/offline_download_provider.dart';
 import '../../../providers/player_provider.dart';
+import '../../../widgets/music_chrome.dart';
 
 class SongMetadataEditPage extends ConsumerStatefulWidget {
   final Song song;
@@ -543,12 +546,13 @@ class _SongMetadataEditPageState extends ConsumerState<SongMetadataEditPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
+        leading: const AppBackButton(),
         title: const Text('修改元数据'),
         actions: [
           IconButton(
             tooltip: '重新获取候选',
             onPressed: _isLoading || _isSubmitting ? null : _loadCandidates,
-            icon: const Icon(Icons.refresh),
+            icon: const Icon(AppIcons.refresh),
           ),
         ],
       ),
@@ -564,7 +568,7 @@ class _SongMetadataEditPageState extends ConsumerState<SongMetadataEditPage> {
                     height: 16,
                     child: CircularProgressIndicator(strokeWidth: 2),
                   )
-                : const Icon(Icons.save_outlined),
+                : const Icon(AppIcons.save_outlined),
             label: Text(
               _isSubmitting
                   ? (_jobStatus == null
@@ -583,30 +587,11 @@ class _SongMetadataEditPageState extends ConsumerState<SongMetadataEditPage> {
       final status = _candidateLookupStatus;
       final statusText = status?.statusDisplayName;
       final statusMessage = status?.message?.trim() ?? '';
-      return Center(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const CircularProgressIndicator(),
-              if (statusText != null && statusText.isNotEmpty) ...[
-                const SizedBox(height: 16),
-                Text(statusText, textAlign: TextAlign.center),
-              ],
-              if (statusMessage.isNotEmpty) ...[
-                const SizedBox(height: 8),
-                Text(
-                  statusMessage,
-                  textAlign: TextAlign.center,
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: Theme.of(context).colorScheme.onSurfaceVariant,
-                  ),
-                ),
-              ],
-            ],
-          ),
-        ),
+      return MusicLoadingPane(
+        message: [
+          if (statusText != null && statusText.isNotEmpty) statusText,
+          if (statusMessage.isNotEmpty) statusMessage,
+        ].join('\n'),
       );
     }
 
@@ -621,7 +606,7 @@ class _SongMetadataEditPageState extends ConsumerState<SongMetadataEditPage> {
               const SizedBox(height: 12),
               OutlinedButton.icon(
                 onPressed: _loadCandidates,
-                icon: const Icon(Icons.refresh),
+                icon: const Icon(AppIcons.refresh),
                 label: const Text('重试'),
               ),
             ],
@@ -683,7 +668,7 @@ class _SongMetadataEditPageState extends ConsumerState<SongMetadataEditPage> {
                             subtitle: Text(
                               '${response.candidates[i].source} · 置信度 ${(response.candidates[i].confidence * 100).toStringAsFixed(0)}%',
                             ),
-                            trailing: const Icon(Icons.tune),
+                            trailing: const Icon(AppIcons.tune),
                             onTap: () => _showCandidateFieldSelector(i),
                           ),
                           if (i != response.candidates.length - 1)
@@ -718,7 +703,7 @@ class _SongMetadataEditPageState extends ConsumerState<SongMetadataEditPage> {
                           context,
                         ).colorScheme.surfaceContainerHighest,
                         alignment: Alignment.center,
-                        child: const Icon(Icons.broken_image_outlined),
+                        child: const Icon(AppIcons.broken_image_outlined),
                       ),
                     ),
                   ),
@@ -815,10 +800,7 @@ class _SongMetadataEditPageState extends ConsumerState<SongMetadataEditPage> {
       validator: validator,
       maxLines: maxLines,
       minLines: maxLines > 1 ? maxLines : null,
-      decoration: InputDecoration(
-        labelText: label,
-        border: const OutlineInputBorder(),
-      ),
+      decoration: InputDecoration(labelText: label),
     );
   }
 }
@@ -948,73 +930,21 @@ class _CandidateFieldSelectionDialogState
                 ),
                 const SizedBox(height: 8),
                 for (final option in options)
-                  Card(
-                    margin: const EdgeInsets.only(bottom: 8),
-                    child: InkWell(
-                      borderRadius: BorderRadius.circular(12),
-                      onTap: () {
-                        setState(() {
-                          if (_selectedFields.contains(option.key)) {
-                            _selectedFields.remove(option.key);
-                          } else {
-                            _selectedFields.add(option.key);
-                          }
-                        });
-                      },
-                      child: Padding(
-                        padding: const EdgeInsets.fromLTRB(8, 8, 12, 8),
-                        child: Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Checkbox(
-                              value: _selectedFields.contains(option.key),
-                              onChanged: (checked) {
-                                setState(() {
-                                  if (checked ?? false) {
-                                    _selectedFields.add(option.key);
-                                  } else {
-                                    _selectedFields.remove(option.key);
-                                  }
-                                });
-                              },
-                            ),
-                            const SizedBox(width: 4),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Padding(
-                                    padding: const EdgeInsets.only(top: 10),
-                                    child: Text(
-                                      option.label,
-                                      style: Theme.of(
-                                        context,
-                                      ).textTheme.titleSmall,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 8),
-                                  Text(
-                                    option.changed
-                                        ? '当前：${_displayValue(option.currentValue)}'
-                                        : '当前：与候选一致',
-                                    maxLines: _previewMaxLines(option.key),
-                                    overflow: TextOverflow.ellipsis,
-                                    softWrap: true,
-                                  ),
-                                  const SizedBox(height: 4),
-                                  Text(
-                                    '候选：${_displayValue(option.candidateValue)}',
-                                    maxLines: _previewMaxLines(option.key),
-                                    overflow: TextOverflow.ellipsis,
-                                    softWrap: true,
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
+                  MusicSelectionTile(
+                    selected: _selectedFields.contains(option.key),
+                    title: option.label,
+                    subtitle:
+                        '${option.changed ? '当前：${_displayValue(option.currentValue)}' : '当前：与候选一致'}\n'
+                        '候选：${_displayValue(option.candidateValue)}',
+                    onTap: () {
+                      setState(() {
+                        if (_selectedFields.contains(option.key)) {
+                          _selectedFields.remove(option.key);
+                        } else {
+                          _selectedFields.add(option.key);
+                        }
+                      });
+                    },
                   ),
               ],
             ),
@@ -1147,15 +1077,6 @@ String _metadataFieldValue(
     _MetadataFieldKey.label => metadata.label.trim(),
     _MetadataFieldKey.comment => metadata.comment.trim(),
     _MetadataFieldKey.lyrics => metadata.lyrics.trim(),
-  };
-}
-
-int _previewMaxLines(_MetadataFieldKey field) {
-  return switch (field) {
-    _MetadataFieldKey.lyrics => 8,
-    _MetadataFieldKey.comment => 6,
-    _MetadataFieldKey.coverUrl => 4,
-    _ => 3,
   };
 }
 

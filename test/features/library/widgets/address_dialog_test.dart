@@ -1,5 +1,6 @@
 import 'package:echoes/features/library/widgets/address_dialog.dart';
 import 'package:flutter/material.dart';
+import 'package:echoes/core/theme/app_icons.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -20,9 +21,9 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.byIcon(Icons.warning_amber_rounded), findsOneWidget);
+    expect(find.byIcon(AppIcons.warning_amber_rounded), findsOneWidget);
 
-    await tester.tap(find.byIcon(Icons.warning_amber_rounded));
+    await tester.tap(find.byIcon(AppIcons.warning_amber_rounded));
     await tester.pumpAndSettle();
 
     expect(find.text('HTTP 使用提示'), findsOneWidget);
@@ -38,6 +39,6 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.byIcon(Icons.warning_amber_rounded), findsNothing);
+    expect(find.byIcon(AppIcons.warning_amber_rounded), findsNothing);
   });
 }

@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:echoes/widgets/app_back_button.dart';
+import 'package:echoes/core/theme/app_icons.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../data/repositories/music_repository.dart';
@@ -43,6 +45,7 @@ class StarredPage extends ConsumerWidget {
         initialIndex: initialTab.index,
         child: Scaffold(
           appBar: AppBar(
+            leading: const AppBackButton(),
             title: const Text('收藏夹'),
             bottom: const TabBar(
               tabs: [
@@ -87,7 +90,7 @@ class StarredPage extends ConsumerWidget {
       return RefreshIndicator(
         onRefresh: () => _refresh(ref),
         child: _buildEmptyScrollable(
-          icon: Icons.favorite_border,
+          icon: AppIcons.favorite_border,
           text: '暂无收藏歌曲',
         ),
       );
@@ -102,7 +105,7 @@ class StarredPage extends ConsumerWidget {
             padding: const EdgeInsets.all(16),
             child: Row(
               children: [
-                const Icon(Icons.music_note),
+                const Icon(AppIcons.music_note),
                 const SizedBox(width: 8),
                 Text(
                   '歌曲 (${songs.length})',
@@ -114,7 +117,7 @@ class StarredPage extends ConsumerWidget {
                 TextButton.icon(
                   onPressed: () =>
                       ref.read(playerProvider.notifier).playQueue(songs),
-                  icon: const Icon(Icons.play_arrow),
+                  icon: const Icon(AppIcons.play_arrow),
                   label: const Text('播放全部'),
                 ),
               ],
@@ -152,7 +155,7 @@ class StarredPage extends ConsumerWidget {
       return RefreshIndicator(
         onRefresh: () => _refresh(ref),
         child: _buildEmptyScrollable(
-          icon: Icons.album_outlined,
+          icon: AppIcons.album_outlined,
           text: '暂无收藏专辑',
         ),
       );
@@ -211,7 +214,7 @@ class StarredPage extends ConsumerWidget {
                               borderRadius: BorderRadius.circular(10),
                             ),
                             child: const Icon(
-                              Icons.favorite,
+                              AppIcons.favorite,
                               size: 14,
                               color: Colors.red,
                             ),
@@ -252,7 +255,7 @@ class StarredPage extends ConsumerWidget {
       return RefreshIndicator(
         onRefresh: () => _refresh(ref),
         child: _buildEmptyScrollable(
-          icon: Icons.person_outline,
+          icon: AppIcons.person_outline,
           text: '暂无收藏歌手',
         ),
       );
@@ -274,7 +277,7 @@ class StarredPage extends ConsumerWidget {
                         size: 40,
                       ),
                     )
-                  : const Icon(Icons.person),
+                  : const Icon(AppIcons.person),
             ),
             title: Text(artist.name),
             subtitle: Text('${artist.albumCount} 张专辑'),

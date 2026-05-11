@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:echoes/widgets/app_back_button.dart';
+import 'package:echoes/core/theme/app_icons.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../data/models/album.dart';
@@ -6,6 +8,7 @@ import '../../../providers/music_provider.dart';
 import '../../../providers/playback_stats_provider.dart';
 import '../../../widgets/cover_art_image.dart';
 import '../../../widgets/error_placeholder.dart';
+import '../../../widgets/music_chrome.dart';
 import '../../../widgets/visible_remote_retry_scope.dart';
 
 class PlaybackStatsPage extends ConsumerWidget {
@@ -35,9 +38,12 @@ class PlaybackStatsPage extends ConsumerWidget {
         ref.invalidate(playbackStatsProvider);
       },
       child: Scaffold(
-        appBar: AppBar(title: const Text('统计信息')),
+        appBar: AppBar(
+          leading: const AppBackButton(),
+          title: const Text('统计信息'),
+        ),
         body: statsAsync.when(
-          loading: () => const Center(child: CircularProgressIndicator()),
+          loading: () => const MusicLoadingPane(message: '正在整理统计'),
           error: (error, stackTrace) {
             return ErrorPlaceholder(
               message: '统计加载失败，请检查网络后重试',
@@ -71,22 +77,22 @@ class PlaybackStatsPage extends ConsumerWidget {
                   _buildSectionTitle(context, '库总览'),
                   _buildStatsGrid(context, [
                     _StatItem(
-                      icon: Icons.music_note_outlined,
+                      icon: AppIcons.music_note_outlined,
                       label: '歌曲总数',
                       value: _formatInteger(stats.totalSongs),
                     ),
                     _StatItem(
-                      icon: Icons.album_outlined,
+                      icon: AppIcons.album_outlined,
                       label: '专辑总数',
                       value: _formatInteger(stats.totalAlbums),
                     ),
                     _StatItem(
-                      icon: Icons.person_outline,
+                      icon: AppIcons.person_outline,
                       label: '歌手总数',
                       value: _formatInteger(stats.totalArtists),
                     ),
                     _StatItem(
-                      icon: Icons.schedule_outlined,
+                      icon: AppIcons.schedule_outlined,
                       label: '曲库总时长',
                       value: _formatDuration(stats.totalSongDurationSeconds),
                     ),
@@ -95,24 +101,24 @@ class PlaybackStatsPage extends ConsumerWidget {
                   _buildSectionTitle(context, '播放总览'),
                   _buildStatsGrid(context, [
                     _StatItem(
-                      icon: Icons.equalizer_outlined,
+                      icon: AppIcons.equalizer_outlined,
                       label: '总播放次数',
                       value: _formatInteger(stats.totalPlayCount),
                     ),
                     _StatItem(
-                      icon: Icons.library_music_outlined,
+                      icon: AppIcons.library_music_outlined,
                       label: '有播放记录歌曲',
                       value: _formatInteger(stats.playedSongsCount),
                     ),
                     _StatItem(
-                      icon: Icons.timer_outlined,
+                      icon: AppIcons.timer_outlined,
                       label: '估算累计播放时长',
                       value: _formatDuration(
                         stats.estimatedPlayedDurationSeconds,
                       ),
                     ),
                     _StatItem(
-                      icon: Icons.auto_graph_outlined,
+                      icon: AppIcons.auto_graph_outlined,
                       label: '平均每首播放次数',
                       value: stats.averagePlayCountPerSong.toStringAsFixed(2),
                     ),
@@ -121,17 +127,17 @@ class PlaybackStatsPage extends ConsumerWidget {
                   _buildSectionTitle(context, '收藏统计'),
                   _buildStatsGrid(context, [
                     _StatItem(
-                      icon: Icons.favorite_outline,
+                      icon: AppIcons.favorite_outline,
                       label: '收藏歌曲',
                       value: _formatInteger(stats.starredSongCount),
                     ),
                     _StatItem(
-                      icon: Icons.collections_bookmark_outlined,
+                      icon: AppIcons.collections_bookmark_outlined,
                       label: '收藏专辑',
                       value: _formatInteger(stats.starredAlbumCount),
                     ),
                     _StatItem(
-                      icon: Icons.people_outline,
+                      icon: AppIcons.people_outline,
                       label: '收藏歌手',
                       value: _formatInteger(stats.starredArtistCount),
                     ),
@@ -140,33 +146,33 @@ class PlaybackStatsPage extends ConsumerWidget {
                   _buildSectionTitle(context, '缓存统计'),
                   _buildStatsGrid(context, [
                     _StatItem(
-                      icon: Icons.storage_outlined,
+                      icon: AppIcons.storage_outlined,
                       label: '缓存条目',
                       value: _formatInteger(stats.cacheEntryCount),
                     ),
                     _StatItem(
-                      icon: Icons.music_video_outlined,
+                      icon: AppIcons.music_video_outlined,
                       label: '缓存歌曲',
                       value: _formatInteger(stats.cacheSongCount),
                     ),
                     _StatItem(
-                      icon: Icons.sd_storage_outlined,
+                      icon: AppIcons.sd_storage_outlined,
                       label: '缓存大小',
                       value: _formatBytes(stats.cacheTotalBytes),
                     ),
                     _StatItem(
-                      icon: Icons.shield_outlined,
+                      icon: AppIcons.shield_outlined,
                       label: '受保护缓存条目',
                       value: _formatInteger(stats.cacheProtectedEntryCount),
                       subtitle: '播放次数 >= $cacheProtectionThreshold',
                     ),
                     _StatItem(
-                      icon: Icons.touch_app_outlined,
+                      icon: AppIcons.touch_app_outlined,
                       label: '缓存命中次数',
                       value: _formatInteger(stats.cachePlayCount),
                     ),
                     _StatItem(
-                      icon: Icons.network_check_outlined,
+                      icon: AppIcons.network_check_outlined,
                       label: '移动网络节省流量',
                       value: _formatBytes(stats.cacheSavedTrafficBytes),
                       subtitle: '仅统计移动网络缓存命中',

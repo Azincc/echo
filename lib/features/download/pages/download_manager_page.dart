@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:echoes/widgets/app_back_button.dart';
+import 'package:echoes/core/theme/app_icons.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../data/models/download_task.dart';
 import '../../../data/models/song.dart';
@@ -6,6 +8,7 @@ import '../../../providers/download_provider.dart';
 import '../../../providers/music_provider.dart';
 import '../../../providers/player_provider.dart';
 import '../../../widgets/cover_art_image.dart';
+import '../../../widgets/music_chrome.dart';
 
 /// 下载管理器页面
 class DownloadManagerPage extends ConsumerWidget {
@@ -19,9 +22,11 @@ class DownloadManagerPage extends ConsumerWidget {
 
     return Scaffold(
       appBar: AppBar(
+        leading: const AppBackButton(),
         title: const Text('下载管理'),
         actions: [
           PopupMenuButton<String>(
+            icon: const Icon(AppIcons.more_horiz),
             onSelected: (value) async {
               final service = ref.read(downloadServiceProvider);
               switch (value) {
@@ -43,7 +48,7 @@ class DownloadManagerPage extends ConsumerWidget {
               const PopupMenuItem(
                 value: 'pause_all',
                 child: ListTile(
-                  leading: Icon(Icons.pause),
+                  leading: Icon(AppIcons.pause),
                   title: Text('全部暂停'),
                   contentPadding: EdgeInsets.zero,
                 ),
@@ -51,7 +56,7 @@ class DownloadManagerPage extends ConsumerWidget {
               const PopupMenuItem(
                 value: 'resume_all',
                 child: ListTile(
-                  leading: Icon(Icons.play_arrow),
+                  leading: Icon(AppIcons.play_arrow),
                   title: Text('全部恢复'),
                   contentPadding: EdgeInsets.zero,
                 ),
@@ -59,7 +64,7 @@ class DownloadManagerPage extends ConsumerWidget {
               const PopupMenuItem(
                 value: 'clear_completed',
                 child: ListTile(
-                  leading: Icon(Icons.clear_all),
+                  leading: Icon(AppIcons.clear_all),
                   title: Text('清除已完成'),
                   contentPadding: EdgeInsets.zero,
                 ),
@@ -67,7 +72,7 @@ class DownloadManagerPage extends ConsumerWidget {
               const PopupMenuItem(
                 value: 'scan_files',
                 child: ListTile(
-                  leading: Icon(Icons.find_in_page_outlined),
+                  leading: Icon(AppIcons.find_in_page_outlined),
                   title: Text('扫描本地文件'),
                   contentPadding: EdgeInsets.zero,
                 ),
@@ -118,7 +123,7 @@ class DownloadManagerPage extends ConsumerWidget {
                     child: Row(
                       children: [
                         Icon(
-                          Icons.folder_outlined,
+                          AppIcons.folder_outlined,
                           size: 16,
                           color: Theme.of(context).colorScheme.onSurfaceVariant,
                         ),
@@ -150,7 +155,7 @@ class DownloadManagerPage extends ConsumerWidget {
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
                             Icon(
-                              Icons.download_done,
+                              AppIcons.download_done,
                               size: 64,
                               color: Colors.grey,
                             ),
@@ -203,7 +208,7 @@ class DownloadManagerPage extends ConsumerWidget {
           );
         },
         error: (err, stack) => Center(child: Text('错误: $err')),
-        loading: () => const Center(child: CircularProgressIndicator()),
+        loading: () => const MusicLoadingPane(message: '正在读取下载任务'),
       ),
       // 播放全部已下载歌曲 FAB
       floatingActionButton: tasksAsync.whenOrNull(
@@ -214,7 +219,7 @@ class DownloadManagerPage extends ConsumerWidget {
           if (completedCount == 0) return null;
           return FloatingActionButton.extended(
             onPressed: () => _playAllDownloaded(context, ref),
-            icon: const Icon(Icons.play_arrow),
+            icon: const Icon(AppIcons.play_arrow),
             label: const Text('播放全部'),
           );
         },
@@ -257,7 +262,7 @@ class DownloadManagerPage extends ConsumerWidget {
                   color: Colors.grey[300],
                   borderRadius: BorderRadius.circular(4),
                 ),
-                child: const Icon(Icons.music_note, color: Colors.grey),
+                child: const Icon(AppIcons.music_note, color: Colors.grey),
               ),
       ),
       title: Text(task.title, maxLines: 1, overflow: TextOverflow.ellipsis),
@@ -316,7 +321,7 @@ class DownloadManagerPage extends ConsumerWidget {
 
     return switch (task.status) {
       DownloadTaskStatus.downloading => IconButton(
-        icon: const Icon(Icons.pause),
+        icon: const Icon(AppIcons.pause),
         onPressed: () => service.pause(task.id),
       ),
       DownloadTaskStatus.pending => const SizedBox(
@@ -328,11 +333,11 @@ class DownloadManagerPage extends ConsumerWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           IconButton(
-            icon: const Icon(Icons.play_arrow),
+            icon: const Icon(AppIcons.play_arrow),
             onPressed: () => service.resume(task.id),
           ),
           IconButton(
-            icon: const Icon(Icons.close, size: 20),
+            icon: const Icon(AppIcons.close, size: 20),
             onPressed: () => service.cancel(task.id),
           ),
         ],
@@ -341,11 +346,11 @@ class DownloadManagerPage extends ConsumerWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           IconButton(
-            icon: const Icon(Icons.refresh),
+            icon: const Icon(AppIcons.refresh),
             onPressed: () => service.resume(task.id),
           ),
           IconButton(
-            icon: const Icon(Icons.close, size: 20),
+            icon: const Icon(AppIcons.close, size: 20),
             onPressed: () => service.cancel(task.id),
           ),
         ],
@@ -355,12 +360,12 @@ class DownloadManagerPage extends ConsumerWidget {
         children: [
           // 播放按钮
           IconButton(
-            icon: const Icon(Icons.play_arrow, size: 20),
+            icon: const Icon(AppIcons.play_arrow, size: 20),
             tooltip: '播放',
             onPressed: () => _playTask(context, ref, task),
           ),
           IconButton(
-            icon: const Icon(Icons.delete_outline, size: 20),
+            icon: const Icon(AppIcons.delete_outline, size: 20),
             tooltip: '删除',
             onPressed: () => service.cancel(task.id),
           ),
@@ -454,7 +459,7 @@ class DownloadManagerPage extends ConsumerWidget {
     showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (context) => const Center(child: CircularProgressIndicator()),
+      builder: (context) => const MusicLoadingPane(message: '正在扫描本地文件'),
     );
 
     try {
@@ -521,7 +526,7 @@ class DownloadManagerPage extends ConsumerWidget {
       padding: const EdgeInsets.symmetric(vertical: 4),
       child: Row(
         children: [
-          Icon(Icons.circle, size: 10, color: color),
+          Icon(AppIcons.circle, size: 10, color: color),
           const SizedBox(width: 8),
           Text(label),
           const Spacer(),
@@ -548,7 +553,7 @@ class DownloadManagerPage extends ConsumerWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             ListTile(
-              leading: const Icon(Icons.play_arrow),
+              leading: const Icon(AppIcons.play_arrow),
               title: const Text('播放'),
               onTap: () {
                 Navigator.pop(context);
@@ -556,7 +561,7 @@ class DownloadManagerPage extends ConsumerWidget {
               },
             ),
             ListTile(
-              leading: const Icon(Icons.delete_outline),
+              leading: const Icon(AppIcons.delete_outline),
               title: const Text('删除下载'),
               onTap: () {
                 Navigator.pop(context);

@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:echoes/widgets/app_back_button.dart';
+import 'package:echoes/core/theme/app_icons.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../data/sources/remote/embed_service_client.dart';
 import '../../../providers/offline_download_provider.dart';
+import '../../../widgets/music_chrome.dart';
 
 class OfflineDownloadStatusPage extends ConsumerStatefulWidget {
   const OfflineDownloadStatusPage({super.key});
@@ -99,15 +102,15 @@ class _OfflineDownloadStatusPageState
         title: Text(_selectMode ? '已选 ${_selected.length} 项' : '离线下载状态'),
         leading: _selectMode
             ? IconButton(
-                icon: const Icon(Icons.close),
+                icon: const Icon(AppIcons.close),
                 onPressed: _toggleSelectMode,
               )
-            : null,
+            : const AppBackButton(),
         actions: _selectMode
             ? [
                 IconButton(
                   tooltip: '全选',
-                  icon: const Icon(Icons.select_all),
+                  icon: const Icon(AppIcons.select_all),
                   onPressed: () {
                     final jobs =
                         ref.read(offlineDownloadJobsProvider).valueOrNull ?? [];
@@ -122,14 +125,14 @@ class _OfflineDownloadStatusPageState
                 ),
                 IconButton(
                   tooltip: '删除选中',
-                  icon: const Icon(Icons.delete, color: Colors.red),
+                  icon: const Icon(AppIcons.delete, color: Colors.red),
                   onPressed: _selected.isEmpty ? null : _batchDelete,
                 ),
               ]
             : [
                 IconButton(
                   tooltip: '刷新',
-                  icon: const Icon(Icons.refresh),
+                  icon: const Icon(AppIcons.refresh),
                   onPressed: () {
                     final config = ref.read(activeEmbedServiceConfigProvider);
                     ref
@@ -139,7 +142,7 @@ class _OfflineDownloadStatusPageState
                 ),
                 IconButton(
                   tooltip: '批量管理',
-                  icon: const Icon(Icons.checklist),
+                  icon: const Icon(AppIcons.checklist),
                   onPressed: _toggleSelectMode,
                 ),
               ],
@@ -168,7 +171,7 @@ class _OfflineDownloadStatusPageState
                   },
                 );
               },
-              loading: () => const Center(child: CircularProgressIndicator()),
+              loading: () => const MusicLoadingPane(message: '正在读取离线任务'),
               error: (error, _) => Center(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
@@ -268,15 +271,17 @@ class _JobTile extends ConsumerWidget {
     // 状态行：活动状态显示百分比，完成/失败状态只显示状态名
     final String statusLine;
     if (job.isActive) {
-      final percent =
-          (job.progressRatio * 100).clamp(0, 100).toStringAsFixed(0);
+      final percent = (job.progressRatio * 100)
+          .clamp(0, 100)
+          .toStringAsFixed(0);
       statusLine = '${job.statusDisplayName} · $percent%';
     } else {
       statusLine = job.statusDisplayName;
     }
 
     // 过滤掉包含 URL 的 message
-    final showMessage = job.message != null &&
+    final showMessage =
+        job.message != null &&
         job.message!.trim().isNotEmpty &&
         !_isUrl(job.message!);
 
@@ -288,19 +293,19 @@ class _JobTile extends ConsumerWidget {
             ? Checkbox(value: selected, onChanged: (_) => onSelect())
             : Icon(
                 job.isDone
-                    ? Icons.check_circle
+                    ? AppIcons.check_circle
                     : job.isFailed
-                        ? Icons.error
-                        : job.isCancelled
-                            ? Icons.cancel
-                            : Icons.downloading,
+                    ? AppIcons.error
+                    : job.isCancelled
+                    ? AppIcons.cancel
+                    : AppIcons.downloading,
                 color: job.isDone
                     ? Colors.green
                     : job.isFailed
-                        ? Colors.red
-                        : job.isCancelled
-                            ? Colors.grey
-                            : Theme.of(context).colorScheme.primary,
+                    ? Colors.red
+                    : job.isCancelled
+                    ? Colors.grey
+                    : Theme.of(context).colorScheme.primary,
               ),
         title: Text(title, maxLines: 1, overflow: TextOverflow.ellipsis),
         subtitle: Column(
@@ -318,10 +323,10 @@ class _JobTile extends ConsumerWidget {
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: job.isFailed
-                        ? Colors.red
-                        : Theme.of(context).colorScheme.onSurfaceVariant,
-                  ),
+                color: job.isFailed
+                    ? Colors.red
+                    : Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
             ),
             if (showMessage)
               Text(
@@ -337,10 +342,9 @@ class _JobTile extends ConsumerWidget {
                 '❌ ${job.error}',
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
-                style: Theme.of(context)
-                    .textTheme
-                    .bodySmall
-                    ?.copyWith(color: Colors.red),
+                style: Theme.of(
+                  context,
+                ).textTheme.bodySmall?.copyWith(color: Colors.red),
               ),
             if (job.isActive)
               Padding(
@@ -360,7 +364,7 @@ class _JobTile extends ConsumerWidget {
     if (job.isFailed) {
       actions.add(
         ListTile(
-          leading: const Icon(Icons.refresh),
+          leading: const Icon(AppIcons.refresh),
           title: const Text('重试'),
           onTap: () async {
             Navigator.of(context).pop();
@@ -389,7 +393,7 @@ class _JobTile extends ConsumerWidget {
       actions.add(
         ListTile(
           leading: Icon(
-            Icons.cancel,
+            AppIcons.cancel,
             color: Theme.of(context).colorScheme.error,
           ),
           title: Text(
@@ -422,7 +426,7 @@ class _JobTile extends ConsumerWidget {
     // 删除（任何状态都可以删除）
     actions.add(
       ListTile(
-        leading: const Icon(Icons.delete_outline, color: Colors.red),
+        leading: const Icon(AppIcons.delete_outline, color: Colors.red),
         title: const Text('删除', style: TextStyle(color: Colors.red)),
         onTap: () async {
           Navigator.of(context).pop();

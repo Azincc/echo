@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:echoes/core/theme/app_icons.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -14,6 +15,7 @@ import '../../../providers/download_provider.dart';
 import '../../../providers/offline_download_provider.dart';
 import '../../../providers/player_provider.dart';
 import '../../../providers/playlist_provider.dart';
+import '../../../widgets/music_chrome.dart';
 import '../../library/pages/song_metadata_edit_page.dart';
 import '../../library/pages/album_detail_page.dart';
 import '../../library/pages/artist_detail_page.dart';
@@ -158,7 +160,7 @@ class _SongOptionsSheet extends ConsumerWidget {
                 if (extraActions.isEmpty)
                   _buildActionTile(
                     context: context,
-                    icon: Icons.info_outline,
+                    icon: AppIcons.info_outline,
                     title: canDownload ? '暂无可用操作' : '当前不可操作',
                     enabled: false,
                   ),
@@ -214,7 +216,9 @@ class _SongOptionsSheet extends ConsumerWidget {
               const Divider(height: 1),
               _buildActionTile(
                 context: context,
-                icon: song.starred ? Icons.favorite : Icons.favorite_border,
+                icon: song.starred
+                    ? AppIcons.favorite
+                    : AppIcons.favorite_border,
                 title: song.starred ? '取消红心' : '红心',
                 onTap: () async {
                   await _closeAndRun(context, () async {
@@ -231,7 +235,7 @@ class _SongOptionsSheet extends ConsumerWidget {
               ),
               _buildActionTile(
                 context: context,
-                icon: Icons.playlist_add,
+                icon: AppIcons.playlist_add,
                 title: '添加到歌单',
                 onTap: () async {
                   await _closeAndRun(context, () async {
@@ -255,7 +259,7 @@ class _SongOptionsSheet extends ConsumerWidget {
               ),
               _buildActionTile(
                 context: context,
-                icon: Icons.download_outlined,
+                icon: AppIcons.download_outlined,
                 title: '下载',
                 enabled: canDownload,
                 onTap: !canDownload
@@ -272,7 +276,7 @@ class _SongOptionsSheet extends ConsumerWidget {
               if (!isCurrentSong)
                 _buildActionTile(
                   context: context,
-                  icon: Icons.queue_play_next,
+                  icon: AppIcons.queue_play_next,
                   title: '下一曲播放',
                   onTap: () async {
                     await _closeAndRun(context, () async {
@@ -283,7 +287,7 @@ class _SongOptionsSheet extends ConsumerWidget {
                 ),
               _buildActionTile(
                 context: context,
-                icon: Icons.person_outline,
+                icon: AppIcons.person_outline,
                 title: '歌手：$artistName',
                 enabled: canOpenArtist,
                 onTap: !canOpenArtist
@@ -305,7 +309,7 @@ class _SongOptionsSheet extends ConsumerWidget {
               ),
               _buildActionTile(
                 context: context,
-                icon: Icons.album_outlined,
+                icon: AppIcons.album_outlined,
                 title: '专辑：$albumName',
                 enabled: canOpenAlbum,
                 onTap: !canOpenAlbum
@@ -328,7 +332,7 @@ class _SongOptionsSheet extends ConsumerWidget {
               if (canEditMetadata)
                 _buildActionTile(
                   context: context,
-                  icon: Icons.edit_note_outlined,
+                  icon: AppIcons.edit_note_outlined,
                   title: '修改元数据',
                   onTap: () async {
                     Logger.infoWithTag(
@@ -487,7 +491,7 @@ class _AddToPlaylistSheet extends ConsumerWidget {
                     itemBuilder: (context, index) {
                       final playlist = playlists[index];
                       return ListTile(
-                        leading: const Icon(Icons.playlist_play),
+                        leading: const Icon(AppIcons.playlist_play),
                         title: Text(
                           playlist.name,
                           maxLines: 1,
@@ -527,7 +531,7 @@ class _AddToPlaylistSheet extends ConsumerWidget {
                     },
                   );
                 },
-                loading: () => const Center(child: CircularProgressIndicator()),
+                loading: () => const MusicLoadingPane(minHeight: 96),
                 error: (_, _) => const Center(child: Text('歌单加载失败')),
               ),
             ),

@@ -1,4 +1,7 @@
+import 'dart:ui';
+
 import 'package:flutter/material.dart';
+import 'package:echoes/core/theme/app_icons.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -9,6 +12,7 @@ import '../providers/navigation_provider.dart';
 import '../providers/offline_download_provider.dart';
 import '../providers/player_provider.dart';
 import 'app_drawer.dart';
+import 'music_chrome.dart';
 
 // GlobalKey used to access Scaffold state (e.g. opening drawer).
 final scaffoldKey = GlobalKey<ScaffoldState>();
@@ -180,33 +184,182 @@ class _MainScaffoldState extends ConsumerState<MainScaffold> {
           child: widget.navigationShell,
         ),
         bottomSheet: const MiniPlayer(),
-        bottomNavigationBar: NavigationBar(
+        bottomNavigationBar: _buildNavigationBar(
+          context: context,
           selectedIndex: selectedIndex == -1 ? 0 : selectedIndex,
-          onDestinationSelected: (index) {
-            final branchIndex = visibleBranchIndices[index];
-            widget.navigationShell.goBranch(
-              branchIndex,
-              initialLocation: branchIndex == currentBranchIndex,
-            );
-          },
-          destinations: [
-            const NavigationDestination(
-              icon: Icon(Icons.explore_outlined),
-              selectedIcon: Icon(Icons.explore),
-              label: '音乐流',
+          visibleBranchIndices: visibleBranchIndices,
+          currentBranchIndex: currentBranchIndex,
+          showExploreTab: showExploreTab,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildNavigationBar({
+    required BuildContext context,
+    required int selectedIndex,
+    required List<int> visibleBranchIndices,
+    required int currentBranchIndex,
+    required bool showExploreTab,
+  }) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final destinations = <_GlassTabDestination>[
+      const _GlassTabDestination(
+        icon: AppIcons.play_circle_outline,
+        selectedIcon: AppIcons.play_circle,
+        label: '音乐流',
+      ),
+      if (showExploreTab)
+        const _GlassTabDestination(
+          icon: AppIcons.search_outlined,
+          selectedIcon: AppIcons.search,
+          label: '探索',
+        ),
+      const _GlassTabDestination(
+        icon: AppIcons.library_music_outlined,
+        selectedIcon: AppIcons.library_music,
+        label: '资料库',
+      ),
+    ];
+
+    return ClipRect(
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            color: theme.colorScheme.surface.withValues(
+              alpha: isDark ? 0.74 : 0.82,
             ),
-            if (showExploreTab)
-              const NavigationDestination(
-                icon: Icon(Icons.travel_explore_outlined),
-                selectedIcon: Icon(Icons.travel_explore),
-                label: '探索',
+            border: Border(
+              top: BorderSide(color: MusicChrome.hairline(context), width: 0.7),
+            ),
+          ),
+          child: SafeArea(
+            top: false,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(10, 6, 10, 7),
+              child: SizedBox(
+                height: 58,
+                child: Row(
+                  children: [
+                    for (var i = 0; i < destinations.length; i++)
+                      Expanded(
+                        child: _GlassTabItem(
+                          destination: destinations[i],
+                          selected: i == selectedIndex,
+                          onTap: () {
+                            final branchIndex = visibleBranchIndices[i];
+                            widget.navigationShell.goBranch(
+                              branchIndex,
+                              initialLocation:
+                                  branchIndex == currentBranchIndex,
+                            );
+                          },
+                        ),
+                      ),
+                  ],
+                ),
               ),
-            const NavigationDestination(
-              icon: Icon(Icons.library_music_outlined),
-              selectedIcon: Icon(Icons.library_music),
-              label: '我的',
             ),
-          ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _GlassTabDestination {
+  final IconData icon;
+  final IconData selectedIcon;
+  final String label;
+
+  const _GlassTabDestination({
+    required this.icon,
+    required this.selectedIcon,
+    required this.label,
+  });
+}
+
+class _GlassTabItem extends StatelessWidget {
+  final _GlassTabDestination destination;
+  final bool selected;
+  final VoidCallback onTap;
+
+  const _GlassTabItem({
+    required this.destination,
+    required this.selected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final selectedColor = colorScheme.primary;
+    final inactiveColor = colorScheme.onSurfaceVariant.withValues(alpha: 0.82);
+    final foregroundColor = selected ? selectedColor : inactiveColor;
+
+    return Semantics(
+      button: true,
+      selected: selected,
+      label: destination.label,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 3),
+        child: Material(
+          color: Colors.transparent,
+          borderRadius: BorderRadius.circular(16),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(16),
+            onTap: onTap,
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 180),
+              curve: Curves.easeOutCubic,
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              decoration: BoxDecoration(
+                color: selected
+                    ? selectedColor.withValues(
+                        alpha: theme.brightness == Brightness.dark
+                            ? 0.13
+                            : 0.08,
+                      )
+                    : Colors.transparent,
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  AnimatedContainer(
+                    duration: const Duration(milliseconds: 180),
+                    curve: Curves.easeOutCubic,
+                    width: selected ? 24 : 8,
+                    height: 3,
+                    margin: const EdgeInsets.only(bottom: 6),
+                    decoration: BoxDecoration(
+                      color: selected ? selectedColor : Colors.transparent,
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                  ),
+                  Icon(
+                    selected ? destination.selectedIcon : destination.icon,
+                    size: 23,
+                    color: foregroundColor,
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    destination.label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.labelSmall?.copyWith(
+                      color: foregroundColor,
+                      fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
+                      height: 1,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
         ),
       ),
     );

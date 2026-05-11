@@ -7,6 +7,7 @@ import 'package:echoes/features/settings/pages/playback_stats_page.dart';
 import 'package:echoes/providers/api_provider.dart';
 import 'package:echoes/providers/library_provider.dart';
 import 'package:flutter/material.dart';
+import 'package:echoes/core/theme/app_icons.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -15,6 +16,7 @@ import '../providers/music_provider.dart';
 import '../providers/offline_download_provider.dart';
 import '../providers/player_provider.dart';
 import '../providers/playlist_provider.dart';
+import 'music_chrome.dart';
 
 /// 应用侧栏
 class AppDrawer extends ConsumerStatefulWidget {
@@ -33,16 +35,23 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
     final activeLibrary = authState.currentLibrary;
     final activeAddress = ref.watch(activeAddressProvider);
 
+    final theme = Theme.of(context);
+
     return Drawer(
-      child: Column(
-        children: [
-          _buildHeader(context, activeLibrary, activeAddress),
-          Expanded(
-            child: _showLibraries
-                ? _buildLibraryList(context, activeLibrary)
-                : _buildNavigationList(context),
-          ),
-        ],
+      backgroundColor: theme.colorScheme.surface,
+      surfaceTintColor: Colors.transparent,
+      child: SafeArea(
+        bottom: false,
+        child: Column(
+          children: [
+            _buildHeader(context, activeLibrary, activeAddress),
+            Expanded(
+              child: _showLibraries
+                  ? _buildLibraryList(context, activeLibrary)
+                  : _buildNavigationList(context),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -52,110 +61,211 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
     MusicLibrary? activeLibrary,
     ServerAddress? activeAddress,
   ) {
-    final primary = Theme.of(context).colorScheme.primary;
-    final primaryContainer = Theme.of(context).colorScheme.primaryContainer;
-    final onPrimary = Theme.of(context).colorScheme.onPrimary;
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final primary = colorScheme.primary;
+    final primaryContainer = colorScheme.primaryContainer;
     final avatarUrl = _resolveAvatarUrl(activeLibrary);
 
-    return DrawerHeader(
-      margin: EdgeInsets.zero,
-      padding: const EdgeInsets.fromLTRB(16, 16, 8, 16),
-      decoration: BoxDecoration(
-        color: primary,
-        gradient: LinearGradient(
-          colors: [primary, primaryContainer],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(14, 14, 14, 10),
+      child: MusicGlassSurface(
+        borderRadius: BorderRadius.circular(20),
+        padding: const EdgeInsets.all(14),
+        color: Color.lerp(
+          colorScheme.surfaceContainer,
+          primaryContainer,
+          theme.brightness == Brightness.dark ? 0.28 : 0.44,
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            CircleAvatar(
+              radius: 28,
+              backgroundColor: primary.withValues(alpha: 0.16),
+              foregroundImage: avatarUrl != null
+                  ? NetworkImage(avatarUrl)
+                  : null,
+              child: avatarUrl == null
+                  ? Icon(AppIcons.person, size: 30, color: primary)
+                  : null,
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    activeLibrary?.username ?? 'Guest',
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w800,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    activeLibrary?.name ?? '未选择',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: colorScheme.onSurfaceVariant,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 4),
+                  Row(
+                    children: [
+                      Container(
+                        width: 8,
+                        height: 8,
+                        decoration: BoxDecoration(
+                          color: activeAddress == null
+                              ? colorScheme.outline
+                              : _statusColor(context, activeAddress.status),
+                          shape: BoxShape.circle,
+                          border: Border.all(
+                            color: Colors.white.withValues(alpha: 0.5),
+                            width: 1,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: Text(
+                          activeAddress?.label ?? '未连接',
+                          style: theme.textTheme.labelSmall?.copyWith(
+                            color: colorScheme.onSurfaceVariant,
+                            fontSize: 11,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            IconButton(
+              icon: Icon(
+                _showLibraries
+                    ? AppIcons.keyboard_arrow_up
+                    : AppIcons.keyboard_arrow_down,
+              ),
+              tooltip: '切换音乐库视图',
+              onPressed: () {
+                setState(() {
+                  _showLibraries = !_showLibraries;
+                });
+              },
+            ),
+          ],
         ),
       ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          CircleAvatar(
-            radius: 28,
-            backgroundColor: onPrimary,
-            foregroundImage: avatarUrl != null ? NetworkImage(avatarUrl) : null,
-            child: avatarUrl == null
-                ? Icon(Icons.person, size: 32, color: primary)
-                : null,
-          ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              crossAxisAlignment: CrossAxisAlignment.start,
+    );
+  }
+
+  Color _statusColor(BuildContext context, ServerAddressStatus status) {
+    switch (status) {
+      case ServerAddressStatus.ok:
+        return Colors.greenAccent.shade400;
+      case ServerAddressStatus.failed:
+        return Theme.of(context).colorScheme.error;
+      case ServerAddressStatus.unknown:
+        return Theme.of(context).colorScheme.outline;
+    }
+  }
+
+  Widget _drawerSectionTitle(BuildContext context, String title) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 18, 20, 6),
+      child: Text(
+        title,
+        style: Theme.of(context).textTheme.labelLarge?.copyWith(
+          color: Theme.of(context).colorScheme.onSurfaceVariant,
+          fontWeight: FontWeight.w800,
+        ),
+      ),
+    );
+  }
+
+  Widget _drawerItem(
+    BuildContext context, {
+    required IconData icon,
+    required String title,
+    String? subtitle,
+    Widget? trailing,
+    VoidCallback? onTap,
+    bool selected = false,
+  }) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final iconColor = selected ? colorScheme.primary : colorScheme.onSurface;
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 3),
+      child: Material(
+        color: selected
+            ? colorScheme.primary.withValues(
+                alpha: theme.brightness == Brightness.dark ? 0.18 : 0.1,
+              )
+            : Colors.transparent,
+        borderRadius: BorderRadius.circular(14),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(14),
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+            child: Row(
               children: [
-                Text(
-                  activeLibrary?.username ?? 'Guest',
-                  style: TextStyle(
-                    color: onPrimary,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 18,
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  activeLibrary?.name ?? '未选择',
-                  style: TextStyle(
-                    color: onPrimary.withValues(alpha: 0.9),
-                    fontSize: 13,
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                const SizedBox(height: 4),
-                Row(
-                  children: [
-                    Container(
-                      width: 8,
-                      height: 8,
-                      decoration: BoxDecoration(
-                        color: activeAddress == null
-                            ? Colors.grey.shade300
-                            : (activeAddress.status == ServerAddressStatus.ok
-                                  ? Colors.greenAccent
-                                  : Colors.redAccent),
-                        shape: BoxShape.circle,
-                        border: Border.all(
-                          color: Colors.white.withValues(alpha: 0.5),
-                          width: 1,
-                        ),
-                      ),
+                Container(
+                  width: 34,
+                  height: 34,
+                  decoration: BoxDecoration(
+                    color: iconColor.withValues(
+                      alpha: selected
+                          ? (theme.brightness == Brightness.dark ? 0.2 : 0.12)
+                          : (theme.brightness == Brightness.dark ? 0.12 : 0.08),
                     ),
-                    const SizedBox(width: 6),
-                    Expanded(
-                      child: Text(
-                        activeAddress?.label ?? '未连接',
-                        style: TextStyle(
-                          color: onPrimary.withValues(alpha: 0.8),
-                          fontSize: 11,
-                        ),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Icon(icon, size: 20, color: iconColor),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        title,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          fontWeight: selected
+                              ? FontWeight.w800
+                              : FontWeight.w700,
+                        ),
                       ),
-                    ),
-                  ],
+                      if (subtitle != null && subtitle.isNotEmpty) ...[
+                        const SizedBox(height: 2),
+                        Text(
+                          subtitle,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.textTheme.labelSmall?.copyWith(
+                            color: colorScheme.onSurfaceVariant,
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
                 ),
+                if (trailing != null) ...[const SizedBox(width: 8), trailing],
               ],
             ),
           ),
-          IconButton(
-            icon: Icon(
-              _showLibraries
-                  ? Icons.keyboard_arrow_up
-                  : Icons.keyboard_arrow_down,
-              color: onPrimary,
-            ),
-            tooltip: '切换音乐库视图',
-            onPressed: () {
-              setState(() {
-                _showLibraries = !_showLibraries;
-              });
-            },
-          ),
-        ],
+        ),
       ),
     );
   }
@@ -175,16 +285,17 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
     return asyncLibraries.when(
       data: (libs) {
         return ListView(
-          padding: EdgeInsets.zero,
+          padding: const EdgeInsets.fromLTRB(0, 4, 0, 24),
           children: [
+            _drawerSectionTitle(context, '音乐库'),
             ...libs.map((lib) {
               final isActive = lib.id == activeLibrary?.id;
-              return ListTile(
-                leading: isActive
-                    ? const Icon(Icons.check, color: Colors.green)
-                    : const Icon(Icons.library_music),
-                title: Text(lib.name),
-                subtitle: Text(lib.addresses.firstOrNull?.url ?? 'No Address'),
+              return _drawerItem(
+                context,
+                icon: isActive ? AppIcons.check_circle : AppIcons.library_music,
+                title: lib.name,
+                subtitle: lib.addresses.firstOrNull?.url ?? 'No Address',
+                selected: isActive,
                 onTap: () {
                   if (!isActive) {
                     _switchLibrary(lib);
@@ -195,17 +306,18 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
                   Navigator.pop(context);
                 },
                 trailing: IconButton(
-                  icon: const Icon(Icons.edit),
+                  icon: const Icon(AppIcons.edit),
                   onPressed: () {
                     context.push('/library/edit/${lib.id}');
                   },
                 ),
               );
             }),
-            const Divider(),
-            ListTile(
-              leading: const Icon(Icons.add),
-              title: const Text('添加新音乐库'),
+            const SizedBox(height: 8),
+            _drawerItem(
+              context,
+              icon: AppIcons.add,
+              title: '添加新音乐库',
               onTap: () {
                 context.push('/login?add=true');
               },
@@ -214,7 +326,7 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
         );
       },
       error: (err, stack) => Center(child: Text('Error: $err')),
-      loading: () => const Center(child: CircularProgressIndicator()),
+      loading: () => const MusicLoadingPane(minHeight: 96),
     );
   }
 
@@ -222,31 +334,30 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
     final downloadSummary = ref.watch(offlineDownloadSummaryProvider);
 
     return ListView(
-      padding: EdgeInsets.zero,
+      padding: const EdgeInsets.fromLTRB(0, 4, 0, 24),
       children: [
-        ListTile(
-          leading: const Icon(Icons.router),
-          title: const Text('切换线路'),
-          subtitle: Consumer(
-            builder: (context, ref, child) {
-              final activeAddress = ref.watch(activeAddressProvider);
-              return Text(
-                activeAddress?.label ?? '自动选择',
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(fontSize: 10),
-              );
-            },
-          ),
-          onTap: () {
-            Navigator.pop(context);
-            _showRouteSelectionDialog(context);
+        _drawerSectionTitle(context, '连接'),
+        Consumer(
+          builder: (context, ref, child) {
+            final activeAddress = ref.watch(activeAddressProvider);
+            return _drawerItem(
+              context,
+              icon: AppIcons.router,
+              title: '切换线路',
+              subtitle: activeAddress?.label ?? '自动选择',
+              trailing: const Icon(AppIcons.chevron_right),
+              onTap: () {
+                Navigator.pop(context);
+                _showRouteSelectionDialog(context);
+              },
+            );
           },
         ),
-        const Divider(),
-        ListTile(
-          leading: const Icon(Icons.analytics_outlined),
-          title: const Text('统计信息'),
+        _drawerSectionTitle(context, '资料'),
+        _drawerItem(
+          context,
+          icon: AppIcons.analytics_outlined,
+          title: '统计信息',
           onTap: () {
             Navigator.pop(context);
             Navigator.push(
@@ -257,9 +368,10 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
             );
           },
         ),
-        ListTile(
-          leading: const Icon(Icons.download_outlined),
-          title: const Text('下载管理'),
+        _drawerItem(
+          context,
+          icon: AppIcons.download_outlined,
+          title: '下载管理',
           onTap: () {
             Navigator.pop(context);
             Navigator.push(
@@ -270,17 +382,13 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
             );
           },
         ),
-        ListTile(
-          leading: const Icon(Icons.offline_pin_outlined),
-          title: const Text('离线下载状态'),
-          subtitle: Text(
-            downloadSummary.total == 0
-                ? '暂无任务'
-                : '进行中 ${downloadSummary.active} · 完成 ${downloadSummary.completed} · 失败 ${downloadSummary.failed}',
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(fontSize: 10),
-          ),
+        _drawerItem(
+          context,
+          icon: AppIcons.offline_pin_outlined,
+          title: '离线下载状态',
+          subtitle: downloadSummary.total == 0
+              ? '暂无任务'
+              : '进行中 ${downloadSummary.active} · 完成 ${downloadSummary.completed} · 失败 ${downloadSummary.failed}',
           onTap: () {
             Navigator.pop(context);
             Navigator.push(
@@ -291,10 +399,11 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
             );
           },
         ),
-        const Divider(),
-        ListTile(
-          leading: const Icon(Icons.settings_outlined),
-          title: const Text('设置'),
+        _drawerSectionTitle(context, '应用'),
+        _drawerItem(
+          context,
+          icon: AppIcons.settings_outlined,
+          title: '设置',
           onTap: () {
             Navigator.pop(context);
             Navigator.push(
@@ -337,7 +446,7 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
               children: [
                 const Text('切换线路'),
                 IconButton(
-                  icon: const Icon(Icons.refresh),
+                  icon: const Icon(AppIcons.refresh),
                   tooltip: '检测延迟',
                   onPressed: () {
                     addressPool.probeAll();
@@ -369,32 +478,29 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
                   child: ListView(
                     shrinkWrap: true,
                     children: [
-                      ListTile(
-                        leading: const Icon(Icons.hdr_auto),
-                        title: const Text('自动选择'),
-                        subtitle: isAuto
-                            ? Text('当前: ${activeAddress?.label}')
-                            : null,
-                        trailing: isAuto
-                            ? const Icon(Icons.check, color: Colors.green)
-                            : null,
+                      MusicSelectionTile(
+                        leading: const Icon(AppIcons.hdr_auto),
+                        selected: isAuto,
+                        title: '自动选择',
+                        subtitle: isAuto ? '当前: ${activeAddress?.label}' : null,
                         onTap: () {
                           addressPool.setAutoMode();
                           Navigator.pop(context);
                         },
                       ),
-                      const Divider(),
                       ...addresses.map((addr) {
                         final isSelected =
                             activeAddress?.id == addr.id && addr.isLocked;
-                        return ListTile(
-                          title: Text(addr.label),
-                          subtitle: Text(
-                            '${addr.url}\n延迟: ${addr.lastLatencyMs != null ? "${addr.lastLatencyMs}ms" : "未知"}',
-                          ),
-                          isThreeLine: true,
+                        return MusicSelectionTile(
+                          title: addr.label,
+                          subtitle:
+                              '${addr.url}\n延迟: ${addr.lastLatencyMs != null ? "${addr.lastLatencyMs}ms" : "未知"}',
+                          selected: isSelected,
                           trailing: isSelected
-                              ? const Icon(Icons.check, color: Colors.green)
+                              ? Icon(
+                                  AppIcons.check,
+                                  color: Theme.of(context).colorScheme.primary,
+                                )
                               : _getStatusIcon(addr.status),
                           onTap: () {
                             addressPool.setManualMode(addr);
@@ -406,10 +512,7 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
                   ),
                 );
               },
-              loading: () => const SizedBox(
-                height: 100,
-                child: Center(child: CircularProgressIndicator()),
-              ),
+              loading: () => const MusicLoadingPane(minHeight: 100),
               error: (err, stack) => Text('Error: $err'),
             ),
             actions: [
@@ -427,11 +530,15 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
   Widget _getStatusIcon(ServerAddressStatus status) {
     switch (status) {
       case ServerAddressStatus.ok:
-        return const Icon(Icons.circle, color: Colors.green, size: 12);
+        return Icon(
+          AppIcons.circle,
+          color: Colors.greenAccent.shade400,
+          size: 12,
+        );
       case ServerAddressStatus.failed:
-        return const Icon(Icons.error, color: Colors.red, size: 12);
+        return const Icon(AppIcons.error, color: Colors.red, size: 12);
       case ServerAddressStatus.unknown:
-        return const Icon(Icons.help, color: Colors.grey, size: 12);
+        return const Icon(AppIcons.help, color: Colors.grey, size: 12);
     }
   }
 }

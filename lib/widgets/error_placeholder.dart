@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:echoes/core/theme/app_icons.dart';
 
 /// 统一的错误占位组件，替代原生 error.toString() 展示。
 /// 显示友好提示文案和可选的重试按钮。
@@ -23,7 +24,7 @@ class ErrorPlaceholder extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             Icon(
-              Icons.cloud_off_rounded,
+              AppIcons.cloud_off_rounded,
               size: 48,
               color: colorScheme.onSurfaceVariant.withValues(alpha: 0.5),
             ),

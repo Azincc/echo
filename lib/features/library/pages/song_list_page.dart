@@ -3,6 +3,8 @@ import 'dart:math' as math;
 
 import 'package:azlistview/azlistview.dart';
 import 'package:flutter/material.dart';
+import 'package:echoes/widgets/app_back_button.dart';
+import 'package:echoes/core/theme/app_icons.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 
@@ -179,11 +181,12 @@ class _SongListPageState extends ConsumerState<SongListPage> {
       onRetry: (ref) => ref.invalidate(allSongsProvider),
       child: Scaffold(
         appBar: AppBar(
+          leading: const AppBackButton(),
           title: const Text('所有歌曲'),
           actions: [
             PopupMenuButton<SongSortOption>(
               tooltip: '歌曲排序：${_sortOption.label}',
-              icon: const Icon(Icons.sort),
+              icon: const Icon(AppIcons.sort),
               initialValue: _sortOption,
               onSelected: (option) {
                 if (option == _sortOption) return;

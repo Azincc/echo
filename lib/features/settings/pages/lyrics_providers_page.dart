@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:echoes/widgets/app_back_button.dart';
+import 'package:echoes/core/theme/app_icons.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:echoes/providers/lyrics_cover_provider.dart';
 import 'package:echoes/data/models/provider_config.dart';
 import 'package:echoes/data/sources/database/database_provider.dart';
+import '../../../widgets/music_chrome.dart';
 
 class LyricsProvidersPage extends ConsumerStatefulWidget {
   const LyricsProvidersPage({super.key});
@@ -18,7 +21,10 @@ class _LyricsProvidersPageState extends ConsumerState<LyricsProvidersPage> {
     final configsAsync = ref.watch(lyricsProviderConfigsProvider);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('歌词提供商')),
+      appBar: AppBar(
+        leading: const AppBackButton(),
+        title: const Text('歌词提供商'),
+      ),
       body: configsAsync.when(
         data: (configs) {
           // Create a modifiable copy for reordering
@@ -46,7 +52,7 @@ class _LyricsProvidersPageState extends ConsumerState<LyricsProvidersPage> {
                 key: ValueKey(config.id),
                 leading: ReorderableDragStartListener(
                   index: index,
-                  child: const Icon(Icons.drag_handle),
+                  child: const Icon(AppIcons.drag_handle),
                 ),
                 title: Text(_getProviderName(config.sourceId)),
                 subtitle: Text(_getProviderDescription(config.sourceId)),
@@ -62,7 +68,7 @@ class _LyricsProvidersPageState extends ConsumerState<LyricsProvidersPage> {
             },
           );
         },
-        loading: () => const Center(child: CircularProgressIndicator()),
+        loading: () => const MusicLoadingPane(minHeight: 120),
         error: (err, stack) => Center(child: Text('Error: $err')),
       ),
     );

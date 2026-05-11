@@ -1,6 +1,8 @@
 import 'dart:math' as math;
 import 'package:azlistview/azlistview.dart';
 import 'package:flutter/material.dart';
+import 'package:echoes/widgets/app_back_button.dart';
+import 'package:echoes/core/theme/app_icons.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../data/models/album.dart';
@@ -80,7 +82,10 @@ class AlbumListPage extends ConsumerWidget {
       shouldRetry: (ref) => loadFailed || albumsAsync.hasError,
       onRetry: (ref) => ref.invalidate(allAlbumsProvider),
       child: Scaffold(
-        appBar: AppBar(title: const Text('所有专辑')),
+        appBar: AppBar(
+          leading: const AppBackButton(),
+          title: const Text('所有专辑'),
+        ),
         body: albumsAsync.when(
           data: (albums) {
             if (albums.isEmpty) {
@@ -149,16 +154,19 @@ class AlbumListPage extends ConsumerWidget {
                     );
                   },
                   indexBarData: SuspensionUtil.getTagIndexList(azAlbumRows),
-                  indexBarOptions: const IndexBarOptions(
+                  indexBarOptions: IndexBarOptions(
                     needRebuild: true,
                     ignoreDragCancel: true,
-                    downTextStyle: TextStyle(fontSize: 12, color: Colors.white),
+                    downTextStyle: const TextStyle(
+                      fontSize: 12,
+                      color: Colors.white,
+                    ),
                     downItemDecoration: BoxDecoration(
                       shape: BoxShape.circle,
-                      color: Colors.green,
+                      color: Theme.of(context).colorScheme.primary,
                     ),
                     indexHintAlignment: Alignment.centerRight,
-                    indexHintOffset: Offset(-20, 0),
+                    indexHintOffset: const Offset(-20, 0),
                   ),
                 ),
               ),
@@ -215,7 +223,7 @@ class AlbumListPage extends ConsumerWidget {
                         borderRadius: BorderRadius.circular(10),
                       ),
                       child: const Icon(
-                        Icons.favorite,
+                        AppIcons.favorite,
                         size: 14,
                         color: Colors.red,
                       ),

@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:echoes/widgets/app_back_button.dart';
+import 'package:echoes/core/theme/app_icons.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/utils/network_error_notifier.dart';
 import '../../../data/models/playlist.dart';
@@ -204,12 +206,13 @@ class _PlaylistDetailPageState extends ConsumerState<PlaylistDetailPage> {
           ref.invalidate(playlistDetailProvider(widget.playlistId)),
       child: Scaffold(
         appBar: AppBar(
+          leading: const AppBackButton(),
           title: Text(currentPlaylist?.name ?? '歌单'),
           actions: [
             if (currentPlaylist != null)
               PopupMenuButton<SongSortOption>(
                 tooltip: '歌曲排序：${_sortOption.label}',
-                icon: const Icon(Icons.sort),
+                icon: const Icon(AppIcons.sort),
                 initialValue: _sortOption,
                 onSelected: (option) {
                   if (option == _sortOption) return;
@@ -230,7 +233,7 @@ class _PlaylistDetailPageState extends ConsumerState<PlaylistDetailPage> {
             if (currentPlaylist != null)
               IconButton(
                 tooltip: '歌单操作',
-                icon: const Icon(Icons.more_horiz),
+                icon: const Icon(AppIcons.more_horiz),
                 onPressed: () async {
                   final sortedSongs = sortSongs(
                     currentPlaylist.songs ?? const <Song>[],
@@ -310,7 +313,7 @@ class _PlaylistDetailPageState extends ConsumerState<PlaylistDetailPage> {
                                           .read(playerProvider.notifier)
                                           .playQueue(songs);
                                     },
-                              icon: const Icon(Icons.play_arrow),
+                              icon: const Icon(AppIcons.play_arrow),
                               label: const Text('播放全部'),
                             ),
                           ],

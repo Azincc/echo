@@ -1,5 +1,7 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
+import 'package:echoes/widgets/app_back_button.dart';
+import 'package:echoes/core/theme/app_icons.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../data/models/album.dart';
 import '../../../data/models/song.dart';
@@ -65,12 +67,13 @@ class _AlbumDetailPageState extends ConsumerState<AlbumDetailPage> {
                 child: CustomScrollView(
                   slivers: [
                     SliverAppBar(
+                      leading: const AppBackButton(),
                       expandedHeight: 300,
                       pinned: true,
                       actions: [
                         PopupMenuButton<SongSortOption>(
                           tooltip: '歌曲排序：${_sortOption.label}',
-                          icon: const Icon(Icons.sort),
+                          icon: const Icon(AppIcons.sort),
                           initialValue: _sortOption,
                           onSelected: (option) {
                             if (option == _sortOption) return;
@@ -99,7 +102,7 @@ class _AlbumDetailPageState extends ConsumerState<AlbumDetailPage> {
                                   );
                                 }
                               : null,
-                          icon: const Icon(Icons.more_horiz),
+                          icon: const Icon(AppIcons.more_horiz),
                           tooltip: '专辑操作',
                         ),
                       ],
@@ -283,7 +286,7 @@ class _AlbumDetailPageState extends ConsumerState<AlbumDetailPage> {
                               Row(
                                 children: [
                                   Icon(
-                                    Icons.wifi_off,
+                                    AppIcons.wifi_off,
                                     size: 16,
                                     color: Theme.of(
                                       context,
@@ -314,7 +317,7 @@ class _AlbumDetailPageState extends ConsumerState<AlbumDetailPage> {
                                               .read(playerProvider.notifier)
                                               .playQueue(songs);
                                         },
-                                  icon: const Icon(Icons.play_arrow),
+                                  icon: const Icon(AppIcons.play_arrow),
                                   label: const Text('播放全部'),
                                 ),
                                 const SizedBox(width: 8),
@@ -360,8 +363,8 @@ class _AlbumDetailPageState extends ConsumerState<AlbumDetailPage> {
                                       : null,
                                   icon: Icon(
                                     album.starred
-                                        ? Icons.favorite
-                                        : Icons.favorite_border,
+                                        ? AppIcons.favorite
+                                        : AppIcons.favorite_border,
                                     color: album.starred ? Colors.red : null,
                                   ),
                                 ),
@@ -395,7 +398,7 @@ class _AlbumDetailPageState extends ConsumerState<AlbumDetailPage> {
                                             ),
                                           );
                                         },
-                                  icon: const Icon(Icons.download_outlined),
+                                  icon: const Icon(AppIcons.download_outlined),
                                   tooltip: '下载专辑',
                                 ),
                               ],

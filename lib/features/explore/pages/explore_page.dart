@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:echoes/core/theme/app_icons.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/utils/logger.dart';
@@ -15,6 +16,7 @@ import '../../../data/repositories/music_repository.dart';
 import '../../../widgets/cover_art_image.dart';
 import '../../../widgets/error_placeholder.dart';
 import '../../../widgets/main_scaffold.dart';
+import '../../../widgets/music_chrome.dart';
 import '../../../widgets/skeleton_templates.dart';
 import '../../../widgets/visible_remote_retry_scope.dart';
 
@@ -415,263 +417,293 @@ class _ExplorePageState extends ConsumerState<ExplorePage> {
         ref.read(exploreRemoteSearchProvider.notifier).loadNextPage();
       },
       child: Scaffold(
-        appBar: AppBar(
-          leading: IconButton(
-            icon: const Icon(Icons.menu),
-            onPressed: () => scaffoldKey.currentState?.openDrawer(),
-          ),
-          title: const Text('探索'),
-          actions: [
-            if (searchMode == ExploreSearchMode.remote)
-              Builder(
-                builder: (context) {
-                  final hasResults = ref
-                      .watch(exploreRemoteSearchProvider)
-                      .songs
-                      .isNotEmpty;
-                  return IconButton(
-                    tooltip: '下载本页所有',
-                    onPressed: hasResults && !_isBatchDownloading
-                        ? _downloadAllOnPage
-                        : null,
-                    icon: const Icon(Icons.download_for_offline_outlined),
-                  );
-                },
+        body: SafeArea(
+          bottom: false,
+          child: Align(
+            alignment: Alignment.topCenter,
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(
+                maxWidth: MusicChrome.maxContentWidth,
               ),
-            IconButton(
-              tooltip: '刷新',
-              onPressed: query.isEmpty ? null : _refreshSearchResults,
-              icon: const Icon(Icons.refresh),
-            ),
-            PopupMenuButton<String>(
-              tooltip: '菜单',
-              onSelected: (value) {
-                if (value == 'local') {
-                  ref.read(exploreSearchModeProvider.notifier).state =
-                      ExploreSearchMode.local;
-                  ref.read(exploreRemoteSearchProvider.notifier).reset();
-                  setState(() {
-                    _selectedSongIds.clear();
-                  });
-                  if (_query.isNotEmpty) {
-                    setState(() {});
-                  }
-                } else if (value == 'remote') {
-                  ref.read(exploreSearchModeProvider.notifier).state =
-                      ExploreSearchMode.remote;
-                  setState(() {
-                    _selectedSongIds.clear();
-                  });
-                  if (_query.isNotEmpty) {
-                    final source = ref.read(exploreRemoteSourceProvider);
-                    final type = ref.read(exploreSearchTypeProvider);
-                    ref
-                        .read(exploreRemoteSearchProvider.notifier)
-                        .search(keyword: _query, source: source, type: type);
-                  }
-                } else if (value.startsWith('source:')) {
-                  final source = value.substring(7);
-                  ref.read(exploreRemoteSourceProvider.notifier).state = source;
-                  ref.read(exploreSearchModeProvider.notifier).state =
-                      ExploreSearchMode.remote;
-                  setState(() {
-                    _selectedSongIds.clear();
-                  });
-                  if (_query.isNotEmpty) {
-                    final type = ref.read(exploreSearchTypeProvider);
-                    ref
-                        .read(exploreRemoteSearchProvider.notifier)
-                        .search(keyword: _query, source: source, type: type);
-                  }
-                }
-              },
-              itemBuilder: (context) => [
-                PopupMenuItem(
-                  value: 'local',
-                  child: Row(
-                    children: [
-                      Icon(
-                        Icons.library_music,
-                        size: 20,
-                        color: searchMode == ExploreSearchMode.local
-                            ? Theme.of(context).colorScheme.primary
-                            : null,
-                      ),
-                      const SizedBox(width: 8),
-                      const Text('搜索音乐库'),
-                    ],
-                  ),
-                ),
-                PopupMenuItem(
-                  value: 'remote',
-                  child: Row(
-                    children: [
-                      Icon(
-                        Icons.cloud_outlined,
-                        size: 20,
-                        color: searchMode == ExploreSearchMode.remote
-                            ? Theme.of(context).colorScheme.primary
-                            : null,
-                      ),
-                      const SizedBox(width: 8),
-                      const Text('搜索远程源'),
-                    ],
-                  ),
-                ),
-                const PopupMenuDivider(),
-                const PopupMenuItem(
-                  enabled: false,
-                  child: Text(
-                    '切换远程源',
-                    style: TextStyle(fontWeight: FontWeight.w600),
-                  ),
-                ),
-                ...['netease', 'kuwo', 'joox', 'bilibili'].map(
-                  (s) => PopupMenuItem(
-                    value: 'source:$s',
-                    child: Row(
-                      children: [
-                        if (remoteSource == s)
-                          Icon(
-                            Icons.check,
-                            size: 18,
-                            color: Theme.of(context).colorScheme.primary,
-                          )
-                        else
-                          const SizedBox(width: 18),
-                        const SizedBox(width: 8),
-                        Text(s),
-                      ],
+              child: Column(
+                children: [
+                  MusicPageHeader(
+                    padding: const EdgeInsets.fromLTRB(20, 14, 20, 6),
+                    title: '探索',
+                    subtitle: searchMode == ExploreSearchMode.local
+                        ? '在你的资料库里查找歌曲、专辑和艺人'
+                        : '从远程源试听并加入离线队列',
+                    leading: MusicIconButton(
+                      icon: AppIcons.menu,
+                      tooltip: '菜单',
+                      onPressed: () => scaffoldKey.currentState?.openDrawer(),
                     ),
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ),
-        body: Align(
-          alignment: Alignment.topCenter,
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 1400),
-            child: Column(
-              children: [
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-                  child: TextField(
-                    controller: _searchController,
-                    textInputAction: TextInputAction.search,
-                    decoration: InputDecoration(
-                      hintText: _hintText(),
-                      prefixIcon: const Icon(Icons.search),
-                      suffixIcon: _searchController.text.isEmpty
-                          ? null
-                          : IconButton(
-                              icon: const Icon(Icons.clear),
-                              onPressed: () {
-                                _searchController.clear();
-                                setState(() {
-                                  _query = '';
-                                  _selectedSongIds.clear();
-                                });
-                                ref
-                                    .read(exploreRemoteSearchProvider.notifier)
-                                    .reset();
-                              },
-                            ),
-                      border: const OutlineInputBorder(),
-                    ),
-                    onChanged: (_) => setState(() {}),
-                    onSubmitted: _submitQuery,
-                  ),
-                ),
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 4),
-                  child: Row(
-                    children: [
-                      Icon(
-                        searchMode == ExploreSearchMode.local
-                            ? Icons.library_music
-                            : Icons.cloud_outlined,
-                        size: 16,
-                        color: Theme.of(context).colorScheme.primary,
-                      ),
-                      const SizedBox(width: 6),
-                      Text(
-                        searchMode == ExploreSearchMode.local
-                            ? '音乐库搜索'
-                            : '远程搜索 · $remoteSource',
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: Theme.of(context).colorScheme.primary,
-                          fontWeight: FontWeight.w500,
+                    actions: [
+                      if (searchMode == ExploreSearchMode.remote)
+                        Builder(
+                          builder: (context) {
+                            final hasResults = ref
+                                .watch(exploreRemoteSearchProvider)
+                                .songs
+                                .isNotEmpty;
+                            return MusicIconButton(
+                              icon: AppIcons.download_for_offline_outlined,
+                              tooltip: '下载本页所有',
+                              onPressed: hasResults && !_isBatchDownloading
+                                  ? _downloadAllOnPage
+                                  : null,
+                            );
+                          },
                         ),
+                      MusicIconButton(
+                        icon: AppIcons.refresh,
+                        tooltip: '刷新',
+                        onPressed: query.isEmpty ? null : _refreshSearchResults,
+                      ),
+                      PopupMenuButton<String>(
+                        tooltip: '菜单',
+                        icon: const Icon(AppIcons.more_horiz),
+                        onSelected: (value) {
+                          if (value == 'local') {
+                            ref.read(exploreSearchModeProvider.notifier).state =
+                                ExploreSearchMode.local;
+                            ref
+                                .read(exploreRemoteSearchProvider.notifier)
+                                .reset();
+                            setState(() {
+                              _selectedSongIds.clear();
+                            });
+                            if (_query.isNotEmpty) {
+                              setState(() {});
+                            }
+                          } else if (value == 'remote') {
+                            ref.read(exploreSearchModeProvider.notifier).state =
+                                ExploreSearchMode.remote;
+                            setState(() {
+                              _selectedSongIds.clear();
+                            });
+                            if (_query.isNotEmpty) {
+                              final source = ref.read(
+                                exploreRemoteSourceProvider,
+                              );
+                              final type = ref.read(exploreSearchTypeProvider);
+                              ref
+                                  .read(exploreRemoteSearchProvider.notifier)
+                                  .search(
+                                    keyword: _query,
+                                    source: source,
+                                    type: type,
+                                  );
+                            }
+                          } else if (value.startsWith('source:')) {
+                            final source = value.substring(7);
+                            ref
+                                    .read(exploreRemoteSourceProvider.notifier)
+                                    .state =
+                                source;
+                            ref.read(exploreSearchModeProvider.notifier).state =
+                                ExploreSearchMode.remote;
+                            setState(() {
+                              _selectedSongIds.clear();
+                            });
+                            if (_query.isNotEmpty) {
+                              final type = ref.read(exploreSearchTypeProvider);
+                              ref
+                                  .read(exploreRemoteSearchProvider.notifier)
+                                  .search(
+                                    keyword: _query,
+                                    source: source,
+                                    type: type,
+                                  );
+                            }
+                          }
+                        },
+                        itemBuilder: (context) => [
+                          PopupMenuItem(
+                            value: 'local',
+                            child: Row(
+                              children: [
+                                Icon(
+                                  AppIcons.library_music,
+                                  size: 20,
+                                  color: searchMode == ExploreSearchMode.local
+                                      ? Theme.of(context).colorScheme.primary
+                                      : null,
+                                ),
+                                const SizedBox(width: 8),
+                                const Text('搜索音乐库'),
+                              ],
+                            ),
+                          ),
+                          PopupMenuItem(
+                            value: 'remote',
+                            child: Row(
+                              children: [
+                                Icon(
+                                  AppIcons.cloud_outlined,
+                                  size: 20,
+                                  color: searchMode == ExploreSearchMode.remote
+                                      ? Theme.of(context).colorScheme.primary
+                                      : null,
+                                ),
+                                const SizedBox(width: 8),
+                                const Text('搜索远程源'),
+                              ],
+                            ),
+                          ),
+                          const PopupMenuDivider(),
+                          const PopupMenuItem(
+                            enabled: false,
+                            child: Text(
+                              '切换远程源',
+                              style: TextStyle(fontWeight: FontWeight.w600),
+                            ),
+                          ),
+                          ...['netease', 'kuwo', 'joox', 'bilibili'].map(
+                            (s) => PopupMenuItem(
+                              value: 'source:$s',
+                              child: Row(
+                                children: [
+                                  if (remoteSource == s)
+                                    Icon(
+                                      AppIcons.check,
+                                      size: 18,
+                                      color: Theme.of(
+                                        context,
+                                      ).colorScheme.primary,
+                                    )
+                                  else
+                                    const SizedBox(width: 18),
+                                  const SizedBox(width: 8),
+                                  Text(s),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
                     ],
                   ),
-                ),
-                if (searchMode == ExploreSearchMode.remote)
                   Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-                    child: Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: ExploreSearchType.values
-                          .where((t) => t != ExploreSearchType.playlist)
-                          .map((type) {
-                            final selected = type == searchType;
-                            return ChoiceChip(
-                              label: Text(_searchTypeLabel(type)),
-                              selected: selected,
-                              onSelected: (_) {
-                                ref
-                                        .read(
-                                          exploreSearchTypeProvider.notifier,
-                                        )
-                                        .state =
-                                    type;
-                                if (type == ExploreSearchType.playlist) {
-                                  ref
-                                          .read(
-                                            exploreRemoteSourceProvider
-                                                .notifier,
-                                          )
-                                          .state =
-                                      'netease';
-                                }
-                                setState(() {
-                                  _selectedSongIds.clear();
-                                });
-                                if (_query.isNotEmpty) {
-                                  final source = ref.read(
-                                    exploreRemoteSourceProvider,
-                                  );
+                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+                    child: TextField(
+                      controller: _searchController,
+                      textInputAction: TextInputAction.search,
+                      decoration: InputDecoration(
+                        hintText: _hintText(),
+                        prefixIcon: const Icon(AppIcons.search),
+                        suffixIcon: _searchController.text.isEmpty
+                            ? null
+                            : IconButton(
+                                icon: const Icon(AppIcons.clear),
+                                onPressed: () {
+                                  _searchController.clear();
+                                  setState(() {
+                                    _query = '';
+                                    _selectedSongIds.clear();
+                                  });
                                   ref
                                       .read(
                                         exploreRemoteSearchProvider.notifier,
                                       )
-                                      .search(
-                                        keyword: _query,
-                                        source: source,
-                                        type: type,
-                                      );
-                                }
-                              },
-                            );
-                          })
-                          .toList(),
+                                      .reset();
+                                },
+                              ),
+                      ),
+                      onChanged: (_) => setState(() {}),
+                      onSubmitted: _submitQuery,
                     ),
                   ),
-                if (query.isEmpty)
-                  const Expanded(child: Center(child: Text('输入关键词，探索音乐')))
-                else if (searchMode == ExploreSearchMode.local)
-                  Expanded(
-                    child: _buildLocalResults(
-                      localSearchAsync,
-                      loadFailed: localSearchLoadFailed,
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 4),
+                    child: Row(
+                      children: [
+                        Icon(
+                          searchMode == ExploreSearchMode.local
+                              ? AppIcons.library_music
+                              : AppIcons.cloud_outlined,
+                          size: 16,
+                          color: Theme.of(context).colorScheme.primary,
+                        ),
+                        const SizedBox(width: 6),
+                        Text(
+                          searchMode == ExploreSearchMode.local
+                              ? '音乐库搜索'
+                              : '远程搜索 · $remoteSource',
+                          style: Theme.of(context).textTheme.bodySmall
+                              ?.copyWith(
+                                color: Theme.of(context).colorScheme.primary,
+                                fontWeight: FontWeight.w500,
+                              ),
+                        ),
+                      ],
                     ),
-                  )
-                else
-                  Expanded(child: _buildRemoteResults(remoteState)),
-              ],
+                  ),
+                  if (searchMode == ExploreSearchMode.remote)
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                      child: Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: ExploreSearchType.values
+                            .where((t) => t != ExploreSearchType.playlist)
+                            .map((type) {
+                              final selected = type == searchType;
+                              return ChoiceChip(
+                                label: Text(_searchTypeLabel(type)),
+                                selected: selected,
+                                onSelected: (_) {
+                                  ref
+                                          .read(
+                                            exploreSearchTypeProvider.notifier,
+                                          )
+                                          .state =
+                                      type;
+                                  if (type == ExploreSearchType.playlist) {
+                                    ref
+                                            .read(
+                                              exploreRemoteSourceProvider
+                                                  .notifier,
+                                            )
+                                            .state =
+                                        'netease';
+                                  }
+                                  setState(() {
+                                    _selectedSongIds.clear();
+                                  });
+                                  if (_query.isNotEmpty) {
+                                    final source = ref.read(
+                                      exploreRemoteSourceProvider,
+                                    );
+                                    ref
+                                        .read(
+                                          exploreRemoteSearchProvider.notifier,
+                                        )
+                                        .search(
+                                          keyword: _query,
+                                          source: source,
+                                          type: type,
+                                        );
+                                  }
+                                },
+                              );
+                            })
+                            .toList(),
+                      ),
+                    ),
+                  if (query.isEmpty)
+                    const Expanded(child: Center(child: Text('输入关键词，探索音乐')))
+                  else if (searchMode == ExploreSearchMode.local)
+                    Expanded(
+                      child: _buildLocalResults(
+                        localSearchAsync,
+                        loadFailed: localSearchLoadFailed,
+                      ),
+                    )
+                  else
+                    Expanded(child: _buildRemoteResults(remoteState)),
+                ],
+              ),
             ),
           ),
         ),
@@ -722,7 +754,9 @@ class _ExplorePageState extends ConsumerState<ExplorePage> {
                                   strokeWidth: 2,
                                 ),
                               )
-                            : const Icon(Icons.download_for_offline_outlined),
+                            : const Icon(
+                                AppIcons.download_for_offline_outlined,
+                              ),
                         label: Text(_isBatchDownloading ? '下载中...' : '下载选中'),
                       ),
                     ],
@@ -730,6 +764,93 @@ class _ExplorePageState extends ConsumerState<ExplorePage> {
                 ),
               )
             : null,
+      ),
+    );
+  }
+
+  Widget _buildSongResultRow({
+    required Song song,
+    required String subtitle,
+    required Widget trailing,
+    required VoidCallback? onTap,
+    VoidCallback? onLongPress,
+    bool selected = false,
+    String? coverArtId,
+    String? previewCoverUrl,
+  }) {
+    final theme = Theme.of(context);
+    final selectedColor = theme.colorScheme.primary.withValues(
+      alpha: theme.brightness == Brightness.dark ? 0.18 : 0.1,
+    );
+
+    return Material(
+      color: selected ? selectedColor : Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        onLongPress: onLongPress,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          child: Row(
+            children: [
+              _buildResultCover(coverArtId: coverArtId, url: previewCoverUrl),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      song.title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.bodyLarge?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      subtitle,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 12),
+              trailing,
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildResultCover({String? coverArtId, String? url}) {
+    final theme = Theme.of(context);
+    final placeholder = Container(
+      width: 50,
+      height: 50,
+      color: theme.colorScheme.surfaceContainerHighest,
+      child: Icon(
+        AppIcons.music_note,
+        color: theme.colorScheme.onSurfaceVariant,
+      ),
+    );
+
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(10),
+      child: SizedBox(
+        width: 50,
+        height: 50,
+        child: url != null && url.isNotEmpty
+            ? Image.network(
+                url,
+                fit: BoxFit.cover,
+                errorBuilder: (context, error, stackTrace) => placeholder,
+              )
+            : CoverArtImage(coverArtId: coverArtId, size: 50),
       ),
     );
   }
@@ -759,21 +880,11 @@ class _ExplorePageState extends ConsumerState<ExplorePage> {
           itemCount: result.songs.length,
           itemBuilder: (context, index) {
             final song = result.songs[index];
-            return ListTile(
-              leading: ClipRRect(
-                borderRadius: BorderRadius.circular(6),
-                child: CoverArtImage(coverArtId: song.coverArt, size: 50),
-              ),
-              title: Text(
-                song.title,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-              subtitle: Text(
-                '${song.artist ?? '未知歌手'}${song.album == null ? '' : ' · ${song.album}'}',
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
+            return _buildSongResultRow(
+              song: song,
+              coverArtId: song.coverArt,
+              subtitle:
+                  '${song.artist ?? '未知歌手'}${song.album == null ? '' : ' · ${song.album}'}',
               trailing: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
@@ -836,7 +947,7 @@ class _ExplorePageState extends ConsumerState<ExplorePage> {
                           .read(exploreRemoteSearchProvider.notifier)
                           .loadNextPage();
                     },
-                    icon: const Icon(Icons.refresh),
+                    icon: const Icon(AppIcons.refresh),
                     label: const Text('重试'),
                   ),
                 ],
@@ -845,7 +956,7 @@ class _ExplorePageState extends ConsumerState<ExplorePage> {
           }
           return const Padding(
             padding: EdgeInsets.all(24),
-            child: Center(child: CircularProgressIndicator()),
+            child: MusicLoadingPane(message: '正在加载更多结果'),
           );
         }
 
@@ -853,23 +964,12 @@ class _ExplorePageState extends ConsumerState<ExplorePage> {
         final isResolving = _resolvingSongId == song.id;
         final isSelected = _selectedSongIds.contains(song.id);
 
-        return ListTile(
+        return _buildSongResultRow(
+          song: song,
           selected: isSelected,
-          selectedTileColor: Theme.of(
-            context,
-          ).colorScheme.primaryContainer.withValues(alpha: 0.3),
-          leading:
-              song.previewCoverUrl != null && song.previewCoverUrl!.isNotEmpty
-              ? CircleAvatar(
-                  backgroundImage: NetworkImage(song.previewCoverUrl!),
-                )
-              : const CircleAvatar(child: Icon(Icons.music_note)),
-          title: Text(song.title, maxLines: 1, overflow: TextOverflow.ellipsis),
-          subtitle: Text(
-            '${song.artist ?? '未知歌手'}${song.album == null ? '' : ' · ${song.album}'}',
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
+          previewCoverUrl: song.previewCoverUrl,
+          subtitle:
+              '${song.artist ?? '未知歌手'}${song.album == null ? '' : ' · ${song.album}'}',
           trailing: _isSelectionMode
               ? Checkbox(
                   value: isSelected,
@@ -894,7 +994,7 @@ class _ExplorePageState extends ConsumerState<ExplorePage> {
                   children: [
                     _badge(context, '试听'),
                     IconButton(
-                      icon: const Icon(Icons.download_outlined),
+                      icon: const Icon(AppIcons.download_outlined),
                       tooltip: '添加到离线下载队列',
                       onPressed: () => _enqueuePreview(song),
                     ),

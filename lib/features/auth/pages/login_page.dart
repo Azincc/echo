@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:echoes/core/theme/app_icons.dart';
+import 'package:echoes/widgets/app_back_button.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -159,7 +161,10 @@ class _LoginPageState extends ConsumerState<LoginPage> {
     });
 
     return Scaffold(
-      appBar: AppBar(title: const Text('连接到服务器')),
+      appBar: AppBar(
+        leading: Navigator.canPop(context) ? const AppBackButton() : null,
+        title: const Text('连接到服务器'),
+      ),
       body: SafeArea(
         child: Stepper(
           clipBehavior: Clip.none,
@@ -276,7 +281,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                             child: Row(
                               children: [
                                 Icon(
-                                  Icons.check_circle,
+                                  AppIcons.check_circle,
                                   color: Theme.of(context).colorScheme.primary,
                                 ),
                                 const SizedBox(width: 8),

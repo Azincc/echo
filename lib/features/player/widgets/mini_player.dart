@@ -1,4 +1,7 @@
+import 'dart:ui';
+
 import 'package:flutter/material.dart';
+import 'package:echoes/core/theme/app_icons.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -225,12 +228,32 @@ class _MiniPlayerState extends ConsumerState<MiniPlayer> {
     return playerState.queue[targetIndex];
   }
 
+  Color _resolveMiniBackground(ThemeData theme, Color? paletteColor) {
+    final scheme = theme.colorScheme;
+    final isDark = theme.brightness == Brightness.dark;
+    final base = scheme.surfaceContainer.withValues(alpha: isDark ? 0.78 : 0.9);
+
+    if (paletteColor == null) {
+      return base;
+    }
+
+    final tunedPalette = paletteColor.computeLuminance() > 0.45
+        ? Color.lerp(paletteColor, Colors.black, 0.32) ?? paletteColor
+        : paletteColor;
+    final blended = Color.lerp(
+      scheme.surfaceContainer,
+      tunedPalette,
+      isDark ? 0.34 : 0.18,
+    );
+    return (blended ?? base).withValues(alpha: isDark ? 0.82 : 0.9);
+  }
+
   @override
   Widget build(BuildContext context) {
     final playerState = ref.watch(playerProvider);
     // 预取调色板：即使 mini-player 不使用颜色，也确保 provider 在歌曲
     // 切换时立即开始计算，全屏播放器展开后无需等待。
-    ref.watch(currentSongPaletteProvider);
+    final paletteGenerator = ref.watch(currentSongPaletteProvider).valueOrNull;
 
     if (playerState.currentSong == null) {
       return const SizedBox.shrink();
@@ -238,6 +261,10 @@ class _MiniPlayerState extends ConsumerState<MiniPlayer> {
 
     final song = _pendingVisualSong ?? playerState.currentSong!;
     final theme = Theme.of(context);
+    final miniBackgroundColor = _resolveMiniBackground(
+      theme,
+      paletteGenerator?.dominantColor?.color,
+    );
     final progress = playerState.duration.inMilliseconds > 0
         ? playerState.position.inMilliseconds /
               playerState.duration.inMilliseconds
@@ -264,15 +291,22 @@ class _MiniPlayerState extends ConsumerState<MiniPlayer> {
             Positioned.fill(
               child: Hero(
                 tag: 'player-background',
-                child: Container(
-                  decoration: BoxDecoration(
-                    color: theme.colorScheme.surfaceContainer,
-                    border: Border(
-                      top: BorderSide(
-                        color: theme.colorScheme.outlineVariant.withValues(
-                          alpha: 0.2,
+                child: ClipRect(
+                  child: BackdropFilter(
+                    filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: miniBackgroundColor,
+                        border: Border(
+                          top: BorderSide(
+                            color: theme.colorScheme.outlineVariant.withValues(
+                              alpha: theme.brightness == Brightness.dark
+                                  ? 0.34
+                                  : 0.68,
+                            ),
+                            width: 0.7,
+                          ),
                         ),
-                        width: 0.5,
                       ),
                     ),
                   ),
@@ -299,7 +333,7 @@ class _MiniPlayerState extends ConsumerState<MiniPlayer> {
                             onHorizontalDragEnd: _handleSwipeDragEnd,
                             onHorizontalDragCancel: _handleSwipeDragCancel,
                             child: ColoredBox(
-                              color: theme.colorScheme.surfaceContainer,
+                              color: miniBackgroundColor,
                               child: ClipRect(
                                 child: Stack(
                                   children: [
@@ -404,8 +438,7 @@ class _MiniPlayerState extends ConsumerState<MiniPlayer> {
                                       bottom: 0,
                                       width: _swipeEdgeGuardWidth,
                                       child: ColoredBox(
-                                        color:
-                                            theme.colorScheme.surfaceContainer,
+                                        color: miniBackgroundColor,
                                       ),
                                     ),
                                   ],
@@ -417,13 +450,13 @@ class _MiniPlayerState extends ConsumerState<MiniPlayer> {
                         IconButton(
                           icon: Icon(
                             playerState.isPlaying
-                                ? Icons.pause
-                                : Icons.play_arrow,
+                                ? AppIcons.pause
+                                : AppIcons.play_arrow,
                           ),
                           onPressed: _togglePlayPause,
                         ),
                         IconButton(
-                          icon: const Icon(Icons.skip_next),
+                          icon: const Icon(AppIcons.skip_next),
                           onPressed: playerState.hasNext
                               ? () {
                                   ref.read(playerProvider.notifier).next();

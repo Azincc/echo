@@ -34,13 +34,19 @@ class _ShimmerEffectState extends State<ShimmerEffect>
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final baseColor = isDark
-        ? const Color(0xFF2A2A2A)
-        : const Color(0xFFE0E0E0);
-    final highlightColor = isDark
-        ? const Color(0xFF3D3D3D)
-        : const Color(0xFFF5F5F5);
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final scheme = theme.colorScheme;
+    final baseColor = Color.lerp(
+      scheme.surfaceContainerHighest,
+      scheme.primary,
+      isDark ? 0.10 : 0.04,
+    )!.withValues(alpha: isDark ? 0.58 : 0.64);
+    final highlightColor = Color.lerp(
+      scheme.surfaceContainerHighest,
+      scheme.primary,
+      isDark ? 0.28 : 0.16,
+    )!.withValues(alpha: isDark ? 0.88 : 0.78);
 
     return AnimatedBuilder(
       animation: _controller,
@@ -94,8 +100,11 @@ class SkeletonBox extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final color = isDark ? const Color(0xFF2A2A2A) : const Color(0xFFE0E0E0);
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final color = theme.colorScheme.surfaceContainerHighest.withValues(
+      alpha: isDark ? 0.64 : 0.70,
+    );
 
     return Container(
       width: width,
@@ -104,6 +113,14 @@ class SkeletonBox extends StatelessWidget {
         color: color,
         shape: isCircle ? BoxShape.circle : BoxShape.rectangle,
         borderRadius: isCircle ? null : BorderRadius.circular(borderRadius),
+        border: isCircle
+            ? null
+            : Border.all(
+                color: theme.colorScheme.outlineVariant.withValues(
+                  alpha: isDark ? 0.18 : 0.32,
+                ),
+                width: 0.5,
+              ),
       ),
     );
   }

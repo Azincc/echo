@@ -214,25 +214,17 @@ class _PlaylistDetailPageState extends ConsumerState<PlaylistDetailPage> {
           title: Text(currentPlaylist?.name ?? '歌单'),
           actions: [
             if (currentPlaylist != null)
-              PopupMenuButton<SongSortOption>(
-                tooltip: '歌曲排序：${_sortOption.label}',
-                icon: const Icon(AppIcons.sort),
-                initialValue: _sortOption,
+              MusicSortButton<SongSortOption>(
+                title: '歌曲排序',
+                value: _sortOption,
+                options: selectableSongSortOptions,
+                labelBuilder: (option) => option.label,
                 onSelected: (option) {
                   if (option == _sortOption) return;
                   setState(() {
                     _sortOption = option;
                   });
                 },
-                itemBuilder: (context) => selectableSongSortOptions
-                    .map(
-                      (option) => CheckedPopupMenuItem<SongSortOption>(
-                        value: option,
-                        checked: option == _sortOption,
-                        child: Text(option.label),
-                      ),
-                    )
-                    .toList(),
               ),
             if (currentPlaylist != null)
               IconButton(
@@ -275,6 +267,8 @@ class _PlaylistDetailPageState extends ConsumerState<PlaylistDetailPage> {
                 playlist.songs ?? const <Song>[],
                 _sortOption,
               );
+              final headerTopPadding =
+                  MediaQuery.paddingOf(context).top + kToolbarHeight + 18;
 
               return Align(
                 alignment: Alignment.topCenter,
@@ -284,50 +278,92 @@ class _PlaylistDetailPageState extends ConsumerState<PlaylistDetailPage> {
                     slivers: [
                       SliverToBoxAdapter(
                         child: Padding(
-                          padding: const EdgeInsets.fromLTRB(16, 96, 16, 16),
+                          padding: EdgeInsets.fromLTRB(
+                            16,
+                            headerTopPadding,
+                            16,
+                            16,
+                          ),
                           child: MusicGlassSurface(
                             borderRadius: MusicChrome.largeRadius,
+                            padding: const EdgeInsets.all(18),
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text(
                                   playlist.name,
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
                                   style: Theme.of(context)
                                       .textTheme
                                       .headlineSmall
-                                      ?.copyWith(fontWeight: FontWeight.bold),
-                                ),
-                                const SizedBox(height: 8),
-                                if (playlist.comment != null &&
-                                    playlist.comment!.isNotEmpty)
-                                  Text(
-                                    playlist.comment!,
-                                    style: Theme.of(
-                                      context,
-                                    ).textTheme.bodyMedium,
-                                  ),
-                                const SizedBox(height: 8),
-                                Text(
-                                  '${playlist.songCount} 首 · ${playlist.durationString}',
-                                  style: Theme.of(context).textTheme.bodyMedium
                                       ?.copyWith(
-                                        color: Theme.of(
-                                          context,
-                                        ).colorScheme.onSurfaceVariant,
+                                        fontWeight: FontWeight.w800,
+                                        height: 1.08,
+                                        letterSpacing: 0,
                                       ),
                                 ),
+                                if (playlist.comment != null &&
+                                    playlist.comment!.trim().isNotEmpty) ...[
+                                  const SizedBox(height: 10),
+                                  Text(
+                                    playlist.comment!.trim(),
+                                    maxLines: 4,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .bodyMedium
+                                        ?.copyWith(
+                                          color: Theme.of(
+                                            context,
+                                          ).colorScheme.onSurfaceVariant,
+                                          height: 1.34,
+                                        ),
+                                  ),
+                                ],
+                                const SizedBox(height: 12),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 10,
+                                    vertical: 6,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: Theme.of(context)
+                                        .colorScheme
+                                        .surfaceContainerHighest
+                                        .withValues(alpha: 0.58),
+                                    borderRadius: BorderRadius.circular(999),
+                                  ),
+                                  child: Text(
+                                    '${playlist.songCount} 首 · ${playlist.durationString}',
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .labelMedium
+                                        ?.copyWith(
+                                          color: Theme.of(
+                                            context,
+                                          ).colorScheme.onSurfaceVariant,
+                                          fontWeight: FontWeight.w700,
+                                        ),
+                                  ),
+                                ),
                                 const SizedBox(height: 16),
-                                FilledButton.icon(
-                                  onPressed: songs.isEmpty
-                                      ? null
-                                      : () {
-                                          // 播放全部
-                                          ref
-                                              .read(playerProvider.notifier)
-                                              .playQueue(songs);
-                                        },
-                                  icon: const Icon(AppIcons.play_arrow),
-                                  label: const Text('播放全部'),
+                                SizedBox(
+                                  width: double.infinity,
+                                  child: FilledButton.icon(
+                                    onPressed: songs.isEmpty
+                                        ? null
+                                        : () {
+                                            // 播放全部
+                                            ref
+                                                .read(playerProvider.notifier)
+                                                .playQueue(songs);
+                                          },
+                                    icon: const Icon(AppIcons.play_arrow),
+                                    label: const Text('播放全部'),
+                                  ),
                                 ),
                               ],
                             ),

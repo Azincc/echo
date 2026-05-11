@@ -13,6 +13,7 @@ import '../widgets/album_options_sheet.dart';
 import 'album_detail_page.dart';
 import 'artist_detail_page.dart';
 import '../../../widgets/error_placeholder.dart';
+import '../../../widgets/music_chrome.dart';
 import '../../../widgets/song_list_item.dart';
 import '../../../widgets/skeleton_templates.dart';
 import '../../../widgets/visible_remote_retry_scope.dart';
@@ -167,14 +168,15 @@ class StarredPage extends ConsumerWidget {
         physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
         gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-          maxCrossAxisExtent: 180,
-          childAspectRatio: 0.75,
-          crossAxisSpacing: 12,
-          mainAxisSpacing: 12,
+          maxCrossAxisExtent: MusicChrome.albumGridMaxCrossAxisExtent,
+          childAspectRatio: MusicChrome.albumGridChildAspectRatio,
+          crossAxisSpacing: MusicChrome.albumGridCrossAxisSpacing,
+          mainAxisSpacing: MusicChrome.albumGridMainAxisSpacing,
         ),
         itemCount: albums.length,
         itemBuilder: (context, index) {
           final album = albums[index];
+          final theme = Theme.of(context);
           return InkWell(
             onTap: () {
               Navigator.push(
@@ -196,7 +198,7 @@ class StarredPage extends ConsumerWidget {
                     children: [
                       Positioned.fill(
                         child: ClipRRect(
-                          borderRadius: BorderRadius.circular(8),
+                          borderRadius: MusicChrome.albumRadius,
                           child: CoverArtImage(
                             coverArtId: album.coverArt,
                             fit: BoxFit.cover,
@@ -228,14 +230,20 @@ class StarredPage extends ConsumerWidget {
                   album.name,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontWeight: FontWeight.w500),
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    fontWeight: FontWeight.w700,
+                    height: 1.16,
+                  ),
                 ),
                 if (album.artist != null)
                   Text(
                     album.artist!,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.bodySmall,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      height: 1.16,
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
                   ),
               ],
             ),

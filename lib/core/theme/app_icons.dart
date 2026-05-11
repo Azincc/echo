@@ -84,8 +84,8 @@ class AppIcons {
   static const IconData people_outline = Remix.group_line;
   static const IconData person = Remix.user_fill;
   static const IconData person_outline = Remix.user_line;
-  static const IconData play_arrow = Remix.play_fill;
-  static const IconData play_arrow_rounded = Remix.play_fill;
+  static const IconData play_arrow = Remix.play_large_fill;
+  static const IconData play_arrow_rounded = Remix.play_large_fill;
   static const IconData play_circle = Remix.play_circle_fill;
   static const IconData play_circle_outline = Remix.play_circle_line;
   static const IconData playlist_add = Remix.play_list_add_line;

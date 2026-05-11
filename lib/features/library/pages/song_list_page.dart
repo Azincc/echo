@@ -3,7 +3,6 @@ import 'dart:math' as math;
 import 'package:azlistview/azlistview.dart';
 import 'package:flutter/material.dart';
 import 'package:echoes/widgets/app_back_button.dart';
-import 'package:echoes/core/theme/app_icons.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 
@@ -18,6 +17,7 @@ import '../widgets/auto_hiding_az_list_view.dart';
 import '../../player/widgets/song_options_sheet.dart';
 import '../../../widgets/error_placeholder.dart';
 import '../../../widgets/song_list_item.dart';
+import '../../../widgets/music_chrome.dart';
 import '../../../widgets/skeleton_templates.dart';
 import '../../../widgets/visible_remote_retry_scope.dart';
 
@@ -142,25 +142,17 @@ class _SongListPageState extends ConsumerState<SongListPage> {
           leading: const AppBackButton(),
           title: const Text('所有歌曲'),
           actions: [
-            PopupMenuButton<SongSortOption>(
-              tooltip: '歌曲排序：${_sortOption.label}',
-              icon: const Icon(AppIcons.sort),
-              initialValue: _sortOption,
+            MusicSortButton<SongSortOption>(
+              title: '歌曲排序',
+              value: _sortOption,
+              options: selectableSongSortOptionsWithoutDefault,
+              labelBuilder: (option) => option.label,
               onSelected: (option) {
                 if (option == _sortOption) return;
                 setState(() {
                   _sortOption = option;
                 });
               },
-              itemBuilder: (context) => selectableSongSortOptionsWithoutDefault
-                  .map(
-                    (option) => CheckedPopupMenuItem<SongSortOption>(
-                      value: option,
-                      checked: option == _sortOption,
-                      child: Text(option.label),
-                    ),
-                  )
-                  .toList(),
             ),
           ],
         ),

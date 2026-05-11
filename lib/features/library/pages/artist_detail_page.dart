@@ -94,13 +94,18 @@ class ArtistDetailPage extends ConsumerWidget {
           backgroundColor: Colors.transparent,
           surfaceTintColor: Colors.transparent,
           leading: const AppBackButton(),
-          title: const Text('歌手详情'),
+          title: Text(
+            currentArtistName ?? '歌手详情',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
           actions: [
-            IconButton(
+            MusicIconButton(
               tooltip: '歌曲来源说明',
               onPressed: () => _showSongSourceInfo(context),
-              icon: const Icon(AppIcons.info_outline),
+              icon: AppIcons.info_outline,
             ),
+            const SizedBox(width: 8),
           ],
         ),
         body: MusicGradientBackdrop(
@@ -113,6 +118,8 @@ class ArtistDetailPage extends ConsumerWidget {
               final artist = artistDetail.artist;
               final albums = artistDetail.albums;
               final songs = artistDetail.songs;
+              final headerTopPadding =
+                  MediaQuery.paddingOf(context).top + kToolbarHeight + 18;
 
               return Align(
                 alignment: Alignment.topCenter,
@@ -126,23 +133,18 @@ class ArtistDetailPage extends ConsumerWidget {
                           // 歌手头像 + 名称 + 统计信息（可滚动消失）
                           SliverToBoxAdapter(
                             child: Padding(
-                              padding: const EdgeInsets.fromLTRB(
+                              padding: EdgeInsets.fromLTRB(
                                 16,
-                                96,
+                                headerTopPadding,
                                 16,
                                 16,
                               ),
                               child: MusicGlassSurface(
                                 borderRadius: MusicChrome.largeRadius,
+                                padding: const EdgeInsets.all(20),
                                 child: Column(
                                   children: [
-                                    CircleAvatar(
-                                      radius: 60,
-                                      child: CoverArtImage(
-                                        coverArtId: artist.coverArt,
-                                        size: 120,
-                                      ),
-                                    ),
+                                    _ArtistAvatar(coverArtId: artist.coverArt),
                                     const SizedBox(height: 16),
                                     Row(
                                       mainAxisAlignment:
@@ -152,15 +154,21 @@ class ArtistDetailPage extends ConsumerWidget {
                                           child: Text(
                                             artist.name,
                                             textAlign: TextAlign.center,
+                                            maxLines: 2,
+                                            overflow: TextOverflow.ellipsis,
                                             style: Theme.of(context)
                                                 .textTheme
                                                 .headlineSmall
                                                 ?.copyWith(
-                                                  fontWeight: FontWeight.bold,
+                                                  fontWeight: FontWeight.w800,
+                                                  height: 1.08,
+                                                  letterSpacing: 0,
                                                 ),
                                           ),
                                         ),
-                                        IconButton(
+                                        const SizedBox(width: 8),
+                                        _ArtistFavoriteButton(
+                                          starred: artist.starred,
                                           tooltip: artist.starred
                                               ? '取消收藏歌手'
                                               : '收藏歌手',
@@ -170,27 +178,13 @@ class ArtistDetailPage extends ConsumerWidget {
                                             artist.id,
                                             artist.starred,
                                           ),
-                                          icon: Icon(
-                                            artist.starred
-                                                ? AppIcons.favorite
-                                                : AppIcons.favorite_border,
-                                            color: artist.starred
-                                                ? Colors.red
-                                                : null,
-                                          ),
                                         ),
                                       ],
                                     ),
-                                    Text(
-                                      '${songs.length} 首歌曲 · ${albums.length} 张专辑',
-                                      style: Theme.of(context)
-                                          .textTheme
-                                          .bodyMedium
-                                          ?.copyWith(
-                                            color: Theme.of(
-                                              context,
-                                            ).colorScheme.onSurfaceVariant,
-                                          ),
+                                    const SizedBox(height: 12),
+                                    _ArtistMetaPill(
+                                      text:
+                                          '${songs.length} 首歌曲 · ${albums.length} 张专辑',
                                     ),
                                   ],
                                 ),
@@ -211,19 +205,26 @@ class ArtistDetailPage extends ConsumerWidget {
                                     Tab(text: '歌曲'),
                                     Tab(text: '专辑'),
                                   ],
+                                  dividerColor: Colors.transparent,
                                   labelColor: Theme.of(
                                     context,
                                   ).colorScheme.primary,
                                   unselectedLabelColor: Theme.of(
                                     context,
-                                  ).colorScheme.onSurface,
+                                  ).colorScheme.onSurfaceVariant,
+                                  labelStyle: Theme.of(context)
+                                      .textTheme
+                                      .labelLarge
+                                      ?.copyWith(fontWeight: FontWeight.w800),
+                                  unselectedLabelStyle: Theme.of(context)
+                                      .textTheme
+                                      .labelLarge
+                                      ?.copyWith(fontWeight: FontWeight.w600),
                                   indicatorColor: Theme.of(
                                     context,
                                   ).colorScheme.primary,
+                                  indicatorSize: TabBarIndicatorSize.label,
                                 ),
-                                color: Theme.of(
-                                  context,
-                                ).colorScheme.surface.withValues(alpha: 0.82),
                               ),
                             ),
                           ),
@@ -261,15 +262,25 @@ class ArtistDetailPage extends ConsumerWidget {
     List<Album> albums,
   ) {
     if (albums.isEmpty) {
-      return Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(AppIcons.album_outlined, size: 64, color: Colors.grey[400]),
-            const SizedBox(height: 16),
-            const Text('暂无专辑'),
-          ],
-        ),
+      return Builder(
+        builder: (context) {
+          return CustomScrollView(
+            slivers: [
+              SliverOverlapInjector(
+                handle: NestedScrollView.sliverOverlapAbsorberHandleFor(
+                  context,
+                ),
+              ),
+              const SliverFillRemaining(
+                hasScrollBody: false,
+                child: _ArtistEmptyState(
+                  icon: AppIcons.album_outlined,
+                  title: '暂无专辑',
+                ),
+              ),
+            ],
+          );
+        },
       );
     }
 
@@ -284,13 +295,14 @@ class ArtistDetailPage extends ConsumerWidget {
               padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
               sliver: SliverGrid(
                 gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-                  maxCrossAxisExtent: 180,
-                  childAspectRatio: 0.75,
-                  crossAxisSpacing: 12,
-                  mainAxisSpacing: 12,
+                  maxCrossAxisExtent: MusicChrome.albumGridMaxCrossAxisExtent,
+                  childAspectRatio: MusicChrome.albumGridChildAspectRatio,
+                  crossAxisSpacing: MusicChrome.albumGridCrossAxisSpacing,
+                  mainAxisSpacing: MusicChrome.albumGridMainAxisSpacing,
                 ),
                 delegate: SliverChildBuilderDelegate((context, index) {
                   final album = albums[index];
+                  final theme = Theme.of(context);
                   return InkWell(
                     onTap: () {
                       Navigator.push(
@@ -317,7 +329,7 @@ class ArtistDetailPage extends ConsumerWidget {
                             children: [
                               Positioned.fill(
                                 child: ClipRRect(
-                                  borderRadius: BorderRadius.circular(8),
+                                  borderRadius: MusicChrome.albumRadius,
                                   child: CoverArtImage(
                                     coverArtId: album.coverArt,
                                     fit: BoxFit.cover,
@@ -351,12 +363,20 @@ class ArtistDetailPage extends ConsumerWidget {
                           album.name,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(fontWeight: FontWeight.w500),
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            fontWeight: FontWeight.w700,
+                            height: 1.16,
+                          ),
                         ),
                         if (album.year != null)
                           Text(
                             album.year.toString(),
-                            style: Theme.of(context).textTheme.bodySmall,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              height: 1.16,
+                              color: theme.colorScheme.onSurfaceVariant,
+                            ),
                           ),
                       ],
                     ),
@@ -367,6 +387,201 @@ class ArtistDetailPage extends ConsumerWidget {
           ],
         );
       },
+    );
+  }
+}
+
+class _ArtistAvatar extends StatelessWidget {
+  final String? coverArtId;
+
+  const _ArtistAvatar({required this.coverArtId});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final shadowColor = theme.brightness == Brightness.dark
+        ? Colors.black.withValues(alpha: 0.34)
+        : Colors.black.withValues(alpha: 0.14);
+
+    return Container(
+      width: 120,
+      height: 120,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        boxShadow: [
+          BoxShadow(
+            color: shadowColor,
+            blurRadius: 22,
+            offset: const Offset(0, 10),
+          ),
+        ],
+      ),
+      child: ClipOval(child: CoverArtImage(coverArtId: coverArtId, size: 120)),
+    );
+  }
+}
+
+class _ArtistFavoriteButton extends StatelessWidget {
+  final bool starred;
+  final String tooltip;
+  final VoidCallback onPressed;
+
+  const _ArtistFavoriteButton({
+    required this.starred,
+    required this.tooltip,
+    required this.onPressed,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final color = starred
+        ? theme.colorScheme.primary
+        : theme.colorScheme.onSurfaceVariant;
+
+    return Tooltip(
+      message: tooltip,
+      child: Material(
+        color: starred
+            ? theme.colorScheme.primary.withValues(alpha: 0.14)
+            : theme.colorScheme.surfaceContainerHighest.withValues(
+                alpha: theme.brightness == Brightness.dark ? 0.68 : 0.78,
+              ),
+        shape: const CircleBorder(),
+        clipBehavior: Clip.antiAlias,
+        child: InkResponse(
+          onTap: onPressed,
+          containedInkWell: true,
+          radius: 22,
+          child: SizedBox.square(
+            dimension: 42,
+            child: Icon(
+              starred ? AppIcons.favorite : AppIcons.favorite_border,
+              color: color,
+              size: 21,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ArtistMetaPill extends StatelessWidget {
+  final String text;
+
+  const _ArtistMetaPill({required this.text});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surfaceContainerHighest.withValues(
+          alpha: theme.brightness == Brightness.dark ? 0.56 : 0.62,
+        ),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        text,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: theme.textTheme.labelMedium?.copyWith(
+          color: theme.colorScheme.onSurfaceVariant,
+          fontWeight: FontWeight.w700,
+        ),
+      ),
+    );
+  }
+}
+
+class _SectionActionButton extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final VoidCallback onPressed;
+
+  const _SectionActionButton({
+    required this.icon,
+    required this.label,
+    required this.onPressed,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Material(
+      color: theme.colorScheme.surfaceContainerHigh.withValues(
+        alpha: theme.brightness == Brightness.dark ? 0.68 : 0.84,
+      ),
+      borderRadius: BorderRadius.circular(999),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onPressed,
+        child: SizedBox(
+          height: 34,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                Transform.translate(
+                  offset: icon == AppIcons.play_arrow
+                      ? const Offset(0.7, 0)
+                      : Offset.zero,
+                  child: Icon(icon, size: 17, color: theme.colorScheme.primary),
+                ),
+                const SizedBox(width: 6),
+                Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.labelMedium?.copyWith(
+                    color: theme.colorScheme.primary,
+                    fontWeight: FontWeight.w800,
+                    height: 1,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ArtistEmptyState extends StatelessWidget {
+  final IconData icon;
+  final String title;
+
+  const _ArtistEmptyState({required this.icon, required this.title});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Center(
+      child: MusicGlassSurface(
+        borderRadius: BorderRadius.circular(22),
+        padding: const EdgeInsets.fromLTRB(24, 26, 24, 24),
+        color: theme.colorScheme.surfaceContainerHigh.withValues(
+          alpha: theme.brightness == Brightness.dark ? 0.72 : 0.84,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 42, color: theme.colorScheme.primary),
+            const SizedBox(height: 12),
+            Text(
+              title,
+              style: theme.textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -412,32 +627,28 @@ class _ArtistSongsTabState extends ConsumerState<_ArtistSongsTab> {
                       : topSongs.take(_topSongsPreviewCount).toList();
 
                   return Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        Row(
-                          children: [
-                            const Icon(AppIcons.whatshot),
-                            const SizedBox(width: 8),
-                            Text(
-                              '热门歌曲 (${topSongs.length})',
-                              style: Theme.of(context).textTheme.titleMedium
-                                  ?.copyWith(fontWeight: FontWeight.bold),
-                            ),
-                            const Spacer(),
+                        MusicSectionHeader(
+                          title: '热门歌曲',
+                          subtitle: '${topSongs.length} 首',
+                          actions: [
                             if (topSongs.length > _topSongsPreviewCount)
-                              TextButton(
+                              _SectionActionButton(
+                                icon: _showAllTopSongs
+                                    ? AppIcons.keyboard_arrow_up
+                                    : AppIcons.keyboard_arrow_down,
+                                label: _showAllTopSongs ? '收起' : '显示所有',
                                 onPressed: () {
                                   setState(() {
                                     _showAllTopSongs = !_showAllTopSongs;
                                   });
                                 },
-                                child: Text(_showAllTopSongs ? '收起' : '显示所有'),
                               ),
                           ],
                         ),
-                        const SizedBox(height: 8),
                         ...List.generate(visibleTopSongs.length, (index) {
                           final song = visibleTopSongs[index];
                           final queueIndex = topSongs.indexWhere(
@@ -473,49 +684,34 @@ class _ArtistSongsTabState extends ConsumerState<_ArtistSongsTab> {
                   );
                 },
                 loading: () => const Padding(
-                  padding: EdgeInsets.fromLTRB(16, 16, 16, 8),
-                  child: LinearProgressIndicator(),
+                  padding: EdgeInsets.fromLTRB(16, 12, 16, 4),
+                  child: MusicLoadingPane(minHeight: 88),
                 ),
                 error: (error, stack) => const SizedBox.shrink(),
               ),
             ),
             if (widget.songs.isEmpty)
               SliverFillRemaining(
-                child: Center(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        AppIcons.music_off,
-                        size: 64,
-                        color: Colors.grey[400],
-                      ),
-                      const SizedBox(height: 16),
-                      const Text('暂无歌曲'),
-                    ],
-                  ),
+                hasScrollBody: false,
+                child: const _ArtistEmptyState(
+                  icon: AppIcons.music_off,
+                  title: '暂无歌曲',
                 ),
               )
             else ...[
               SliverToBoxAdapter(
                 child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Row(
-                    children: [
-                      const Icon(AppIcons.library_music),
-                      const SizedBox(width: 8),
-                      Text(
-                        '所有歌曲 (${widget.songs.length})',
-                        style: Theme.of(context).textTheme.titleMedium
-                            ?.copyWith(fontWeight: FontWeight.bold),
-                      ),
-                      const Spacer(),
-                      TextButton.icon(
+                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+                  child: MusicSectionHeader(
+                    title: '所有歌曲',
+                    subtitle: '${widget.songs.length} 首',
+                    actions: [
+                      _SectionActionButton(
+                        icon: AppIcons.play_arrow,
+                        label: '播放全部',
                         onPressed: () => ref
                             .read(playerProvider.notifier)
                             .playQueue(widget.songs),
-                        icon: const Icon(AppIcons.play_arrow, size: 18),
-                        label: const Text('播放全部'),
                       ),
                     ],
                   ),
@@ -550,9 +746,8 @@ class _ArtistSongsTabState extends ConsumerState<_ArtistSongsTab> {
 /// TabBar 吸顶代理
 class _SliverTabBarDelegate extends SliverPersistentHeaderDelegate {
   final TabBar tabBar;
-  final Color color;
 
-  _SliverTabBarDelegate(this.tabBar, {required this.color});
+  _SliverTabBarDelegate(this.tabBar);
 
   @override
   double get minExtent => tabBar.preferredSize.height;
@@ -566,11 +761,26 @@ class _SliverTabBarDelegate extends SliverPersistentHeaderDelegate {
     double shrinkOffset,
     bool overlapsContent,
   ) {
-    return Container(color: color, child: tabBar);
+    final theme = Theme.of(context);
+    return MusicGlassSurface(
+      borderRadius: BorderRadius.zero,
+      padding: EdgeInsets.zero,
+      blur: 20,
+      color: theme.colorScheme.surface.withValues(
+        alpha: theme.brightness == Brightness.dark ? 0.78 : 0.86,
+      ),
+      border: Border(
+        bottom: BorderSide(
+          color: theme.colorScheme.outlineVariant.withValues(alpha: 0.52),
+          width: 0.7,
+        ),
+      ),
+      child: tabBar,
+    );
   }
 
   @override
   bool shouldRebuild(_SliverTabBarDelegate oldDelegate) {
-    return tabBar != oldDelegate.tabBar || color != oldDelegate.color;
+    return tabBar != oldDelegate.tabBar;
   }
 }

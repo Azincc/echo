@@ -396,10 +396,10 @@ class FrequentAlbumsSection extends ConsumerWidget {
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
               gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-                maxCrossAxisExtent: 190,
-                childAspectRatio: 0.72,
-                crossAxisSpacing: 16,
-                mainAxisSpacing: 18,
+                maxCrossAxisExtent: MusicChrome.albumGridMaxCrossAxisExtent,
+                childAspectRatio: MusicChrome.albumGridChildAspectRatio,
+                crossAxisSpacing: MusicChrome.albumGridCrossAxisSpacing,
+                mainAxisSpacing: MusicChrome.albumGridMainAxisSpacing,
               ),
               itemCount: albums.length > 6 ? 6 : albums.length,
               itemBuilder: (context, index) {

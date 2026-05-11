@@ -73,26 +73,17 @@ class _AlbumDetailPageState extends ConsumerState<AlbumDetailPage> {
                         expandedHeight: 300,
                         pinned: true,
                         actions: [
-                          PopupMenuButton<SongSortOption>(
-                            tooltip: '歌曲排序：${_sortOption.label}',
-                            icon: const Icon(AppIcons.sort),
-                            initialValue: _sortOption,
+                          MusicSortButton<SongSortOption>(
+                            title: '歌曲排序',
+                            value: _sortOption,
+                            options: selectableSongSortOptions,
+                            labelBuilder: (option) => option.label,
                             onSelected: (option) {
                               if (option == _sortOption) return;
                               setState(() {
                                 _sortOption = option;
                               });
                             },
-                            itemBuilder: (context) => selectableSongSortOptions
-                                .map(
-                                  (option) =>
-                                      CheckedPopupMenuItem<SongSortOption>(
-                                        value: option,
-                                        checked: option == _sortOption,
-                                        child: Text(option.label),
-                                      ),
-                                )
-                                .toList(),
                           ),
                           IconButton(
                             onPressed: hasAlbumData

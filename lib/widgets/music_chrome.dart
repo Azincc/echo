@@ -8,6 +8,10 @@ class MusicChrome {
   static const double pageHorizontalPadding = 20;
   static const BorderRadius albumRadius = BorderRadius.all(Radius.circular(10));
   static const BorderRadius largeRadius = BorderRadius.all(Radius.circular(18));
+  static const double albumGridMaxCrossAxisExtent = 190;
+  static const double albumGridChildAspectRatio = 0.72;
+  static const double albumGridCrossAxisSpacing = 16;
+  static const double albumGridMainAxisSpacing = 18;
 
   static Color elevatedSurface(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
@@ -288,6 +292,149 @@ class MusicIconButton extends StatelessWidget {
       ),
     );
   }
+}
+
+class MusicSortButton<T> extends StatelessWidget {
+  final String title;
+  final T value;
+  final List<T> options;
+  final String Function(T option) labelBuilder;
+  final ValueChanged<T> onSelected;
+
+  const MusicSortButton({
+    super.key,
+    required this.title,
+    required this.value,
+    required this.options,
+    required this.labelBuilder,
+    required this.onSelected,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return MusicIconButton(
+      icon: AppIcons.sort,
+      tooltip: '$title：${labelBuilder(value)}',
+      onPressed: () async {
+        final selected = await showMusicSelectionSheet<T>(
+          context: context,
+          title: title,
+          options: options,
+          selected: value,
+          labelBuilder: labelBuilder,
+        );
+        if (selected != null && selected != value && context.mounted) {
+          onSelected(selected);
+        }
+      },
+    );
+  }
+}
+
+Future<T?> showMusicSelectionSheet<T>({
+  required BuildContext context,
+  required String title,
+  required List<T> options,
+  required T selected,
+  required String Function(T option) labelBuilder,
+}) {
+  final theme = Theme.of(context);
+  return showModalBottomSheet<T>(
+    context: context,
+    useSafeArea: true,
+    isScrollControlled: true,
+    backgroundColor: Colors.transparent,
+    barrierColor: Colors.black.withValues(
+      alpha: theme.brightness == Brightness.dark ? 0.48 : 0.30,
+    ),
+    constraints: const BoxConstraints(maxWidth: 520),
+    builder: (sheetContext) {
+      final sheetTheme = Theme.of(sheetContext);
+      final bottomPadding = MediaQuery.of(sheetContext).padding.bottom;
+      return Padding(
+        padding: EdgeInsets.fromLTRB(12, 0, 12, 12 + bottomPadding),
+        child: MusicGlassSurface(
+          borderRadius: BorderRadius.circular(24),
+          padding: const EdgeInsets.fromLTRB(14, 14, 14, 12),
+          color: sheetTheme.colorScheme.surfaceContainerHigh.withValues(
+            alpha: sheetTheme.brightness == Brightness.dark ? 0.90 : 0.94,
+          ),
+          blur: 26,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    width: 36,
+                    height: 36,
+                    decoration: BoxDecoration(
+                      color: sheetTheme.colorScheme.primary.withValues(
+                        alpha: 0.14,
+                      ),
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(
+                      AppIcons.sort,
+                      color: sheetTheme.colorScheme.primary,
+                      size: 20,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          title,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: sheetTheme.textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          labelBuilder(selected),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: sheetTheme.textTheme.bodySmall?.copyWith(
+                            color: sheetTheme.colorScheme.onSurfaceVariant,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  MusicIconButton(
+                    icon: AppIcons.close,
+                    tooltip: '关闭',
+                    onPressed: () => Navigator.of(sheetContext).pop(),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 14),
+              ConstrainedBox(
+                constraints: BoxConstraints(
+                  maxHeight: MediaQuery.sizeOf(sheetContext).height * 0.56,
+                ),
+                child: ListView(
+                  shrinkWrap: true,
+                  children: options.map((option) {
+                    final isSelected = option == selected;
+                    return MusicSelectionTile(
+                      title: labelBuilder(option),
+                      selected: isSelected,
+                      onTap: () => Navigator.of(sheetContext).pop(option),
+                    );
+                  }).toList(),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    },
+  );
 }
 
 class MusicLoadingIndicator extends StatelessWidget {

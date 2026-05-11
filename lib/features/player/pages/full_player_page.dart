@@ -1248,21 +1248,11 @@ class PlaybackControls extends ConsumerWidget {
         const SizedBox(width: 12),
 
         // 播放/暂停按钮（大）
-        Container(
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            color: Theme.of(context).colorScheme.primary,
-          ),
-          child: IconButton(
-            iconSize: 48,
-            icon: Icon(
-              playerState.isPlaying ? AppIcons.pause : AppIcons.play_arrow,
-              color: Theme.of(context).colorScheme.onPrimary,
-            ),
-            onPressed: () {
-              ref.read(playerProvider.notifier).togglePlayPause();
-            },
-          ),
+        _PlayPauseControlButton(
+          isPlaying: playerState.isPlaying,
+          onPressed: () {
+            ref.read(playerProvider.notifier).togglePlayPause();
+          },
         ),
 
         const SizedBox(width: 12),
@@ -1300,5 +1290,45 @@ class PlaybackControls extends ConsumerWidget {
       PlaybackMode.repeatAll => AppIcons.repeat,
       PlaybackMode.repeatOne => AppIcons.repeat_one,
     };
+  }
+}
+
+class _PlayPauseControlButton extends StatelessWidget {
+  final bool isPlaying;
+  final VoidCallback onPressed;
+
+  const _PlayPauseControlButton({
+    required this.isPlaying,
+    required this.onPressed,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return Material(
+      color: colorScheme.primary,
+      shape: const CircleBorder(),
+      clipBehavior: Clip.antiAlias,
+      child: InkResponse(
+        onTap: onPressed,
+        containedInkWell: true,
+        radius: 36,
+        child: SizedBox.square(
+          dimension: 72,
+          child: Center(
+            child: Transform.translate(
+              // 三角形的视觉重心天然偏左，圆形播放键需要向右补偿。
+              offset: isPlaying ? Offset.zero : const Offset(5, 0),
+              child: Icon(
+                isPlaying ? AppIcons.pause : AppIcons.play_arrow,
+                size: 48,
+                color: colorScheme.onPrimary,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
   }
 }

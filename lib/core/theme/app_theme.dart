@@ -8,9 +8,14 @@ class AppTheme {
     final colorScheme = AppColorScheme.lightScheme(seedColor);
     return ThemeData(
       useMaterial3: true,
+      splashFactory: NoSplash.splashFactory,
       colorScheme: colorScheme,
       scaffoldBackgroundColor: AppColorScheme.lightBackgroundColor,
       canvasColor: AppColorScheme.lightBackgroundColor,
+      splashColor: Colors.transparent,
+      highlightColor: Colors.transparent,
+      hoverColor: colorScheme.primary.withValues(alpha: 0.06),
+      focusColor: colorScheme.primary.withValues(alpha: 0.08),
       appBarTheme: AppBarTheme(
         centerTitle: false,
         elevation: 0,
@@ -162,9 +167,14 @@ class AppTheme {
     final colorScheme = AppColorScheme.darkScheme(seedColor);
     return ThemeData(
       useMaterial3: true,
+      splashFactory: NoSplash.splashFactory,
       colorScheme: colorScheme,
       scaffoldBackgroundColor: AppColorScheme.darkBackgroundColor,
       canvasColor: AppColorScheme.darkBackgroundColor,
+      splashColor: Colors.transparent,
+      highlightColor: Colors.transparent,
+      hoverColor: colorScheme.primary.withValues(alpha: 0.10),
+      focusColor: colorScheme.primary.withValues(alpha: 0.12),
       appBarTheme: AppBarTheme(
         centerTitle: false,
         elevation: 0,

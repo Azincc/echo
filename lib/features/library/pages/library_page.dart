@@ -426,30 +426,17 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
                       title: '我的歌单',
                       subtitle: '自建和同步的播放列表',
                       actions: [
-                        PopupMenuButton<PlaylistSortOption>(
-                          tooltip: '歌单排序：${_playlistSortOption.label}',
-                          icon: const Icon(AppIcons.sort),
-                          initialValue: _playlistSortOption,
+                        MusicSortButton<PlaylistSortOption>(
+                          title: '歌单排序',
+                          value: _playlistSortOption,
+                          options: selectablePlaylistSortOptions,
+                          labelBuilder: (option) => option.label,
                           onSelected: (option) {
                             if (option == _playlistSortOption) return;
                             setState(() {
                               _playlistSortOption = option;
                             });
                           },
-                          itemBuilder: (context) =>
-                              selectablePlaylistSortOptions
-                                  .map(
-                                    (option) =>
-                                        CheckedPopupMenuItem<
-                                          PlaylistSortOption
-                                        >(
-                                          value: option,
-                                          checked:
-                                              option == _playlistSortOption,
-                                          child: Text(option.label),
-                                        ),
-                                  )
-                                  .toList(),
                         ),
                         MusicIconButton(
                           onPressed: () => _createPlaylist(context, ref),

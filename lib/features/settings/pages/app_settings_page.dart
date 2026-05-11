@@ -11,6 +11,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../../core/services/update_checker.dart';
 import '../../../core/utils/logger.dart';
 import '../../../data/models/music_library.dart';
+import '../../../data/models/server_address.dart';
 import '../../../data/sources/local_storage.dart';
 import '../../../providers/api_provider.dart';
 import '../../../providers/auth_provider.dart';
@@ -225,6 +226,7 @@ class _AppSettingsPageState extends ConsumerState<AppSettingsPage> {
     final authState = ref.watch(authStateProvider);
     final library = authState.currentLibrary;
     final activeAddress = ref.watch(activeAddressProvider);
+    final addressPool = ref.watch(addressPoolProvider);
     final autoFallback = ref.watch(autoFallbackProvider);
     final themeSettings = ref.watch(themeSettingsProvider);
 
@@ -268,14 +270,14 @@ class _AppSettingsPageState extends ConsumerState<AppSettingsPage> {
                           },
                   ),
                   children: [
-                    _buildInfoRow('当前连接', activeAddress?.label ?? '未连接'),
-                    _buildInfoRow('服务器地址', activeAddress?.url ?? '未设置'),
-                    _buildInfoRow('用户名', library?.username ?? '未设置'),
-                    _buildInfoRow(
-                      '认证方式',
-                      library?.authType == MusicLibraryAuthType.apiKey
-                          ? 'API Key'
-                          : '密码',
+                    _buildServerInfo(
+                      context,
+                      library: library,
+                      activeAddress: activeAddress,
+                      addresses: addressPool.addresses.isNotEmpty
+                          ? addressPool.addresses
+                          : library?.addresses ?? const [],
+                      autoFallback: autoFallback,
                     ),
                   ],
                 ),
@@ -491,6 +493,223 @@ class _AppSettingsPageState extends ConsumerState<AppSettingsPage> {
     );
   }
 
+  Widget _buildServerInfo(
+    BuildContext context, {
+    required MusicLibrary? library,
+    required ServerAddress? activeAddress,
+    required List<ServerAddress> addresses,
+    required bool autoFallback,
+  }) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final statusColor = _serverStatusColor(context, activeAddress?.status);
+    final statusText = _serverStatusText(activeAddress);
+    final totalCount = addresses.length;
+    final okCount = addresses
+        .where((address) => address.status == ServerAddressStatus.ok)
+        .length;
+    final isManual = activeAddress?.isLocked == true;
+    final latencyText = activeAddress?.lastLatencyMs == null
+        ? '未测速'
+        : '${activeAddress!.lastLatencyMs} ms';
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  color: statusColor.withValues(
+                    alpha: theme.brightness == Brightness.dark ? 0.18 : 0.11,
+                  ),
+                  borderRadius: BorderRadius.circular(13),
+                ),
+                child: Icon(
+                  _serverStatusIcon(activeAddress?.status),
+                  color: statusColor,
+                  size: 23,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      library?.name ?? '未连接音乐库',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      activeAddress == null
+                          ? '没有可用的服务器线路'
+                          : '${activeAddress.label} · $latencyText',
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: colorScheme.onSurfaceVariant,
+                        height: 1.25,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 12),
+              _serverStatusChip(context, statusText, statusColor),
+            ],
+          ),
+          const SizedBox(height: 14),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              _serverMetric(context, '线路', '$okCount/$totalCount 可用'),
+              _serverMetric(context, '模式', isManual ? '手动锁定' : '自动选择'),
+              _serverMetric(context, '回退', autoFallback ? '已开启' : '已关闭'),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Divider(color: MusicChrome.hairline(context), height: 1),
+          const SizedBox(height: 8),
+          _serverInfoRow(
+            context,
+            '当前线路',
+            activeAddress?.label ?? '未连接',
+            icon: AppIcons.route_outlined,
+          ),
+          _serverInfoRow(
+            context,
+            '服务器地址',
+            activeAddress?.url ?? '未设置',
+            icon: AppIcons.router,
+          ),
+          _serverInfoRow(
+            context,
+            '服务端',
+            _serverVersionText(library),
+            icon: AppIcons.cloud_outlined,
+          ),
+          _serverInfoRow(
+            context,
+            '用户名',
+            library?.username?.isNotEmpty == true ? library!.username! : '未设置',
+            icon: AppIcons.person_outline,
+          ),
+          _serverInfoRow(
+            context,
+            '认证方式',
+            _authTypeText(library),
+            icon: AppIcons.key,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _serverStatusChip(BuildContext context, String text, Color color) {
+    final theme = Theme.of(context);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: color.withValues(
+          alpha: theme.brightness == Brightness.dark ? 0.18 : 0.11,
+        ),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        text,
+        style: theme.textTheme.labelSmall?.copyWith(
+          color: color,
+          fontWeight: FontWeight.w800,
+        ),
+      ),
+    );
+  }
+
+  Widget _serverMetric(BuildContext context, String label, String value) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+      decoration: BoxDecoration(
+        color: colorScheme.surfaceContainerHighest.withValues(
+          alpha: theme.brightness == Brightness.dark ? 0.36 : 0.56,
+        ),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            label,
+            style: theme.textTheme.labelSmall?.copyWith(
+              color: colorScheme.onSurfaceVariant,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(width: 6),
+          Text(
+            value,
+            style: theme.textTheme.labelMedium?.copyWith(
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _serverInfoRow(
+    BuildContext context,
+    String label,
+    String value, {
+    required IconData icon,
+  }) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    return Padding(
+      padding: const EdgeInsets.only(top: 8),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, size: 17, color: colorScheme.onSurfaceVariant),
+          const SizedBox(width: 9),
+          SizedBox(
+            width: 72,
+            child: Text(
+              label,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: colorScheme.onSurfaceVariant,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              value,
+              softWrap: true,
+              style: theme.textTheme.bodySmall?.copyWith(
+                fontWeight: FontWeight.w600,
+                height: 1.28,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _settingsSection(
     BuildContext context, {
     required String title,
@@ -614,25 +833,6 @@ class _AppSettingsPageState extends ConsumerState<AppSettingsPage> {
     );
   }
 
-  Widget _buildInfoRow(String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(
-            width: 80,
-            child: Text(
-              label,
-              style: const TextStyle(color: Colors.grey, fontSize: 12),
-            ),
-          ),
-          Expanded(child: Text(value, style: const TextStyle(fontSize: 12))),
-        ],
-      ),
-    );
-  }
-
   void _showAppAboutDialog(BuildContext context) {
     showAboutDialog(
       context: context,
@@ -641,6 +841,73 @@ class _AppSettingsPageState extends ConsumerState<AppSettingsPage> {
       applicationLegalese: '© 2026 echoes',
       children: const [SizedBox(height: 12), Text('基于 Subsonic API 的音乐客户端。')],
     );
+  }
+
+  Color _serverStatusColor(BuildContext context, ServerAddressStatus? status) {
+    switch (status) {
+      case ServerAddressStatus.ok:
+        return Colors.greenAccent.shade400;
+      case ServerAddressStatus.failed:
+        return Theme.of(context).colorScheme.error;
+      case ServerAddressStatus.unknown:
+      case null:
+        return Theme.of(context).colorScheme.outline;
+    }
+  }
+
+  IconData _serverStatusIcon(ServerAddressStatus? status) {
+    switch (status) {
+      case ServerAddressStatus.ok:
+        return AppIcons.check_circle;
+      case ServerAddressStatus.failed:
+        return AppIcons.cloud_off_rounded;
+      case ServerAddressStatus.unknown:
+      case null:
+        return AppIcons.network_check_outlined;
+    }
+  }
+
+  String _serverStatusText(ServerAddress? address) {
+    switch (address?.status) {
+      case ServerAddressStatus.ok:
+        return '在线';
+      case ServerAddressStatus.failed:
+        return '异常';
+      case ServerAddressStatus.unknown:
+        return '检测中';
+      case null:
+        return '未连接';
+    }
+  }
+
+  String _serverVersionText(MusicLibrary? library) {
+    if (library == null) return '未设置';
+
+    final parts = <String>[];
+    final serverType = library.serverType?.trim();
+    final serverVersion = library.serverVersion?.trim();
+    if (serverType != null && serverType.isNotEmpty) {
+      parts.add(serverType);
+    }
+    if (serverVersion != null && serverVersion.isNotEmpty) {
+      parts.add(serverVersion);
+    }
+    if (library.isOpenSubsonic) {
+      parts.add('OpenSubsonic');
+    }
+
+    return parts.isEmpty ? 'Subsonic API' : parts.join(' · ');
+  }
+
+  String _authTypeText(MusicLibrary? library) {
+    switch (library?.authType) {
+      case MusicLibraryAuthType.apiKey:
+        return 'API Key';
+      case MusicLibraryAuthType.token:
+        return '密码 / Token';
+      case null:
+        return '未设置';
+    }
   }
 
   String _themeModeText(ThemeMode mode) {

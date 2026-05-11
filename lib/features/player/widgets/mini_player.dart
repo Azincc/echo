@@ -228,24 +228,10 @@ class _MiniPlayerState extends ConsumerState<MiniPlayer> {
     return playerState.queue[targetIndex];
   }
 
-  Color _resolveMiniBackground(ThemeData theme, Color? paletteColor) {
+  Color _resolveMiniBackground(ThemeData theme) {
     final scheme = theme.colorScheme;
     final isDark = theme.brightness == Brightness.dark;
-    final base = scheme.surfaceContainer.withValues(alpha: isDark ? 0.78 : 0.9);
-
-    if (paletteColor == null) {
-      return base;
-    }
-
-    final tunedPalette = paletteColor.computeLuminance() > 0.45
-        ? Color.lerp(paletteColor, Colors.black, 0.32) ?? paletteColor
-        : paletteColor;
-    final blended = Color.lerp(
-      scheme.surfaceContainer,
-      tunedPalette,
-      isDark ? 0.34 : 0.18,
-    );
-    return (blended ?? base).withValues(alpha: isDark ? 0.82 : 0.9);
+    return scheme.surface.withValues(alpha: isDark ? 0.74 : 0.82);
   }
 
   @override
@@ -253,7 +239,7 @@ class _MiniPlayerState extends ConsumerState<MiniPlayer> {
     final playerState = ref.watch(playerProvider);
     // 预取调色板：即使 mini-player 不使用颜色，也确保 provider 在歌曲
     // 切换时立即开始计算，全屏播放器展开后无需等待。
-    final paletteGenerator = ref.watch(currentSongPaletteProvider).valueOrNull;
+    ref.watch(currentSongPaletteProvider);
 
     if (playerState.currentSong == null) {
       return const SizedBox.shrink();
@@ -261,10 +247,7 @@ class _MiniPlayerState extends ConsumerState<MiniPlayer> {
 
     final song = _pendingVisualSong ?? playerState.currentSong!;
     final theme = Theme.of(context);
-    final miniBackgroundColor = _resolveMiniBackground(
-      theme,
-      paletteGenerator?.dominantColor?.color,
-    );
+    final miniBackgroundColor = _resolveMiniBackground(theme);
     final progress = playerState.duration.inMilliseconds > 0
         ? playerState.position.inMilliseconds /
               playerState.duration.inMilliseconds
@@ -332,117 +315,89 @@ class _MiniPlayerState extends ConsumerState<MiniPlayer> {
                             onHorizontalDragUpdate: _handleSwipeDragUpdate,
                             onHorizontalDragEnd: _handleSwipeDragEnd,
                             onHorizontalDragCancel: _handleSwipeDragCancel,
-                            child: ColoredBox(
-                              color: miniBackgroundColor,
-                              child: ClipRect(
-                                child: Stack(
-                                  children: [
-                                    Positioned.fill(
-                                      child: LayoutBuilder(
-                                        builder: (context, constraints) {
-                                          final width = constraints.maxWidth;
-                                          _swipeViewportWidth = width;
-                                          final dragOffset = _horizontalDragDx
-                                              .clamp(-width, width);
-                                          final pixelRatio =
-                                              MediaQuery.devicePixelRatioOf(
-                                                context,
-                                              );
-                                          final translateX =
-                                              ((-width + dragOffset) *
-                                                      pixelRatio)
-                                                  .round() /
-                                              pixelRatio;
+                            child: ClipRect(
+                              child: LayoutBuilder(
+                                builder: (context, constraints) {
+                                  final width = constraints.maxWidth;
+                                  _swipeViewportWidth = width;
+                                  final dragOffset = _horizontalDragDx.clamp(
+                                    -width,
+                                    width,
+                                  );
+                                  final pixelRatio =
+                                      MediaQuery.devicePixelRatioOf(context);
+                                  final translateX =
+                                      ((-width + dragOffset) * pixelRatio)
+                                          .round() /
+                                      pixelRatio;
 
-                                          return OverflowBox(
-                                            alignment: Alignment.centerLeft,
-                                            minWidth: width * 3,
-                                            maxWidth: width * 3,
-                                            child: AnimatedContainer(
-                                              width: width * 3,
-                                              duration: _settlingSwipe
-                                                  ? _swipeSettleDuration
-                                                  : Duration.zero,
-                                              curve: Curves.easeOutCubic,
-                                              transform:
-                                                  Matrix4.translationValues(
-                                                    translateX,
-                                                    0,
-                                                    0,
-                                                  ),
-                                              child: Row(
-                                                children: [
-                                                  SizedBox(
-                                                    width: width,
-                                                    child: previousSong == null
-                                                        ? const SizedBox.shrink()
-                                                        : Padding(
-                                                            padding:
-                                                                const EdgeInsets.only(
-                                                                  left:
-                                                                      _swipeEdgeGuardWidth,
-                                                                ),
-                                                            child: _MiniPlayerTrack(
-                                                              song:
-                                                                  previousSong,
-                                                              theme: theme,
-                                                              useHero: false,
-                                                            ),
-                                                          ),
-                                                  ),
-                                                  SizedBox(
-                                                    width: width,
-                                                    child: Padding(
-                                                      padding:
-                                                          const EdgeInsets.only(
-                                                            left:
-                                                                _swipeEdgeGuardWidth,
-                                                          ),
-                                                      child: _MiniPlayerTrack(
-                                                        song: song,
-                                                        theme: theme,
-                                                        useHero: true,
-                                                      ),
+                                  return OverflowBox(
+                                    alignment: Alignment.centerLeft,
+                                    minWidth: width * 3,
+                                    maxWidth: width * 3,
+                                    child: AnimatedContainer(
+                                      width: width * 3,
+                                      duration: _settlingSwipe
+                                          ? _swipeSettleDuration
+                                          : Duration.zero,
+                                      curve: Curves.easeOutCubic,
+                                      transform: Matrix4.translationValues(
+                                        translateX,
+                                        0,
+                                        0,
+                                      ),
+                                      child: Row(
+                                        children: [
+                                          SizedBox(
+                                            width: width,
+                                            child: previousSong == null
+                                                ? const SizedBox.shrink()
+                                                : Padding(
+                                                    padding: const EdgeInsets.only(
+                                                      left:
+                                                          _swipeEdgeGuardWidth,
+                                                    ),
+                                                    child: _MiniPlayerTrack(
+                                                      song: previousSong,
+                                                      theme: theme,
+                                                      useHero: false,
                                                     ),
                                                   ),
-                                                  SizedBox(
-                                                    width: width,
-                                                    child: nextSong == null
-                                                        ? const SizedBox.shrink()
-                                                        : Padding(
-                                                            padding:
-                                                                const EdgeInsets.only(
-                                                                  left:
-                                                                      _swipeEdgeGuardWidth,
-                                                                ),
-                                                            child:
-                                                                _MiniPlayerTrack(
-                                                                  song:
-                                                                      nextSong,
-                                                                  theme: theme,
-                                                                  useHero:
-                                                                      false,
-                                                                ),
-                                                          ),
-                                                  ),
-                                                ],
+                                          ),
+                                          SizedBox(
+                                            width: width,
+                                            child: Padding(
+                                              padding: const EdgeInsets.only(
+                                                left: _swipeEdgeGuardWidth,
+                                              ),
+                                              child: _MiniPlayerTrack(
+                                                song: song,
+                                                theme: theme,
+                                                useHero: true,
                                               ),
                                             ),
-                                          );
-                                        },
+                                          ),
+                                          SizedBox(
+                                            width: width,
+                                            child: nextSong == null
+                                                ? const SizedBox.shrink()
+                                                : Padding(
+                                                    padding: const EdgeInsets.only(
+                                                      left:
+                                                          _swipeEdgeGuardWidth,
+                                                    ),
+                                                    child: _MiniPlayerTrack(
+                                                      song: nextSong,
+                                                      theme: theme,
+                                                      useHero: false,
+                                                    ),
+                                                  ),
+                                          ),
+                                        ],
                                       ),
                                     ),
-                                    Positioned(
-                                      left: 0,
-                                      top: 0,
-                                      bottom: 0,
-                                      width: _swipeEdgeGuardWidth,
-                                      child: ColoredBox(
-                                        color: miniBackgroundColor,
-                                      ),
-                                    ),
-                                  ],
-                                ),
+                                  );
+                                },
                               ),
                             ),
                           ),

@@ -12,6 +12,7 @@ import '../../../utils/az_item.dart';
 import '../../../utils/pinyin_helper.dart';
 import '../../../widgets/cover_art_image.dart';
 import '../widgets/album_options_sheet.dart';
+import '../widgets/auto_hiding_az_list_view.dart';
 import 'album_detail_page.dart';
 import '../../../widgets/error_placeholder.dart';
 import '../../../widgets/skeleton_templates.dart';
@@ -98,7 +99,7 @@ class AlbumListPage extends ConsumerWidget {
               alignment: Alignment.topCenter,
               child: ConstrainedBox(
                 constraints: const BoxConstraints(maxWidth: 1400),
-                child: AzListView(
+                child: AutoHidingAzListView(
                   data: azAlbumRows,
                   itemCount: azAlbumRows.length,
                   itemBuilder: (context, index) {
@@ -154,20 +155,6 @@ class AlbumListPage extends ConsumerWidget {
                     );
                   },
                   indexBarData: SuspensionUtil.getTagIndexList(azAlbumRows),
-                  indexBarOptions: IndexBarOptions(
-                    needRebuild: true,
-                    ignoreDragCancel: true,
-                    downTextStyle: const TextStyle(
-                      fontSize: 12,
-                      color: Colors.white,
-                    ),
-                    downItemDecoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: Theme.of(context).colorScheme.primary,
-                    ),
-                    indexHintAlignment: Alignment.centerRight,
-                    indexHintOffset: const Offset(-20, 0),
-                  ),
                 ),
               ),
             );

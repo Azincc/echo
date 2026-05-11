@@ -10,6 +10,7 @@ import '../../../providers/navigation_provider.dart';
 import '../../../utils/az_item.dart';
 import '../../../utils/pinyin_helper.dart';
 import '../../../widgets/cover_art_image.dart';
+import '../widgets/auto_hiding_az_list_view.dart';
 import 'artist_detail_page.dart';
 import '../../../widgets/error_placeholder.dart';
 import '../../../widgets/skeleton_templates.dart';
@@ -73,7 +74,7 @@ class _ArtistListPageState extends ConsumerState<ArtistListPage> {
               alignment: Alignment.topCenter,
               child: ConstrainedBox(
                 constraints: const BoxConstraints(maxWidth: 1400),
-                child: AzListView(
+                child: AutoHidingAzListView(
                   data: _azArtists,
                   itemCount: _azArtists.length,
                   itemBuilder: (context, index) {
@@ -128,31 +129,7 @@ class _ArtistListPageState extends ConsumerState<ArtistListPage> {
                       ],
                     );
                   },
-                  // Index Bar setup
                   indexBarData: SuspensionUtil.getTagIndexList(_azArtists),
-                  indexBarOptions: IndexBarOptions(
-                    needRebuild: true,
-                    ignoreDragCancel: true,
-                    downTextStyle: const TextStyle(
-                      fontSize: 12,
-                      color: Colors.white,
-                    ),
-                    downItemDecoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: Theme.of(context).colorScheme.primary,
-                    ),
-                    indexHintWidth: 120 / 2,
-                    indexHintHeight: 100 / 2,
-                    indexHintDecoration: BoxDecoration(
-                      image: null,
-                      color: Colors.grey[700],
-                      shape: BoxShape.rectangle,
-                      borderRadius: BorderRadius.circular(5.0),
-                    ),
-                    indexHintAlignment: Alignment.centerRight,
-                    indexHintChildAlignment: const Alignment(-0.25, 0.0),
-                    indexHintOffset: const Offset(-20, 0),
-                  ),
                 ),
               ),
             );

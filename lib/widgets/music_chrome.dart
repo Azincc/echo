@@ -21,6 +21,83 @@ class MusicChrome {
   }
 }
 
+class MusicGradientBackdrop extends StatelessWidget {
+  final Widget child;
+  final EdgeInsetsGeometry padding;
+
+  const MusicGradientBackdrop({
+    super.key,
+    required this.child,
+    this.padding = EdgeInsets.zero,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final isDark = theme.brightness == Brightness.dark;
+
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: scheme.surface,
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [
+            Color.lerp(scheme.surface, scheme.primary, isDark ? 0.16 : 0.08) ??
+                scheme.surface,
+            scheme.surface,
+            scheme.surface,
+          ],
+          stops: const [0, 0.34, 1],
+        ),
+      ),
+      child: Stack(
+        children: [
+          Positioned(
+            top: -96,
+            right: -72,
+            child: _MusicGlowOrb(
+              size: 220,
+              color: scheme.primary.withValues(alpha: isDark ? 0.20 : 0.12),
+            ),
+          ),
+          Positioned(
+            top: 92,
+            left: -96,
+            child: _MusicGlowOrb(
+              size: 180,
+              color: scheme.secondary.withValues(alpha: isDark ? 0.12 : 0.08),
+            ),
+          ),
+          Padding(padding: padding, child: child),
+        ],
+      ),
+    );
+  }
+}
+
+class _MusicGlowOrb extends StatelessWidget {
+  final double size;
+  final Color color;
+
+  const _MusicGlowOrb({required this.size, required this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    return IgnorePointer(
+      child: ImageFiltered(
+        imageFilter: ImageFilter.blur(sigmaX: 42, sigmaY: 42),
+        child: Container(
+          width: size,
+          height: size,
+          decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+        ),
+      ),
+    );
+  }
+}
+
 class MusicGlassSurface extends StatelessWidget {
   final Widget child;
   final BorderRadius borderRadius;

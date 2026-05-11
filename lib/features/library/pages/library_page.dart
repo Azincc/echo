@@ -340,227 +340,237 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
         ref.invalidate(starredProvider);
       },
       child: Scaffold(
-        body: SafeArea(
-          bottom: false,
-          child: Align(
-            alignment: Alignment.topCenter,
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(
-                maxWidth: MusicChrome.maxContentWidth,
-              ),
-              child: ListView(
-                padding: const EdgeInsets.fromLTRB(20, 0, 20, 28),
-                children: [
-                  MusicPageHeader(
-                    padding: const EdgeInsets.fromLTRB(0, 14, 0, 14),
-                    title: '资料库',
-                    subtitle: '收藏、歌单和全部音乐都在这里',
-                    leading: MusicIconButton(
-                      icon: AppIcons.menu,
-                      tooltip: '菜单',
-                      onPressed: () => scaffoldKey.currentState?.openDrawer(),
-                    ),
-                  ),
-                  const MusicSectionHeader(title: '收藏'),
-                  _buildLibraryRow(
-                    context,
-                    icon: AppIcons.favorite,
-                    title: '收藏歌曲',
-                    trailing: starredAsync.when(
-                      data: (starred) => Text('${starred.songs.length} 首'),
-                      loading: () => const SizedBox.shrink(),
-                      error: (error, stack) => const SizedBox.shrink(),
-                    ),
-                    onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) =>
-                              const StarredPage(initialTab: StarredTab.songs),
-                        ),
-                      );
-                    },
-                  ),
-                  _buildLibraryRow(
-                    context,
-                    icon: AppIcons.album,
-                    title: '收藏专辑',
-                    trailing: starredAsync.when(
-                      data: (starred) => Text('${starred.albums.length} 张'),
-                      loading: () => const SizedBox.shrink(),
-                      error: (error, stack) => const SizedBox.shrink(),
-                    ),
-                    onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) =>
-                              const StarredPage(initialTab: StarredTab.albums),
-                        ),
-                      );
-                    },
-                  ),
-                  _buildLibraryRow(
-                    context,
-                    icon: AppIcons.person,
-                    title: '收藏歌手',
-                    trailing: starredAsync.when(
-                      data: (starred) => Text('${starred.artists.length} 位'),
-                      loading: () => const SizedBox.shrink(),
-                      error: (error, stack) => const SizedBox.shrink(),
-                    ),
-                    onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) =>
-                              const StarredPage(initialTab: StarredTab.artists),
-                        ),
-                      );
-                    },
-                  ),
-                  MusicSectionHeader(
-                    title: '我的歌单',
-                    subtitle: '自建和同步的播放列表',
-                    actions: [
-                      PopupMenuButton<PlaylistSortOption>(
-                        tooltip: '歌单排序：${_playlistSortOption.label}',
-                        icon: const Icon(AppIcons.sort),
-                        initialValue: _playlistSortOption,
-                        onSelected: (option) {
-                          if (option == _playlistSortOption) return;
-                          setState(() {
-                            _playlistSortOption = option;
-                          });
-                        },
-                        itemBuilder: (context) => selectablePlaylistSortOptions
-                            .map(
-                              (option) =>
-                                  CheckedPopupMenuItem<PlaylistSortOption>(
-                                    value: option,
-                                    checked: option == _playlistSortOption,
-                                    child: Text(option.label),
-                                  ),
-                            )
-                            .toList(),
+        body: MusicGradientBackdrop(
+          child: SafeArea(
+            bottom: false,
+            child: Align(
+              alignment: Alignment.topCenter,
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(
+                  maxWidth: MusicChrome.maxContentWidth,
+                ),
+                child: ListView(
+                  padding: const EdgeInsets.fromLTRB(20, 0, 20, 28),
+                  children: [
+                    MusicPageHeader(
+                      padding: const EdgeInsets.fromLTRB(0, 14, 0, 14),
+                      title: '资料库',
+                      subtitle: '收藏、歌单和全部音乐都在这里',
+                      leading: MusicIconButton(
+                        icon: AppIcons.menu,
+                        tooltip: '菜单',
+                        onPressed: () => scaffoldKey.currentState?.openDrawer(),
                       ),
-                      MusicIconButton(
-                        onPressed: () => _createPlaylist(context, ref),
-                        icon: AppIcons.add,
-                        tooltip: '新建歌单',
+                    ),
+                    const MusicSectionHeader(title: '收藏'),
+                    _buildLibraryRow(
+                      context,
+                      icon: AppIcons.favorite,
+                      title: '收藏歌曲',
+                      trailing: starredAsync.when(
+                        data: (starred) => Text('${starred.songs.length} 首'),
+                        loading: () => const SizedBox.shrink(),
+                        error: (error, stack) => const SizedBox.shrink(),
                       ),
-                    ],
-                  ),
-                  playlistsAsync.when(
-                    data: (playlists) {
-                      if (playlists.isEmpty) {
-                        return Padding(
-                          padding: const EdgeInsets.all(24),
-                          child: Center(
-                            child: Text(
-                              playlistsLoadFailed ? '网络异常，歌单加载失败' : '暂无歌单',
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) =>
+                                const StarredPage(initialTab: StarredTab.songs),
+                          ),
+                        );
+                      },
+                    ),
+                    _buildLibraryRow(
+                      context,
+                      icon: AppIcons.album,
+                      title: '收藏专辑',
+                      trailing: starredAsync.when(
+                        data: (starred) => Text('${starred.albums.length} 张'),
+                        loading: () => const SizedBox.shrink(),
+                        error: (error, stack) => const SizedBox.shrink(),
+                      ),
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => const StarredPage(
+                              initialTab: StarredTab.albums,
                             ),
                           ),
                         );
-                      }
-                      final sortedPlaylists = sortPlaylists(
-                        playlists,
-                        _playlistSortOption,
-                      );
-                      return Column(
-                        children: sortedPlaylists.map((playlist) {
-                          return _buildLibraryRow(
-                            context,
-                            icon: AppIcons.queue_music_rounded,
-                            title: playlist.name,
-                            subtitle: '${playlist.songCount} 首',
-                            trailing: IconButton(
-                              tooltip: '歌单操作',
-                              icon: const Icon(AppIcons.more_horiz),
-                              onPressed: () async {
-                                final action = await showPlaylistOptionsSheet(
-                                  context: context,
-                                  playlist: playlist,
-                                  canDownload: hasActiveLibrary,
-                                  hasSongs: playlist.songCount > 0,
-                                );
-                                if (action == null || !context.mounted) return;
-                                await _onPlaylistMenuSelected(
+                      },
+                    ),
+                    _buildLibraryRow(
+                      context,
+                      icon: AppIcons.person,
+                      title: '收藏歌手',
+                      trailing: starredAsync.when(
+                        data: (starred) => Text('${starred.artists.length} 位'),
+                        loading: () => const SizedBox.shrink(),
+                        error: (error, stack) => const SizedBox.shrink(),
+                      ),
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => const StarredPage(
+                              initialTab: StarredTab.artists,
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                    MusicSectionHeader(
+                      title: '我的歌单',
+                      subtitle: '自建和同步的播放列表',
+                      actions: [
+                        PopupMenuButton<PlaylistSortOption>(
+                          tooltip: '歌单排序：${_playlistSortOption.label}',
+                          icon: const Icon(AppIcons.sort),
+                          initialValue: _playlistSortOption,
+                          onSelected: (option) {
+                            if (option == _playlistSortOption) return;
+                            setState(() {
+                              _playlistSortOption = option;
+                            });
+                          },
+                          itemBuilder: (context) =>
+                              selectablePlaylistSortOptions
+                                  .map(
+                                    (option) =>
+                                        CheckedPopupMenuItem<
+                                          PlaylistSortOption
+                                        >(
+                                          value: option,
+                                          checked:
+                                              option == _playlistSortOption,
+                                          child: Text(option.label),
+                                        ),
+                                  )
+                                  .toList(),
+                        ),
+                        MusicIconButton(
+                          onPressed: () => _createPlaylist(context, ref),
+                          icon: AppIcons.add,
+                          tooltip: '新建歌单',
+                        ),
+                      ],
+                    ),
+                    playlistsAsync.when(
+                      data: (playlists) {
+                        if (playlists.isEmpty) {
+                          return Padding(
+                            padding: const EdgeInsets.all(24),
+                            child: Center(
+                              child: Text(
+                                playlistsLoadFailed ? '网络异常，歌单加载失败' : '暂无歌单',
+                              ),
+                            ),
+                          );
+                        }
+                        final sortedPlaylists = sortPlaylists(
+                          playlists,
+                          _playlistSortOption,
+                        );
+                        return Column(
+                          children: sortedPlaylists.map((playlist) {
+                            return _buildLibraryRow(
+                              context,
+                              icon: AppIcons.queue_music_rounded,
+                              title: playlist.name,
+                              subtitle: '${playlist.songCount} 首',
+                              trailing: IconButton(
+                                tooltip: '歌单操作',
+                                icon: const Icon(AppIcons.more_horiz),
+                                onPressed: () async {
+                                  final action = await showPlaylistOptionsSheet(
+                                    context: context,
+                                    playlist: playlist,
+                                    canDownload: hasActiveLibrary,
+                                    hasSongs: playlist.songCount > 0,
+                                  );
+                                  if (action == null || !context.mounted) {
+                                    return;
+                                  }
+                                  await _onPlaylistMenuSelected(
+                                    context,
+                                    ref,
+                                    playlist,
+                                    action,
+                                  );
+                                },
+                              ),
+                              onTap: () {
+                                Navigator.push(
                                   context,
-                                  ref,
-                                  playlist,
-                                  action,
+                                  MaterialPageRoute(
+                                    builder: (context) => PlaylistDetailPage(
+                                      playlistId: playlist.id,
+                                    ),
+                                  ),
                                 );
                               },
-                            ),
-                            onTap: () {
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (context) => PlaylistDetailPage(
-                                    playlistId: playlist.id,
-                                  ),
-                                ),
-                              );
-                            },
-                          );
-                        }).toList(),
-                      );
-                    },
-                    loading: () =>
-                        const ListTileSkeleton(count: 3, hasIcon: true),
-                    error: (error, stack) => const Padding(
-                      padding: EdgeInsets.all(24),
-                      child: ErrorPlaceholder(message: '歌单加载失败，请检查网络后重试'),
+                            );
+                          }).toList(),
+                        );
+                      },
+                      loading: () =>
+                          const ListTileSkeleton(count: 3, hasIcon: true),
+                      error: (error, stack) => const Padding(
+                        padding: EdgeInsets.all(24),
+                        child: ErrorPlaceholder(message: '歌单加载失败，请检查网络后重试'),
+                      ),
                     ),
-                  ),
-                  const MusicSectionHeader(
-                    title: '音乐库浏览',
-                    subtitle: '按不同维度进入完整资料库',
-                  ),
-                  _buildLibraryRow(
-                    context,
-                    icon: AppIcons.music_note,
-                    title: '全部歌曲',
-                    trailing: const Icon(AppIcons.chevron_right),
-                    onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => const SongListPage(),
-                        ),
-                      );
-                    },
-                  ),
-                  _buildLibraryRow(
-                    context,
-                    icon: AppIcons.album,
-                    title: '按专辑浏览',
-                    trailing: const Icon(AppIcons.chevron_right),
-                    onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => const AlbumListPage(),
-                        ),
-                      );
-                    },
-                  ),
-                  _buildLibraryRow(
-                    context,
-                    icon: AppIcons.person,
-                    title: '按歌手浏览',
-                    trailing: const Icon(AppIcons.chevron_right),
-                    onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => const ArtistListPage(),
-                        ),
-                      );
-                    },
-                  ),
-                ],
+                    const MusicSectionHeader(
+                      title: '音乐库浏览',
+                      subtitle: '按不同维度进入完整资料库',
+                    ),
+                    _buildLibraryRow(
+                      context,
+                      icon: AppIcons.music_note,
+                      title: '全部歌曲',
+                      trailing: const Icon(AppIcons.chevron_right),
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => const SongListPage(),
+                          ),
+                        );
+                      },
+                    ),
+                    _buildLibraryRow(
+                      context,
+                      icon: AppIcons.album,
+                      title: '按专辑浏览',
+                      trailing: const Icon(AppIcons.chevron_right),
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => const AlbumListPage(),
+                          ),
+                        );
+                      },
+                    ),
+                    _buildLibraryRow(
+                      context,
+                      icon: AppIcons.person,
+                      title: '按歌手浏览',
+                      trailing: const Icon(AppIcons.chevron_right),
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => const ArtistListPage(),
+                          ),
+                        );
+                      },
+                    ),
+                  ],
+                ),
               ),
             ),
           ),

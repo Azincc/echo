@@ -19,6 +19,7 @@ import '../../../widgets/error_placeholder.dart';
 import '../../../widgets/song_list_item.dart';
 import '../../../widgets/skeleton_templates.dart';
 import '../../../widgets/visible_remote_retry_scope.dart';
+import '../../../widgets/music_chrome.dart';
 
 /// 歌单详情页
 class PlaylistDetailPage extends ConsumerStatefulWidget {
@@ -205,7 +206,10 @@ class _PlaylistDetailPageState extends ConsumerState<PlaylistDetailPage> {
       onRetry: (ref) =>
           ref.invalidate(playlistDetailProvider(widget.playlistId)),
       child: Scaffold(
+        extendBodyBehindAppBar: true,
         appBar: AppBar(
+          backgroundColor: Colors.transparent,
+          surfaceTintColor: Colors.transparent,
           leading: const AppBackButton(),
           title: Text(currentPlaylist?.name ?? '歌单'),
           actions: [
@@ -258,95 +262,126 @@ class _PlaylistDetailPageState extends ConsumerState<PlaylistDetailPage> {
               ),
           ],
         ),
-        body: playlistAsync.when(
-          data: (playlist) {
-            if (playlist == null) {
-              return Center(child: Text(loadFailed ? '网络异常，歌单加载失败' : '歌单不存在'));
-            }
+        body: MusicGradientBackdrop(
+          child: playlistAsync.when(
+            data: (playlist) {
+              if (playlist == null) {
+                return Center(
+                  child: Text(loadFailed ? '网络异常，歌单加载失败' : '歌单不存在'),
+                );
+              }
 
-            final songs = sortSongs(
-              playlist.songs ?? const <Song>[],
-              _sortOption,
-            );
+              final songs = sortSongs(
+                playlist.songs ?? const <Song>[],
+                _sortOption,
+              );
 
-            return Align(
-              alignment: Alignment.topCenter,
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 1400),
-                child: CustomScrollView(
-                  slivers: [
-                    SliverToBoxAdapter(
-                      child: Padding(
-                        padding: const EdgeInsets.all(16),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              playlist.name,
-                              style: Theme.of(context).textTheme.headlineSmall
-                                  ?.copyWith(fontWeight: FontWeight.bold),
-                            ),
-                            const SizedBox(height: 8),
-                            if (playlist.comment != null &&
-                                playlist.comment!.isNotEmpty)
-                              Text(
-                                playlist.comment!,
-                                style: Theme.of(context).textTheme.bodyMedium,
-                              ),
-                            const SizedBox(height: 8),
-                            Text(
-                              '${playlist.songCount} 首 · ${playlist.durationString}',
-                              style: Theme.of(context).textTheme.bodyMedium
-                                  ?.copyWith(
-                                    color: Theme.of(
+              return Align(
+                alignment: Alignment.topCenter,
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 1400),
+                  child: CustomScrollView(
+                    slivers: [
+                      SliverToBoxAdapter(
+                        child: Padding(
+                          padding: const EdgeInsets.fromLTRB(16, 96, 16, 16),
+                          child: MusicGlassSurface(
+                            borderRadius: MusicChrome.largeRadius,
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  playlist.name,
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .headlineSmall
+                                      ?.copyWith(fontWeight: FontWeight.bold),
+                                ),
+                                const SizedBox(height: 8),
+                                if (playlist.comment != null &&
+                                    playlist.comment!.isNotEmpty)
+                                  Text(
+                                    playlist.comment!,
+                                    style: Theme.of(
                                       context,
-                                    ).colorScheme.onSurfaceVariant,
+                                    ).textTheme.bodyMedium,
                                   ),
+                                const SizedBox(height: 8),
+                                Text(
+                                  '${playlist.songCount} 首 · ${playlist.durationString}',
+                                  style: Theme.of(context).textTheme.bodyMedium
+                                      ?.copyWith(
+                                        color: Theme.of(
+                                          context,
+                                        ).colorScheme.onSurfaceVariant,
+                                      ),
+                                ),
+                                const SizedBox(height: 16),
+                                FilledButton.icon(
+                                  onPressed: songs.isEmpty
+                                      ? null
+                                      : () {
+                                          // 播放全部
+                                          ref
+                                              .read(playerProvider.notifier)
+                                              .playQueue(songs);
+                                        },
+                                  icon: const Icon(AppIcons.play_arrow),
+                                  label: const Text('播放全部'),
+                                ),
+                              ],
                             ),
-                            const SizedBox(height: 16),
-                            FilledButton.icon(
-                              onPressed: songs.isEmpty
-                                  ? null
-                                  : () {
-                                      // 播放全部
-                                      ref
-                                          .read(playerProvider.notifier)
-                                          .playQueue(songs);
-                                    },
-                              icon: const Icon(AppIcons.play_arrow),
-                              label: const Text('播放全部'),
-                            ),
-                          ],
+                          ),
                         ),
                       ),
-                    ),
-                    SliverList(
-                      delegate: SliverChildBuilderDelegate((context, index) {
-                        final song = songs[index];
-                        return SongListItem(
-                          song: song,
-                          index: index,
-                          variant: SongListItemVariant.standard,
-                          onTap: () {
-                            // 播放歌曲
-                            ref
-                                .read(playerProvider.notifier)
-                                .playQueue(songs, startIndex: index);
-                          },
-                          onLongPress: () {
-                            _showSongContextMenu(context, ref, song);
-                          },
-                        );
-                      }, childCount: songs.length),
-                    ),
-                  ],
+                      if (songs.isNotEmpty)
+                        SliverToBoxAdapter(
+                          child: Padding(
+                            padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+                            child: MusicSectionHeader(
+                              title: '歌曲',
+                              actions: [
+                                Text(
+                                  '${songs.length} 首',
+                                  style: Theme.of(context).textTheme.labelMedium
+                                      ?.copyWith(
+                                        color: Theme.of(
+                                          context,
+                                        ).colorScheme.onSurfaceVariant,
+                                      ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      SliverList(
+                        delegate: SliverChildBuilderDelegate((context, index) {
+                          final song = songs[index];
+                          return SongListItem(
+                            song: song,
+                            index: index,
+                            variant: SongListItemVariant.standard,
+                            onTap: () {
+                              // 播放歌曲
+                              ref
+                                  .read(playerProvider.notifier)
+                                  .playQueue(songs, startIndex: index);
+                            },
+                            onLongPress: () {
+                              _showSongContextMenu(context, ref, song);
+                            },
+                          );
+                        }, childCount: songs.length),
+                      ),
+                    ],
+                  ),
                 ),
-              ),
-            );
-          },
-          loading: () => const PlaylistDetailSkeleton(),
-          error: (error, stack) =>
-              const ErrorPlaceholder(message: '歌单加载失败，请检查网络后重试'),
+              );
+            },
+            loading: () => const PlaylistDetailSkeleton(),
+            error: (error, stack) =>
+                const ErrorPlaceholder(message: '歌单加载失败，请检查网络后重试'),
+          ),
         ),
       ),
     );

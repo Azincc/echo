@@ -15,6 +15,7 @@ import '../../../widgets/error_placeholder.dart';
 import '../../../widgets/song_list_item.dart';
 import '../../../widgets/skeleton_templates.dart';
 import '../../../widgets/visible_remote_retry_scope.dart';
+import '../../../widgets/music_chrome.dart';
 
 /// 歌手详情页
 class ArtistDetailPage extends ConsumerWidget {
@@ -88,7 +89,10 @@ class ArtistDetailPage extends ConsumerWidget {
         }
       },
       child: Scaffold(
+        extendBodyBehindAppBar: true,
         appBar: AppBar(
+          backgroundColor: Colors.transparent,
+          surfaceTintColor: Colors.transparent,
           leading: const AppBackButton(),
           title: const Text('歌手详情'),
           actions: [
@@ -99,132 +103,147 @@ class ArtistDetailPage extends ConsumerWidget {
             ),
           ],
         ),
-        body: artistDetailAsync.when(
-          data: (artistDetail) {
-            if (artistDetail == null) {
-              return const Center(child: Text('歌手不存在'));
-            }
+        body: MusicGradientBackdrop(
+          child: artistDetailAsync.when(
+            data: (artistDetail) {
+              if (artistDetail == null) {
+                return const Center(child: Text('歌手不存在'));
+              }
 
-            final artist = artistDetail.artist;
-            final albums = artistDetail.albums;
-            final songs = artistDetail.songs;
+              final artist = artistDetail.artist;
+              final albums = artistDetail.albums;
+              final songs = artistDetail.songs;
 
-            return Align(
-              alignment: Alignment.topCenter,
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 1400),
-                child: DefaultTabController(
-                  length: 2,
-                  child: NestedScrollView(
-                    headerSliverBuilder: (context, innerBoxIsScrolled) {
-                      return [
-                        // 歌手头像 + 名称 + 统计信息（可滚动消失）
-                        SliverToBoxAdapter(
-                          child: Padding(
-                            padding: const EdgeInsets.all(16),
-                            child: Column(
-                              children: [
-                                CircleAvatar(
-                                  radius: 60,
-                                  child: CoverArtImage(
-                                    coverArtId: artist.coverArt,
-                                    size: 120,
-                                  ),
-                                ),
-                                const SizedBox(height: 16),
-                                Row(
-                                  mainAxisAlignment: MainAxisAlignment.center,
+              return Align(
+                alignment: Alignment.topCenter,
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 1400),
+                  child: DefaultTabController(
+                    length: 2,
+                    child: NestedScrollView(
+                      headerSliverBuilder: (context, innerBoxIsScrolled) {
+                        return [
+                          // 歌手头像 + 名称 + 统计信息（可滚动消失）
+                          SliverToBoxAdapter(
+                            child: Padding(
+                              padding: const EdgeInsets.fromLTRB(
+                                16,
+                                96,
+                                16,
+                                16,
+                              ),
+                              child: MusicGlassSurface(
+                                borderRadius: MusicChrome.largeRadius,
+                                child: Column(
                                   children: [
-                                    Flexible(
-                                      child: Text(
-                                        artist.name,
-                                        textAlign: TextAlign.center,
-                                        style: Theme.of(context)
-                                            .textTheme
-                                            .headlineSmall
-                                            ?.copyWith(
-                                              fontWeight: FontWeight.bold,
-                                            ),
+                                    CircleAvatar(
+                                      radius: 60,
+                                      child: CoverArtImage(
+                                        coverArtId: artist.coverArt,
+                                        size: 120,
                                       ),
                                     ),
-                                    IconButton(
-                                      tooltip: artist.starred
-                                          ? '取消收藏歌手'
-                                          : '收藏歌手',
-                                      onPressed: () => _toggleArtistStarred(
-                                        context,
-                                        ref,
-                                        artist.id,
-                                        artist.starred,
-                                      ),
-                                      icon: Icon(
-                                        artist.starred
-                                            ? AppIcons.favorite
-                                            : AppIcons.favorite_border,
-                                        color: artist.starred
-                                            ? Colors.red
-                                            : null,
-                                      ),
+                                    const SizedBox(height: 16),
+                                    Row(
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.center,
+                                      children: [
+                                        Flexible(
+                                          child: Text(
+                                            artist.name,
+                                            textAlign: TextAlign.center,
+                                            style: Theme.of(context)
+                                                .textTheme
+                                                .headlineSmall
+                                                ?.copyWith(
+                                                  fontWeight: FontWeight.bold,
+                                                ),
+                                          ),
+                                        ),
+                                        IconButton(
+                                          tooltip: artist.starred
+                                              ? '取消收藏歌手'
+                                              : '收藏歌手',
+                                          onPressed: () => _toggleArtistStarred(
+                                            context,
+                                            ref,
+                                            artist.id,
+                                            artist.starred,
+                                          ),
+                                          icon: Icon(
+                                            artist.starred
+                                                ? AppIcons.favorite
+                                                : AppIcons.favorite_border,
+                                            color: artist.starred
+                                                ? Colors.red
+                                                : null,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    Text(
+                                      '${songs.length} 首歌曲 · ${albums.length} 张专辑',
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .bodyMedium
+                                          ?.copyWith(
+                                            color: Theme.of(
+                                              context,
+                                            ).colorScheme.onSurfaceVariant,
+                                          ),
                                     ),
                                   ],
                                 ),
-                                Text(
-                                  '${songs.length} 首歌曲 · ${albums.length} 张专辑',
-                                  style: Theme.of(context).textTheme.bodyMedium
-                                      ?.copyWith(
-                                        color: Theme.of(
-                                          context,
-                                        ).colorScheme.onSurfaceVariant,
-                                      ),
+                              ),
+                            ),
+                          ),
+                          // TabBar（吸顶固定）
+                          SliverOverlapAbsorber(
+                            handle:
+                                NestedScrollView.sliverOverlapAbsorberHandleFor(
+                                  context,
                                 ),
-                              ],
+                            sliver: SliverPersistentHeader(
+                              pinned: true,
+                              delegate: _SliverTabBarDelegate(
+                                TabBar(
+                                  tabs: const [
+                                    Tab(text: '歌曲'),
+                                    Tab(text: '专辑'),
+                                  ],
+                                  labelColor: Theme.of(
+                                    context,
+                                  ).colorScheme.primary,
+                                  unselectedLabelColor: Theme.of(
+                                    context,
+                                  ).colorScheme.onSurface,
+                                  indicatorColor: Theme.of(
+                                    context,
+                                  ).colorScheme.primary,
+                                ),
+                                color: Theme.of(
+                                  context,
+                                ).colorScheme.surface.withValues(alpha: 0.82),
+                              ),
                             ),
                           ),
-                        ),
-                        // TabBar（吸顶固定）
-                        SliverOverlapAbsorber(
-                          handle:
-                              NestedScrollView.sliverOverlapAbsorberHandleFor(
-                                context,
-                              ),
-                          sliver: SliverPersistentHeader(
-                            pinned: true,
-                            delegate: _SliverTabBarDelegate(
-                              TabBar(
-                                tabs: const [
-                                  Tab(text: '歌曲'),
-                                  Tab(text: '专辑'),
-                                ],
-                                labelColor: Theme.of(
-                                  context,
-                                ).colorScheme.primary,
-                                unselectedLabelColor: Theme.of(
-                                  context,
-                                ).colorScheme.onSurface,
-                                indicatorColor: Theme.of(
-                                  context,
-                                ).colorScheme.primary,
-                              ),
-                              color: Theme.of(context).scaffoldBackgroundColor,
-                            ),
-                          ),
-                        ),
-                      ];
-                    },
-                    body: TabBarView(
-                      children: [
-                        _buildSongsTab(artist.name, songs),
-                        _buildAlbumsTab(context, ref, albums),
-                      ],
+                        ];
+                      },
+                      body: TabBarView(
+                        children: [
+                          _buildSongsTab(artist.name, songs),
+                          _buildAlbumsTab(context, ref, albums),
+                        ],
+                      ),
                     ),
                   ),
                 ),
-              ),
-            );
-          },
-          loading: () => const ArtistDetailSkeleton(),
-          error: (error, stack) =>
-              const ErrorPlaceholder(message: '歌手详情加载失败，请检查网络后重试'),
+              );
+            },
+            loading: () => const ArtistDetailSkeleton(),
+            error: (error, stack) =>
+                const ErrorPlaceholder(message: '歌手详情加载失败，请检查网络后重试'),
+          ),
         ),
       ),
     );

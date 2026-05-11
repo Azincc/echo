@@ -114,33 +114,47 @@ class MusicRepository {
           [];
 
       // 按歌手下所有专辑聚合歌曲，避免仅返回热门歌曲。
-      final albumDetails = await Future.wait(
-        albums.map((album) async {
-          try {
-            return await getAlbum(album.id);
-          } catch (e) {
-            Logger.warn(
-              'Failed to get album songs for artist=$artistId album=${album.id}',
-              e,
-            );
-            return null;
-          }
-        }),
-      );
-
       final songsById = <String, Song>{};
-      for (final detail in albumDetails) {
-        if (detail == null) continue;
-        for (final song in detail.songs) {
-          final songArtistId = song.artistId;
-          if (songArtistId != null &&
-              songArtistId.isNotEmpty &&
-              songArtistId != artist.id) {
-            continue;
+      if (albums.isNotEmpty) {
+        final albumDetails = await Future.wait(
+          albums.map((album) async {
+            try {
+              return await getAlbum(album.id);
+            } catch (e) {
+              Logger.warn(
+                'Failed to get album songs for artist=$artistId album=${album.id}',
+                e,
+              );
+              return null;
+            }
+          }),
+        );
+
+        for (final detail in albumDetails) {
+          if (detail == null) continue;
+          for (final song in detail.songs) {
+            final songArtistId = song.artistId;
+            if (songArtistId != null &&
+                songArtistId.isNotEmpty &&
+                songArtistId != artist.id) {
+              continue;
+            }
+            songsById.putIfAbsent(song.id, () => song);
           }
-          songsById.putIfAbsent(song.id, () => song);
         }
       }
+
+      if (songsById.isEmpty) {
+        try {
+          final topSongs = await getTopSongs(artist.name);
+          for (final song in topSongs) {
+            songsById.putIfAbsent(song.id, () => song);
+          }
+        } catch (e) {
+          Logger.warn('Failed to get top songs for artist=$artistId', e);
+        }
+      }
+
       final songs = songsById.values.toList();
 
       return ArtistDetail(artist: artist, albums: albums, songs: songs);

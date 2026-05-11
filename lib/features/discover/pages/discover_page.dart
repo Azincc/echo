@@ -51,67 +51,73 @@ class _DiscoverPageState extends ConsumerState<DiscoverPage> {
         ref.invalidate(frequentAlbumsProvider);
       },
       child: Scaffold(
-        body: SafeArea(
-          bottom: false,
-          child: RefreshIndicator(
-            onRefresh: () async {
-              ref.invalidate(randomSongsProvider);
-              ref.invalidate(newestAlbumsProvider);
-              ref.invalidate(recentAlbumsProvider);
-              ref.invalidate(frequentAlbumsProvider);
-            },
-            child: Align(
-              alignment: Alignment.topCenter,
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(
-                  maxWidth: MusicChrome.maxContentWidth,
-                ),
-                child: ListView(
-                  cacheExtent: 1500,
-                  padding: const EdgeInsets.fromLTRB(20, 0, 20, 28),
-                  children: [
-                    MusicPageHeader(
-                      padding: const EdgeInsets.fromLTRB(0, 14, 0, 14),
-                      title: '音乐流',
-                      subtitle: '从你的资料库里继续发现熟悉和意外的声音',
-                      leading: MusicIconButton(
-                        icon: AppIcons.menu,
-                        tooltip: '菜单',
-                        onPressed: () => scaffoldKey.currentState?.openDrawer(),
-                      ),
-                      actions: [
-                        MusicIconButton(
-                          icon: AppIcons.search,
-                          tooltip: '搜索',
-                          onPressed: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (context) => const SearchPage(),
-                              ),
-                            );
-                          },
+        body: MusicGradientBackdrop(
+          child: SafeArea(
+            bottom: false,
+            child: RefreshIndicator(
+              onRefresh: () async {
+                ref.invalidate(randomSongsProvider);
+                ref.invalidate(newestAlbumsProvider);
+                ref.invalidate(recentAlbumsProvider);
+                ref.invalidate(frequentAlbumsProvider);
+              },
+              child: Align(
+                alignment: Alignment.topCenter,
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(
+                    maxWidth: MusicChrome.maxContentWidth,
+                  ),
+                  child: ListView(
+                    cacheExtent: 1500,
+                    padding: const EdgeInsets.fromLTRB(20, 0, 20, 28),
+                    children: [
+                      MusicPageHeader(
+                        padding: const EdgeInsets.fromLTRB(0, 14, 0, 14),
+                        title: '音乐流',
+                        subtitle: '从你的资料库里继续发现熟悉和意外的声音',
+                        leading: MusicIconButton(
+                          icon: AppIcons.menu,
+                          tooltip: '菜单',
+                          onPressed: () =>
+                              scaffoldKey.currentState?.openDrawer(),
                         ),
-                      ],
-                    ),
-                    const MusicSectionHeader(
-                      title: '随机推荐',
-                      subtitle: '快速开始一组来自资料库的歌曲',
-                    ),
-                    const RandomSongsSection(),
-                    const MusicSectionHeader(title: '最近入库', subtitle: '新加入的专辑'),
-                    const NewestAlbumsSection(),
-                    const MusicSectionHeader(
-                      title: '最近播放',
-                      subtitle: '接着听你停下的地方',
-                    ),
-                    const RecentAlbumsSection(),
-                    const MusicSectionHeader(
-                      title: '经常听的专辑',
-                      subtitle: '资料库里的高频回访',
-                    ),
-                    const FrequentAlbumsSection(),
-                  ],
+                        actions: [
+                          MusicIconButton(
+                            icon: AppIcons.search,
+                            tooltip: '搜索',
+                            onPressed: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) => const SearchPage(),
+                                ),
+                              );
+                            },
+                          ),
+                        ],
+                      ),
+                      const MusicSectionHeader(
+                        title: '随机推荐',
+                        subtitle: '快速开始一组来自资料库的歌曲',
+                      ),
+                      const RandomSongsSection(),
+                      const MusicSectionHeader(
+                        title: '最近入库',
+                        subtitle: '新加入的专辑',
+                      ),
+                      const NewestAlbumsSection(),
+                      const MusicSectionHeader(
+                        title: '最近播放',
+                        subtitle: '接着听你停下的地方',
+                      ),
+                      const RecentAlbumsSection(),
+                      const MusicSectionHeader(
+                        title: '经常听的专辑',
+                        subtitle: '资料库里的高频回访',
+                      ),
+                      const FrequentAlbumsSection(),
+                    ],
+                  ),
                 ),
               ),
             ),

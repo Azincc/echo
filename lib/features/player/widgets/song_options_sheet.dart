@@ -48,8 +48,10 @@ Future<void> showSongOptionsSheet({
     useRootNavigator: useRootNavigator,
     isScrollControlled: true,
     enableDrag: true,
+    backgroundColor: Colors.transparent,
+    barrierColor: Colors.black.withValues(alpha: 0.32),
     shape: const RoundedRectangleBorder(
-      borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
     ),
     builder: (sheetContext) => _SongOptionsSheet(
       hostContext: context,
@@ -58,6 +60,44 @@ Future<void> showSongOptionsSheet({
       mode: mode,
     ),
   );
+}
+
+class _OptionsSheetShell extends StatelessWidget {
+  final Widget child;
+
+  const _OptionsSheetShell({required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return SafeArea(
+      top: false,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.18),
+                blurRadius: 30,
+                offset: const Offset(0, -8),
+              ),
+            ],
+          ),
+          child: MusicGlassSurface(
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+            blur: 26,
+            color: theme.colorScheme.surface.withValues(
+              alpha: theme.brightness == Brightness.dark ? 0.78 : 0.9,
+            ),
+            padding: EdgeInsets.zero,
+            child: child,
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 class _SongOptionsSheet extends ConsumerWidget {
@@ -101,8 +141,7 @@ class _SongOptionsSheet extends ConsumerWidget {
         (song.path?.trim().isNotEmpty ?? false);
 
     if (mode == SongOptionsSheetMode.offlineOnly) {
-      return SafeArea(
-        top: false,
+      return _OptionsSheetShell(
         child: SingleChildScrollView(
           child: Padding(
             padding: EdgeInsets.only(
@@ -171,8 +210,7 @@ class _SongOptionsSheet extends ConsumerWidget {
       );
     }
 
-    return SafeArea(
-      top: false,
+    return _OptionsSheetShell(
       child: SingleChildScrollView(
         child: Padding(
           padding: EdgeInsets.only(
@@ -437,8 +475,7 @@ class _AddToPlaylistSheet extends ConsumerWidget {
     final playlistsAsync = ref.watch(playlistsProvider);
     final loadFailed = ref.watch(playlistsLoadFailedProvider);
 
-    return SafeArea(
-      top: false,
+    return _OptionsSheetShell(
       child: ConstrainedBox(
         constraints: BoxConstraints(
           maxHeight: MediaQuery.sizeOf(context).height * 0.72,

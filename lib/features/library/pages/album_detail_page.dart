@@ -85,7 +85,7 @@ class _AlbumDetailPageState extends ConsumerState<AlbumDetailPage> {
                               });
                             },
                           ),
-                          IconButton(
+                          MusicIconButton(
                             onPressed: hasAlbumData
                                 ? () {
                                     showAlbumOptionsSheet(
@@ -95,7 +95,7 @@ class _AlbumDetailPageState extends ConsumerState<AlbumDetailPage> {
                                     );
                                   }
                                 : null,
-                            icon: const Icon(AppIcons.more_horiz),
+                            icon: AppIcons.more_horiz,
                             tooltip: '专辑操作',
                           ),
                         ],

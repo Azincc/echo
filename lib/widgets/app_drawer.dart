@@ -35,22 +35,22 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
     final activeLibrary = authState.currentLibrary;
     final activeAddress = ref.watch(activeAddressProvider);
 
-    final theme = Theme.of(context);
-
     return Drawer(
-      backgroundColor: theme.colorScheme.surface,
+      backgroundColor: Colors.transparent,
       surfaceTintColor: Colors.transparent,
-      child: SafeArea(
-        bottom: false,
-        child: Column(
-          children: [
-            _buildHeader(context, activeLibrary, activeAddress),
-            Expanded(
-              child: _showLibraries
-                  ? _buildLibraryList(context, activeLibrary)
-                  : _buildNavigationList(context),
-            ),
-          ],
+      child: MusicGradientBackdrop(
+        child: SafeArea(
+          bottom: false,
+          child: Column(
+            children: [
+              _buildHeader(context, activeLibrary, activeAddress),
+              Expanded(
+                child: _showLibraries
+                    ? _buildLibraryList(context, activeLibrary)
+                    : _buildNavigationList(context),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -147,13 +147,12 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
                 ],
               ),
             ),
-            IconButton(
-              icon: Icon(
-                _showLibraries
-                    ? AppIcons.keyboard_arrow_up
-                    : AppIcons.keyboard_arrow_down,
-              ),
+            MusicIconButton(
+              icon: _showLibraries
+                  ? AppIcons.keyboard_arrow_up
+                  : AppIcons.keyboard_arrow_down,
               tooltip: '切换音乐库视图',
+              margin: const EdgeInsets.only(left: 8),
               onPressed: () {
                 setState(() {
                   _showLibraries = !_showLibraries;
@@ -203,70 +202,31 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
     final colorScheme = theme.colorScheme;
     final iconColor = selected ? colorScheme.primary : colorScheme.onSurface;
 
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 3),
-      child: Material(
-        color: selected
-            ? colorScheme.primary.withValues(
-                alpha: theme.brightness == Brightness.dark ? 0.18 : 0.1,
-              )
-            : Colors.transparent,
-        borderRadius: BorderRadius.circular(14),
-        child: InkWell(
-          borderRadius: BorderRadius.circular(14),
-          onTap: onTap,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
-            child: Row(
-              children: [
-                Container(
-                  width: 34,
-                  height: 34,
-                  decoration: BoxDecoration(
-                    color: iconColor.withValues(
-                      alpha: selected
-                          ? (theme.brightness == Brightness.dark ? 0.2 : 0.12)
-                          : (theme.brightness == Brightness.dark ? 0.12 : 0.08),
-                    ),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: Icon(icon, size: 20, color: iconColor),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        title,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: theme.textTheme.bodyMedium?.copyWith(
-                          fontWeight: selected
-                              ? FontWeight.w800
-                              : FontWeight.w700,
-                        ),
-                      ),
-                      if (subtitle != null && subtitle.isNotEmpty) ...[
-                        const SizedBox(height: 2),
-                        Text(
-                          subtitle,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: theme.textTheme.labelSmall?.copyWith(
-                            color: colorScheme.onSurfaceVariant,
-                          ),
-                        ),
-                      ],
-                    ],
-                  ),
-                ),
-                if (trailing != null) ...[const SizedBox(width: 8), trailing],
-              ],
-            ),
+    return MusicGlassTile(
+      margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+      title: title,
+      subtitle: subtitle,
+      selected: selected,
+      onTap: onTap,
+      leading: Container(
+        width: 34,
+        height: 34,
+        decoration: BoxDecoration(
+          color: iconColor.withValues(
+            alpha: selected
+                ? (theme.brightness == Brightness.dark ? 0.2 : 0.12)
+                : (theme.brightness == Brightness.dark ? 0.12 : 0.08),
+          ),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(
+            color: iconColor.withValues(alpha: selected ? 0.22 : 0.10),
+            width: 0.7,
           ),
         ),
+        child: Icon(icon, size: 20, color: iconColor),
       ),
+      trailing: trailing,
     );
   }
 
@@ -305,8 +265,11 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
                   });
                   Navigator.pop(context);
                 },
-                trailing: IconButton(
-                  icon: const Icon(AppIcons.edit),
+                trailing: MusicIconButton(
+                  icon: AppIcons.edit,
+                  tooltip: '编辑音乐库',
+                  size: 38,
+                  margin: EdgeInsets.zero,
                   onPressed: () {
                     context.push('/library/edit/${lib.id}');
                   },
@@ -445,9 +408,10 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 const Text('切换线路'),
-                IconButton(
-                  icon: const Icon(AppIcons.refresh),
+                MusicIconButton(
+                  icon: AppIcons.refresh,
                   tooltip: '检测延迟',
+                  size: 38,
                   onPressed: () {
                     addressPool.probeAll();
                   },

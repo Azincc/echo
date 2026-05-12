@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:echoes/core/theme/app_icons.dart';
 
 import '../../../data/models/playlist.dart';
+import '../../../widgets/music_chrome.dart';
 
 enum PlaylistOptionsAction { download, addToQueue, edit, delete }
 
@@ -63,23 +64,13 @@ class _PlaylistOptionsSheet extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 8),
-              ListTile(
-                dense: true,
-                title: Text(
-                  playlist.name,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                subtitle: Text(
-                  '${playlist.songCount} 首 · ${playlist.durationString}',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
+              MusicGlassTile(
+                margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                title: playlist.name,
+                subtitle:
+                    '${playlist.songCount} 首 · ${playlist.durationString}',
               ),
-              const Divider(height: 1),
+              const SizedBox(height: 4),
               _buildActionTile(
                 context: context,
                 icon: AppIcons.download_outlined,
@@ -132,14 +123,18 @@ class _PlaylistOptionsSheet extends StatelessWidget {
       context,
     ).colorScheme.onSurfaceVariant.withValues(alpha: 0.5);
 
-    return ListTile(
-      enabled: enabled,
+    return MusicGlassTile(
+      margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
       leading: Icon(icon, color: enabled ? iconColor : disabledColor),
-      title: Text(
+      title: title,
+      titleWidget: Text(
         title,
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
-        style: TextStyle(color: enabled ? textColor : disabledColor),
+        style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+          color: enabled ? textColor : disabledColor,
+          fontWeight: FontWeight.w800,
+        ),
       ),
       onTap: enabled && onTap != null ? onTap : null,
     );

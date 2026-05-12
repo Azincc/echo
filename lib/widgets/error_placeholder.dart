@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:echoes/core/theme/app_icons.dart';
+import 'music_chrome.dart';
 
 /// 统一的错误占位组件，替代原生 error.toString() 展示。
 /// 显示友好提示文案和可选的重试按钮。
@@ -38,7 +39,12 @@ class ErrorPlaceholder extends StatelessWidget {
             ),
             if (onRetry != null) ...[
               const SizedBox(height: 16),
-              FilledButton.tonal(onPressed: onRetry, child: const Text('重试')),
+              MusicGlassButton.icon(
+                icon: AppIcons.refresh,
+                onPressed: onRetry,
+                primary: true,
+                child: const Text('重试'),
+              ),
             ],
           ],
         ),

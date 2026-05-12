@@ -26,6 +26,20 @@ class DownloadManagerPage extends ConsumerWidget {
         title: const Text('下载管理'),
         actions: [
           PopupMenuButton<String>(
+            color: Theme.of(context).colorScheme.surfaceContainerHigh
+                .withValues(
+                  alpha: Theme.of(context).brightness == Brightness.dark
+                      ? 0.94
+                      : 0.98,
+                ),
+            surfaceTintColor: Colors.transparent,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(18),
+              side: BorderSide(
+                color: MusicChrome.hairline(context),
+                width: 0.7,
+              ),
+            ),
             icon: const Icon(AppIcons.more_horiz),
             onSelected: (value) async {
               final service = ref.read(downloadServiceProvider);
@@ -47,34 +61,42 @@ class DownloadManagerPage extends ConsumerWidget {
             itemBuilder: (context) => [
               const PopupMenuItem(
                 value: 'pause_all',
-                child: ListTile(
-                  leading: Icon(AppIcons.pause),
-                  title: Text('全部暂停'),
-                  contentPadding: EdgeInsets.zero,
+                child: Row(
+                  children: [
+                    Icon(AppIcons.pause),
+                    SizedBox(width: 12),
+                    Text('全部暂停'),
+                  ],
                 ),
               ),
               const PopupMenuItem(
                 value: 'resume_all',
-                child: ListTile(
-                  leading: Icon(AppIcons.play_arrow),
-                  title: Text('全部恢复'),
-                  contentPadding: EdgeInsets.zero,
+                child: Row(
+                  children: [
+                    Icon(AppIcons.play_arrow),
+                    SizedBox(width: 12),
+                    Text('全部恢复'),
+                  ],
                 ),
               ),
               const PopupMenuItem(
                 value: 'clear_completed',
-                child: ListTile(
-                  leading: Icon(AppIcons.clear_all),
-                  title: Text('清除已完成'),
-                  contentPadding: EdgeInsets.zero,
+                child: Row(
+                  children: [
+                    Icon(AppIcons.clear_all),
+                    SizedBox(width: 12),
+                    Text('清除已完成'),
+                  ],
                 ),
               ),
               const PopupMenuItem(
                 value: 'scan_files',
-                child: ListTile(
-                  leading: Icon(AppIcons.find_in_page_outlined),
-                  title: Text('扫描本地文件'),
-                  contentPadding: EdgeInsets.zero,
+                child: Row(
+                  children: [
+                    Icon(AppIcons.find_in_page_outlined),
+                    SizedBox(width: 12),
+                    Text('扫描本地文件'),
+                  ],
                 ),
               ),
             ],
@@ -248,25 +270,19 @@ class DownloadManagerPage extends ConsumerWidget {
   ) {
     final currentProgress = progress[task.id] ?? task.progress;
 
-    return ListTile(
-      leading: SizedBox(
-        width: 48,
-        height: 48,
-        child: task.coverArt != null
-            ? ClipRRect(
-                borderRadius: BorderRadius.circular(4),
-                child: CoverArtImage(coverArtId: task.coverArt, size: 48),
-              )
-            : Container(
-                decoration: BoxDecoration(
-                  color: Colors.grey[300],
-                  borderRadius: BorderRadius.circular(4),
-                ),
-                child: const Icon(AppIcons.music_note, color: Colors.grey),
-              ),
+    return MusicGlassTile(
+      margin: const EdgeInsets.symmetric(horizontal: 14, vertical: 5),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+      title: task.title,
+      titleWidget: Text(
+        task.title,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: Theme.of(
+          context,
+        ).textTheme.bodyLarge?.copyWith(fontWeight: FontWeight.w800),
       ),
-      title: Text(task.title, maxLines: 1, overflow: TextOverflow.ellipsis),
-      subtitle: Column(
+      subtitleWidget: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           if (task.artist != null)
@@ -274,14 +290,22 @@ class DownloadManagerPage extends ConsumerWidget {
               task.artist!,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(fontSize: 12),
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
             ),
           if (task.status == DownloadTaskStatus.downloading)
             Padding(
-              padding: const EdgeInsets.only(top: 4),
-              child: LinearProgressIndicator(
-                value: currentProgress,
-                minHeight: 3,
+              padding: const EdgeInsets.only(top: 6),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(999),
+                child: LinearProgressIndicator(
+                  value: currentProgress,
+                  minHeight: 4,
+                  backgroundColor: Theme.of(
+                    context,
+                  ).colorScheme.surfaceContainerHighest.withValues(alpha: 0.48),
+                ),
               ),
             )
           else
@@ -291,21 +315,39 @@ class DownloadManagerPage extends ConsumerWidget {
                           task.errorMessage != null
                       ? ': ${task.errorMessage}'
                       : ''),
-              style: TextStyle(
-                fontSize: 11,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.labelSmall?.copyWith(
                 color: task.status == DownloadTaskStatus.failed
-                    ? Colors.red
-                    : Colors.grey,
+                    ? Theme.of(context).colorScheme.error
+                    : Theme.of(context).colorScheme.onSurfaceVariant,
               ),
             ),
         ],
       ),
+      leading: SizedBox(
+        width: 48,
+        height: 48,
+        child: task.coverArt != null
+            ? ClipRRect(
+                borderRadius: BorderRadius.circular(10),
+                child: CoverArtImage(coverArtId: task.coverArt, size: 48),
+              )
+            : Container(
+                decoration: BoxDecoration(
+                  color: MusicChrome.glassFill(context, emphasized: true),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Icon(
+                  AppIcons.music_note,
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
+              ),
+      ),
       trailing: _buildTrailingActions(context, ref, task),
-      // 点击已完成任务 → 播放
       onTap: task.status == DownloadTaskStatus.completed
           ? () => _playTask(context, ref, task)
           : null,
-      // 长按已完成任务 → 操作菜单
       onLongPress: task.status == DownloadTaskStatus.completed
           ? () => _showTaskMenu(context, ref, task)
           : null,
@@ -320,8 +362,11 @@ class DownloadManagerPage extends ConsumerWidget {
     final service = ref.read(downloadServiceProvider);
 
     return switch (task.status) {
-      DownloadTaskStatus.downloading => IconButton(
-        icon: const Icon(AppIcons.pause),
+      DownloadTaskStatus.downloading => MusicIconButton(
+        icon: AppIcons.pause,
+        tooltip: '暂停',
+        size: 38,
+        margin: EdgeInsets.zero,
         onPressed: () => service.pause(task.id),
       ),
       DownloadTaskStatus.pending => const SizedBox(
@@ -332,12 +377,18 @@ class DownloadManagerPage extends ConsumerWidget {
       DownloadTaskStatus.paused => Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          IconButton(
-            icon: const Icon(AppIcons.play_arrow),
+          MusicIconButton(
+            icon: AppIcons.play_arrow,
+            tooltip: '继续',
+            size: 38,
+            margin: EdgeInsets.zero,
             onPressed: () => service.resume(task.id),
           ),
-          IconButton(
-            icon: const Icon(AppIcons.close, size: 20),
+          MusicIconButton(
+            icon: AppIcons.close,
+            tooltip: '取消',
+            size: 38,
+            margin: const EdgeInsets.only(left: 6),
             onPressed: () => service.cancel(task.id),
           ),
         ],
@@ -345,12 +396,18 @@ class DownloadManagerPage extends ConsumerWidget {
       DownloadTaskStatus.failed => Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          IconButton(
-            icon: const Icon(AppIcons.refresh),
+          MusicIconButton(
+            icon: AppIcons.refresh,
+            tooltip: '重试',
+            size: 38,
+            margin: EdgeInsets.zero,
             onPressed: () => service.resume(task.id),
           ),
-          IconButton(
-            icon: const Icon(AppIcons.close, size: 20),
+          MusicIconButton(
+            icon: AppIcons.close,
+            tooltip: '取消',
+            size: 38,
+            margin: const EdgeInsets.only(left: 6),
             onPressed: () => service.cancel(task.id),
           ),
         ],
@@ -358,15 +415,18 @@ class DownloadManagerPage extends ConsumerWidget {
       DownloadTaskStatus.completed => Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          // 播放按钮
-          IconButton(
-            icon: const Icon(AppIcons.play_arrow, size: 20),
+          MusicIconButton(
+            icon: AppIcons.play_arrow,
             tooltip: '播放',
+            size: 38,
+            margin: EdgeInsets.zero,
             onPressed: () => _playTask(context, ref, task),
           ),
-          IconButton(
-            icon: const Icon(AppIcons.delete_outline, size: 20),
+          MusicIconButton(
+            icon: AppIcons.delete_outline,
             tooltip: '删除',
+            size: 38,
+            margin: const EdgeInsets.only(left: 6),
             onPressed: () => service.cancel(task.id),
           ),
         ],

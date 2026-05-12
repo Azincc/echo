@@ -260,9 +260,9 @@ class _AppSettingsPageState extends ConsumerState<AppSettingsPage> {
                 _settingsSection(
                   context,
                   title: '服务器信息',
-                  action: IconButton(
+                  action: MusicIconButton(
                     tooltip: '编辑服务器设置',
-                    icon: const Icon(AppIcons.edit_outlined),
+                    icon: AppIcons.edit_outlined,
                     onPressed: library == null
                         ? null
                         : () {
@@ -758,57 +758,28 @@ class _AppSettingsPageState extends ConsumerState<AppSettingsPage> {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
 
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
-          child: Row(
-            children: [
-              Container(
-                width: 38,
-                height: 38,
-                decoration: BoxDecoration(
-                  color: colorScheme.primary.withValues(
-                    alpha: theme.brightness == Brightness.dark ? 0.18 : 0.1,
-                  ),
-                  borderRadius: BorderRadius.circular(11),
-                ),
-                child: Icon(icon, color: colorScheme.primary, size: 21),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      title,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.bodyLarge?.copyWith(
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    if (subtitle != null && subtitle.isNotEmpty) ...[
-                      const SizedBox(height: 2),
-                      Text(
-                        subtitle,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: colorScheme.onSurfaceVariant,
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-              if (trailing != null) ...[const SizedBox(width: 12), trailing],
-            ],
+    return MusicGlassTile(
+      margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+      title: title,
+      subtitle: subtitle,
+      onTap: onTap,
+      leading: Container(
+        width: 38,
+        height: 38,
+        decoration: BoxDecoration(
+          color: colorScheme.primary.withValues(
+            alpha: theme.brightness == Brightness.dark ? 0.18 : 0.1,
+          ),
+          borderRadius: BorderRadius.circular(11),
+          border: Border.all(
+            color: colorScheme.primary.withValues(alpha: 0.14),
+            width: 0.7,
           ),
         ),
+        child: Icon(icon, color: colorScheme.primary, size: 21),
       ),
+      trailing: trailing,
     );
   }
 

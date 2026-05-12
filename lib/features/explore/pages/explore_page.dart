@@ -462,6 +462,24 @@ class _ExplorePageState extends ConsumerState<ExplorePage> {
                       ),
                       PopupMenuButton<String>(
                         tooltip: '菜单',
+                        color: Theme.of(context)
+                            .colorScheme
+                            .surfaceContainerHigh
+                            .withValues(
+                              alpha:
+                                  Theme.of(context).brightness ==
+                                      Brightness.dark
+                                  ? 0.94
+                                  : 0.98,
+                            ),
+                        surfaceTintColor: Colors.transparent,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(18),
+                          side: BorderSide(
+                            color: MusicChrome.hairline(context),
+                            width: 0.7,
+                          ),
+                        ),
                         icon: const Icon(AppIcons.more_horiz),
                         onSelected: (value) {
                           if (value == 'local') {
@@ -586,30 +604,17 @@ class _ExplorePageState extends ConsumerState<ExplorePage> {
                   ),
                   Padding(
                     padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-                    child: TextField(
+                    child: MusicGlassSearchField(
                       controller: _searchController,
-                      textInputAction: TextInputAction.search,
-                      decoration: InputDecoration(
-                        hintText: _hintText(),
-                        prefixIcon: const Icon(AppIcons.search),
-                        suffixIcon: _searchController.text.isEmpty
-                            ? null
-                            : IconButton(
-                                icon: const Icon(AppIcons.clear),
-                                onPressed: () {
-                                  _searchController.clear();
-                                  setState(() {
-                                    _query = '';
-                                    _selectedSongIds.clear();
-                                  });
-                                  ref
-                                      .read(
-                                        exploreRemoteSearchProvider.notifier,
-                                      )
-                                      .reset();
-                                },
-                              ),
-                      ),
+                      hintText: _hintText(),
+                      onClear: () {
+                        _searchController.clear();
+                        setState(() {
+                          _query = '';
+                          _selectedSongIds.clear();
+                        });
+                        ref.read(exploreRemoteSearchProvider.notifier).reset();
+                      },
                       onChanged: (_) => setState(() {}),
                       onSubmitted: _submitQuery,
                     ),
@@ -649,10 +654,10 @@ class _ExplorePageState extends ConsumerState<ExplorePage> {
                             .where((t) => t != ExploreSearchType.playlist)
                             .map((type) {
                               final selected = type == searchType;
-                              return ChoiceChip(
-                                label: Text(_searchTypeLabel(type)),
+                              return MusicGlassPill(
+                                label: _searchTypeLabel(type),
                                 selected: selected,
-                                onSelected: (_) {
+                                onTap: () {
                                   ref
                                           .read(
                                             exploreSearchTypeProvider.notifier,
@@ -779,51 +784,33 @@ class _ExplorePageState extends ConsumerState<ExplorePage> {
     String? previewCoverUrl,
   }) {
     final theme = Theme.of(context);
-    final selectedColor = theme.colorScheme.primary.withValues(
-      alpha: theme.brightness == Brightness.dark ? 0.18 : 0.1,
-    );
-
-    return Material(
-      color: selected ? selectedColor : Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        onLongPress: onLongPress,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-          child: Row(
-            children: [
-              _buildResultCover(coverArtId: coverArtId, url: previewCoverUrl),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      song.title,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.bodyLarge?.copyWith(
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      subtitle,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                        color: theme.colorScheme.onSurfaceVariant,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 12),
-              trailing,
-            ],
-          ),
+    return MusicGlassTile(
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 5),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+      selected: selected,
+      title: song.title,
+      titleWidget: Text(
+        song.title,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: theme.textTheme.bodyLarge?.copyWith(
+          fontWeight: FontWeight.w800,
+          letterSpacing: -0.1,
         ),
       ),
+      subtitleWidget: Text(
+        subtitle,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: theme.textTheme.bodyMedium?.copyWith(
+          color: theme.colorScheme.onSurfaceVariant,
+          fontWeight: FontWeight.w500,
+        ),
+      ),
+      leading: _buildResultCover(coverArtId: coverArtId, url: previewCoverUrl),
+      trailing: trailing,
+      onTap: onTap,
+      onLongPress: onLongPress,
     );
   }
 

@@ -180,22 +180,24 @@ class PlaybackStatsPage extends ConsumerWidget {
                   ]),
                   const SizedBox(height: 16),
                   _buildSectionTitle(context, '最多播放歌曲'),
-                  _buildTopSongsCard(stats.topSongs),
+                  _buildTopSongsCard(context, stats.topSongs),
                   const SizedBox(height: 16),
                   _buildSectionTitle(context, '最多播放歌手'),
-                  _buildTopArtistsCard(stats.topArtists),
+                  _buildTopArtistsCard(context, stats.topArtists),
                   const SizedBox(height: 16),
                   _buildSectionTitle(context, '最多播放专辑'),
-                  _buildTopAlbumsCard(stats.topAlbums),
+                  _buildTopAlbumsCard(context, stats.topAlbums),
                   const SizedBox(height: 16),
                   _buildSectionTitle(context, '最近播放专辑'),
                   _buildAlbumChipsCard(
+                    context,
                     stats.recentAlbums,
                     emptyText: '暂无最近播放专辑',
                   ),
                   const SizedBox(height: 16),
                   _buildSectionTitle(context, '常听专辑'),
                   _buildAlbumChipsCard(
+                    context,
                     stats.frequentAlbums,
                     emptyText: '暂无常听专辑',
                   ),
@@ -233,59 +235,63 @@ class PlaybackStatsPage extends ConsumerWidget {
       ),
       itemBuilder: (context, index) {
         final item = items[index];
-        return Card(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Row(
-                  children: [
-                    Icon(item.icon, size: 18),
-                    const SizedBox(width: 6),
-                    Expanded(
-                      child: Text(
-                        item.label,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: Theme.of(context).textTheme.labelMedium,
-                      ),
+        return MusicGlassSurface(
+          borderRadius: BorderRadius.circular(18),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          color: MusicChrome.glassFill(context, emphasized: true),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Row(
+                children: [
+                  Icon(item.icon, size: 18),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      item.label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.labelMedium,
                     ),
-                  ],
-                ),
-                const SizedBox(height: 8),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Text(
+                item.value,
+                style: Theme.of(
+                  context,
+                ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+              ),
+              if (item.subtitle != null)
                 Text(
-                  item.value,
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w700,
-                  ),
+                  item.subtitle!,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.bodySmall,
                 ),
-                if (item.subtitle != null)
-                  Text(
-                    item.subtitle!,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.bodySmall,
-                  ),
-              ],
-            ),
+            ],
           ),
         );
       },
     );
   }
 
-  Widget _buildTopSongsCard(List<SongPlayStat> topSongs) {
+  Widget _buildTopSongsCard(BuildContext context, List<SongPlayStat> topSongs) {
     if (topSongs.isEmpty) {
       return const _EmptyCard(message: '暂无歌曲播放记录');
     }
 
-    return Card(
+    return MusicGlassSurface(
+      borderRadius: BorderRadius.circular(20),
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      color: MusicChrome.glassFill(context, emphasized: true),
       child: Column(
         children: [
           for (var i = 0; i < topSongs.length; i++)
-            ListTile(
+            MusicGlassTile(
+              margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
               leading: SizedBox(
                 width: 74,
                 child: Row(
@@ -309,16 +315,8 @@ class PlaybackStatsPage extends ConsumerWidget {
                   ],
                 ),
               ),
-              title: Text(
-                topSongs[i].song.title,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-              subtitle: Text(
-                _buildSongSubtitle(topSongs[i]),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
+              title: topSongs[i].song.title,
+              subtitle: _buildSongSubtitle(topSongs[i]),
               trailing: Text('${_formatInteger(topSongs[i].playCount)} 次'),
             ),
         ],
@@ -326,16 +324,23 @@ class PlaybackStatsPage extends ConsumerWidget {
     );
   }
 
-  Widget _buildTopArtistsCard(List<ArtistPlayStat> topArtists) {
+  Widget _buildTopArtistsCard(
+    BuildContext context,
+    List<ArtistPlayStat> topArtists,
+  ) {
     if (topArtists.isEmpty) {
       return const _EmptyCard(message: '暂无歌手播放记录');
     }
 
-    return Card(
+    return MusicGlassSurface(
+      borderRadius: BorderRadius.circular(20),
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      color: MusicChrome.glassFill(context, emphasized: true),
       child: Column(
         children: [
           for (var i = 0; i < topArtists.length; i++)
-            ListTile(
+            MusicGlassTile(
+              margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
               leading: SizedBox(
                 width: 22,
                 child: Text(
@@ -344,12 +349,8 @@ class PlaybackStatsPage extends ConsumerWidget {
                   style: const TextStyle(fontWeight: FontWeight.w600),
                 ),
               ),
-              title: Text(
-                topArtists[i].artistName,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-              subtitle: Text('${_formatInteger(topArtists[i].songCount)} 首歌曲'),
+              title: topArtists[i].artistName,
+              subtitle: '${_formatInteger(topArtists[i].songCount)} 首歌曲',
               trailing: Text('${_formatInteger(topArtists[i].playCount)} 次'),
             ),
         ],
@@ -357,16 +358,23 @@ class PlaybackStatsPage extends ConsumerWidget {
     );
   }
 
-  Widget _buildTopAlbumsCard(List<AlbumPlayStat> topAlbums) {
+  Widget _buildTopAlbumsCard(
+    BuildContext context,
+    List<AlbumPlayStat> topAlbums,
+  ) {
     if (topAlbums.isEmpty) {
       return const _EmptyCard(message: '暂无专辑播放记录');
     }
 
-    return Card(
+    return MusicGlassSurface(
+      borderRadius: BorderRadius.circular(20),
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      color: MusicChrome.glassFill(context, emphasized: true),
       child: Column(
         children: [
           for (var i = 0; i < topAlbums.length; i++)
-            ListTile(
+            MusicGlassTile(
+              margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
               leading: SizedBox(
                 width: 74,
                 child: Row(
@@ -390,16 +398,9 @@ class PlaybackStatsPage extends ConsumerWidget {
                   ],
                 ),
               ),
-              title: Text(
-                topAlbums[i].albumName,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-              subtitle: Text(
-                '${topAlbums[i].artistName ?? '未知歌手'} · ${_formatInteger(topAlbums[i].songCount)} 首歌曲',
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
+              title: topAlbums[i].albumName,
+              subtitle:
+                  '${topAlbums[i].artistName ?? '未知歌手'} · ${_formatInteger(topAlbums[i].songCount)} 首歌曲',
               trailing: Text('${_formatInteger(topAlbums[i].playCount)} 次'),
             ),
         ],
@@ -407,27 +408,25 @@ class PlaybackStatsPage extends ConsumerWidget {
     );
   }
 
-  Widget _buildAlbumChipsCard(List<Album> albums, {required String emptyText}) {
+  Widget _buildAlbumChipsCard(
+    BuildContext context,
+    List<Album> albums, {
+    required String emptyText,
+  }) {
     if (albums.isEmpty) {
       return _EmptyCard(message: emptyText);
     }
 
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: albums.take(16).map((album) {
-            return Chip(
-              avatar: ClipRRect(
-                borderRadius: BorderRadius.circular(8),
-                child: CoverArtImage(coverArtId: album.coverArt, size: 20),
-              ),
-              label: Text(album.name, overflow: TextOverflow.ellipsis),
-            );
-          }).toList(),
-        ),
+    return MusicGlassSurface(
+      borderRadius: BorderRadius.circular(20),
+      padding: const EdgeInsets.all(12),
+      color: MusicChrome.glassFill(context, emphasized: true),
+      child: Wrap(
+        spacing: 8,
+        runSpacing: 8,
+        children: albums.take(16).map((album) {
+          return MusicGlassPill(label: album.name);
+        }).toList(),
       ),
     );
   }
@@ -458,15 +457,15 @@ class _EmptyCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 16),
-        child: Center(
-          child: Text(
-            message,
-            style: Theme.of(context).textTheme.bodyMedium,
-            textAlign: TextAlign.center,
-          ),
+    return MusicGlassSurface(
+      borderRadius: BorderRadius.circular(20),
+      padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 16),
+      color: MusicChrome.glassFill(context, emphasized: true),
+      child: Center(
+        child: Text(
+          message,
+          style: Theme.of(context).textTheme.bodyMedium,
+          textAlign: TextAlign.center,
         ),
       ),
     );

@@ -101,16 +101,18 @@ class _OfflineDownloadStatusPageState
       appBar: AppBar(
         title: Text(_selectMode ? '已选 ${_selected.length} 项' : '离线下载状态'),
         leading: _selectMode
-            ? IconButton(
-                icon: const Icon(AppIcons.close),
+            ? MusicIconButton(
+                icon: AppIcons.close,
+                tooltip: '退出选择',
+                margin: const EdgeInsets.only(left: 8),
                 onPressed: _toggleSelectMode,
               )
             : const AppBackButton(),
         actions: _selectMode
             ? [
-                IconButton(
+                MusicIconButton(
                   tooltip: '全选',
-                  icon: const Icon(AppIcons.select_all),
+                  icon: AppIcons.select_all,
                   onPressed: () {
                     final jobs =
                         ref.read(offlineDownloadJobsProvider).valueOrNull ?? [];
@@ -123,16 +125,16 @@ class _OfflineDownloadStatusPageState
                     });
                   },
                 ),
-                IconButton(
+                MusicIconButton(
                   tooltip: '删除选中',
-                  icon: const Icon(AppIcons.delete, color: Colors.red),
+                  icon: AppIcons.delete,
                   onPressed: _selected.isEmpty ? null : _batchDelete,
                 ),
               ]
             : [
-                IconButton(
+                MusicIconButton(
                   tooltip: '刷新',
-                  icon: const Icon(AppIcons.refresh),
+                  icon: AppIcons.refresh,
                   onPressed: () {
                     final config = ref.read(activeEmbedServiceConfigProvider);
                     ref
@@ -140,9 +142,9 @@ class _OfflineDownloadStatusPageState
                         .refreshNow(config: config);
                   },
                 ),
-                IconButton(
+                MusicIconButton(
                   tooltip: '批量管理',
-                  icon: const Icon(AppIcons.checklist),
+                  icon: AppIcons.checklist,
                   onPressed: _toggleSelectMode,
                 ),
               ],
@@ -157,9 +159,9 @@ class _OfflineDownloadStatusPageState
                   return const Center(child: Text('暂无离线任务'));
                 }
 
-                return ListView.separated(
+                return ListView.builder(
+                  padding: const EdgeInsets.fromLTRB(12, 8, 12, 18),
                   itemCount: jobs.length,
-                  separatorBuilder: (_, _) => const Divider(height: 1),
                   itemBuilder: (context, index) {
                     final job = jobs[index];
                     return _JobTile(
@@ -207,31 +209,27 @@ class _SummaryBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      color: Theme.of(context).colorScheme.surfaceContainerHighest,
-      child: Wrap(
-        spacing: 12,
-        runSpacing: 8,
-        children: [
-          _pill(context, '进行中', summary.active),
-          _pill(context, '完成', summary.completed),
-          _pill(context, '失败', summary.failed),
-        ],
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 10, 12, 4),
+      child: MusicGlassSurface(
+        borderRadius: BorderRadius.circular(20),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        color: MusicChrome.glassFill(context, emphasized: true),
+        child: Wrap(
+          spacing: 10,
+          runSpacing: 8,
+          children: [
+            _pill(context, '进行中', summary.active),
+            _pill(context, '完成', summary.completed),
+            _pill(context, '失败', summary.failed),
+          ],
+        ),
       ),
     );
   }
 
   Widget _pill(BuildContext context, String label, int value) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surface,
-        borderRadius: BorderRadius.circular(999),
-      ),
-      child: Text('$label: $value'),
-    );
+    return MusicGlassPill(label: '$label: $value');
   }
 }
 
@@ -285,75 +283,88 @@ class _JobTile extends ConsumerWidget {
         job.message!.trim().isNotEmpty &&
         !_isUrl(job.message!);
 
-    return InkWell(
+    final statusColor = job.isDone
+        ? Colors.green
+        : job.isFailed
+        ? Theme.of(context).colorScheme.error
+        : job.isCancelled
+        ? Theme.of(context).colorScheme.onSurfaceVariant
+        : Theme.of(context).colorScheme.primary;
+
+    return MusicGlassTile(
+      margin: const EdgeInsets.symmetric(vertical: 5),
+      selected: selected,
       onTap: selectMode ? onSelect : null,
       onLongPress: selectMode ? null : () => _showActionsSheet(context, ref),
-      child: ListTile(
-        leading: selectMode
-            ? Checkbox(value: selected, onChanged: (_) => onSelect())
-            : Icon(
-                job.isDone
-                    ? AppIcons.check_circle
-                    : job.isFailed
-                    ? AppIcons.error
-                    : job.isCancelled
-                    ? AppIcons.cancel
-                    : AppIcons.downloading,
-                color: job.isDone
-                    ? Colors.green
-                    : job.isFailed
-                    ? Colors.red
-                    : job.isCancelled
-                    ? Colors.grey
-                    : Theme.of(context).colorScheme.primary,
-              ),
-        title: Text(title, maxLines: 1, overflow: TextOverflow.ellipsis),
-        subtitle: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            if (metaLine.isNotEmpty)
-              Text(
-                metaLine,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: Theme.of(context).textTheme.bodySmall,
-              ),
+      leading: selectMode
+          ? Checkbox(value: selected, onChanged: (_) => onSelect())
+          : Icon(
+              job.isDone
+                  ? AppIcons.check_circle
+                  : job.isFailed
+                  ? AppIcons.error
+                  : job.isCancelled
+                  ? AppIcons.cancel
+                  : AppIcons.downloading,
+              color: statusColor,
+            ),
+      title: title,
+      titleWidget: Text(
+        title,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: Theme.of(
+          context,
+        ).textTheme.bodyLarge?.copyWith(fontWeight: FontWeight.w800),
+      ),
+      subtitleWidget: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (metaLine.isNotEmpty)
             Text(
-              statusLine,
+              metaLine,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+          Text(
+            statusLine,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              color: job.isFailed
+                  ? Theme.of(context).colorScheme.error
+                  : Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
+          ),
+          if (showMessage)
+            Text(
+              job.message!,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+          if (job.isFailed && job.error != null && job.error!.trim().isNotEmpty)
+            Text(
+              '❌ ${job.error}',
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: job.isFailed
-                    ? Colors.red
-                    : Theme.of(context).colorScheme.onSurfaceVariant,
+                color: Theme.of(context).colorScheme.error,
               ),
             ),
-            if (showMessage)
-              Text(
-                job.message!,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: Theme.of(context).textTheme.bodySmall,
+          if (job.isActive)
+            Padding(
+              padding: const EdgeInsets.only(top: 6),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(999),
+                child: LinearProgressIndicator(
+                  value: job.progressRatio,
+                  minHeight: 4,
+                ),
               ),
-            if (job.isFailed &&
-                job.error != null &&
-                job.error!.trim().isNotEmpty)
-              Text(
-                '❌ ${job.error}',
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: Theme.of(
-                  context,
-                ).textTheme.bodySmall?.copyWith(color: Colors.red),
-              ),
-            if (job.isActive)
-              Padding(
-                padding: const EdgeInsets.only(top: 4),
-                child: LinearProgressIndicator(value: job.progressRatio),
-              ),
-          ],
-        ),
-        trailing: selectMode ? null : const SizedBox.shrink(),
+            ),
+        ],
       ),
     );
   }
@@ -363,9 +374,9 @@ class _JobTile extends ConsumerWidget {
 
     if (job.isFailed) {
       actions.add(
-        ListTile(
+        MusicGlassTile(
           leading: const Icon(AppIcons.refresh),
-          title: const Text('重试'),
+          title: '重试',
           onTap: () async {
             Navigator.of(context).pop();
             try {
@@ -391,14 +402,18 @@ class _JobTile extends ConsumerWidget {
 
     if (job.isActive) {
       actions.add(
-        ListTile(
+        MusicGlassTile(
           leading: Icon(
             AppIcons.cancel,
             color: Theme.of(context).colorScheme.error,
           ),
-          title: Text(
+          title: '取消',
+          titleWidget: Text(
             '取消',
-            style: TextStyle(color: Theme.of(context).colorScheme.error),
+            style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+              color: Theme.of(context).colorScheme.error,
+              fontWeight: FontWeight.w800,
+            ),
           ),
           onTap: () async {
             Navigator.of(context).pop();
@@ -425,9 +440,19 @@ class _JobTile extends ConsumerWidget {
 
     // 删除（任何状态都可以删除）
     actions.add(
-      ListTile(
-        leading: const Icon(AppIcons.delete_outline, color: Colors.red),
-        title: const Text('删除', style: TextStyle(color: Colors.red)),
+      MusicGlassTile(
+        leading: Icon(
+          AppIcons.delete_outline,
+          color: Theme.of(context).colorScheme.error,
+        ),
+        title: '删除',
+        titleWidget: Text(
+          '删除',
+          style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+            color: Theme.of(context).colorScheme.error,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
         onTap: () async {
           Navigator.of(context).pop();
           final confirmed = await showDialog<bool>(
@@ -497,23 +522,11 @@ class _JobTile extends ConsumerWidget {
                 ),
               ),
               const SizedBox(height: 8),
-              ListTile(
-                dense: true,
-                title: Text(
-                  (job.title ?? '').isNotEmpty ? job.title! : job.jobId,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: Theme.of(ctx).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                subtitle: Text(
-                  '${job.artist ?? "未知歌手"} · ${job.statusDisplayName}',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
+              MusicGlassTile(
+                title: (job.title ?? '').isNotEmpty ? job.title! : job.jobId,
+                subtitle: '${job.artist ?? "未知歌手"} · ${job.statusDisplayName}',
               ),
-              const Divider(height: 1),
+              const SizedBox(height: 4),
               ...actions,
             ],
           ),

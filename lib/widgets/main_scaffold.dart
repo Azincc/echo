@@ -1,5 +1,3 @@
-import 'dart:ui';
-
 import 'package:flutter/material.dart';
 import 'package:echoes/core/theme/app_icons.dart';
 import 'package:flutter/services.dart';
@@ -223,44 +221,39 @@ class _MainScaffoldState extends ConsumerState<MainScaffold> {
       ),
     ];
 
-    return ClipRect(
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
-        child: DecoratedBox(
-          decoration: BoxDecoration(
-            color: theme.colorScheme.surface.withValues(
-              alpha: isDark ? 0.74 : 0.82,
-            ),
-            border: Border(
-              top: BorderSide(color: MusicChrome.hairline(context), width: 0.7),
-            ),
-          ),
-          child: SafeArea(
-            top: false,
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(10, 6, 10, 7),
-              child: SizedBox(
-                height: 58,
-                child: Row(
-                  children: [
-                    for (var i = 0; i < destinations.length; i++)
-                      Expanded(
-                        child: _GlassTabItem(
-                          destination: destinations[i],
-                          selected: i == selectedIndex,
-                          onTap: () {
-                            final branchIndex = visibleBranchIndices[i];
-                            widget.navigationShell.goBranch(
-                              branchIndex,
-                              initialLocation:
-                                  branchIndex == currentBranchIndex,
-                            );
-                          },
-                        ),
-                      ),
-                  ],
-                ),
-              ),
+    return SafeArea(
+      top: false,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(14, 0, 14, 10),
+        child: MusicGlassSurface(
+          borderRadius: BorderRadius.circular(28),
+          blur: 30,
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 7),
+          color: Color.lerp(
+            theme.colorScheme.surface,
+            theme.colorScheme.surfaceContainerHigh,
+            isDark ? 0.64 : 0.78,
+          )?.withValues(alpha: isDark ? 0.78 : 0.88),
+          border: MusicChrome.glassBorder(context),
+          child: SizedBox(
+            height: 58,
+            child: Row(
+              children: [
+                for (var i = 0; i < destinations.length; i++)
+                  Expanded(
+                    child: _GlassTabItem(
+                      destination: destinations[i],
+                      selected: i == selectedIndex,
+                      onTap: () {
+                        final branchIndex = visibleBranchIndices[i];
+                        widget.navigationShell.goBranch(
+                          branchIndex,
+                          initialLocation: branchIndex == currentBranchIndex,
+                        );
+                      },
+                    ),
+                  ),
+              ],
             ),
           ),
         ),
@@ -306,58 +299,66 @@ class _GlassTabItem extends StatelessWidget {
       label: destination.label,
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 3),
-        child: Material(
-          color: Colors.transparent,
-          borderRadius: BorderRadius.circular(16),
-          child: InkWell(
-            borderRadius: BorderRadius.circular(16),
-            onTap: onTap,
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 180),
-              curve: Curves.easeOutCubic,
-              padding: const EdgeInsets.symmetric(horizontal: 8),
-              decoration: BoxDecoration(
-                color: selected
-                    ? selectedColor.withValues(
-                        alpha: theme.brightness == Brightness.dark
-                            ? 0.13
-                            : 0.08,
-                      )
-                    : Colors.transparent,
-                borderRadius: BorderRadius.circular(16),
-              ),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  AnimatedContainer(
-                    duration: const Duration(milliseconds: 180),
-                    curve: Curves.easeOutCubic,
-                    width: selected ? 24 : 8,
-                    height: 3,
-                    margin: const EdgeInsets.only(bottom: 6),
-                    decoration: BoxDecoration(
-                      color: selected ? selectedColor : Colors.transparent,
-                      borderRadius: BorderRadius.circular(999),
-                    ),
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: onTap,
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 190),
+            curve: Curves.easeOutCubic,
+            padding: const EdgeInsets.symmetric(horizontal: 8),
+            decoration: BoxDecoration(
+              color: selected
+                  ? selectedColor.withValues(
+                      alpha: theme.brightness == Brightness.dark ? 0.16 : 0.10,
+                    )
+                  : Colors.transparent,
+              borderRadius: BorderRadius.circular(22),
+              border: selected
+                  ? Border.all(
+                      color: selectedColor.withValues(alpha: 0.18),
+                      width: 0.7,
+                    )
+                  : null,
+            ),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                AnimatedContainer(
+                  duration: const Duration(milliseconds: 190),
+                  curve: Curves.easeOutCubic,
+                  width: selected ? 30 : 8,
+                  height: 3,
+                  margin: const EdgeInsets.only(bottom: 6),
+                  decoration: BoxDecoration(
+                    color: selected ? selectedColor : Colors.transparent,
+                    borderRadius: BorderRadius.circular(999),
+                    boxShadow: selected
+                        ? [
+                            BoxShadow(
+                              color: selectedColor.withValues(alpha: 0.34),
+                              blurRadius: 10,
+                            ),
+                          ]
+                        : null,
                   ),
-                  Icon(
-                    selected ? destination.selectedIcon : destination.icon,
-                    size: 23,
+                ),
+                Icon(
+                  selected ? destination.selectedIcon : destination.icon,
+                  size: selected ? 24 : 22,
+                  color: foregroundColor,
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  destination.label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.labelSmall?.copyWith(
                     color: foregroundColor,
+                    fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
+                    height: 1,
                   ),
-                  const SizedBox(height: 3),
-                  Text(
-                    destination.label,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: theme.textTheme.labelSmall?.copyWith(
-                      color: foregroundColor,
-                      fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
-                      height: 1,
-                    ),
-                  ),
-                ],
-              ),
+                ),
+              ],
             ),
           ),
         ),

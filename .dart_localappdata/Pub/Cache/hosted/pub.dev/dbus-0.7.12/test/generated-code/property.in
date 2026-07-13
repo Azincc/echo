@@ -1,5 +1,0 @@
-<node>
-  <interface name="com.example.Test">
-    <property name="Value" type="s"/>
-  </interface>
-</node>

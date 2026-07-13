@@ -50,6 +50,11 @@ analyze_output.txt
 devtools_options.yaml
 *.iml
 
+# Local development caches
+/.dart_localappdata/
+/.gocache/
+/.gotmp/
+
 # IDE local state
 .idea/
 .idea/caches/

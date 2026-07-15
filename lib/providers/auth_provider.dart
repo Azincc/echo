@@ -105,7 +105,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
     String? libraryName,
     String? addressLabel,
   }) async {
-    Logger.infoWithTag('AUTH', 'loginWithPassword start: $serverUrl/$username');
+    Logger.infoWithTag('AUTH', 'password login started');
     state = state.copyWith(isLoading: true, errorMessage: null);
 
     final result = await _repository.loginWithPassword(
@@ -127,7 +127,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
     String? libraryName,
     String? addressLabel,
   }) async {
-    Logger.infoWithTag('AUTH', 'loginWithApiKey start: $serverUrl/$username');
+    Logger.infoWithTag('AUTH', 'API key login started');
     state = state.copyWith(isLoading: true, errorMessage: null);
 
     final result = await _repository.loginWithApiKey(
@@ -155,10 +155,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
         isLoading: false,
         currentLibrary: result.library!,
       );
-      Logger.infoWithTag(
-        'AUTH',
-        'login success: library=${result.library!.name} id=${result.library!.id}',
-      );
+      Logger.infoWithTag('AUTH', 'login succeeded');
 
       return true;
     } else {
@@ -166,10 +163,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
         isLoading: false,
         errorMessage: result.errorMessage,
       );
-      Logger.warnWithTag(
-        'AUTH',
-        'login failed: ${result.errorMessage ?? 'unknown error'}',
-      );
+      Logger.warnWithTag('AUTH', 'login failed');
       return false;
     }
   }

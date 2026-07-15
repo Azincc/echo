@@ -41,6 +41,7 @@ void main() {
     await tester.pump();
 
     expect(find.byType(CachedNetworkImage), findsOneWidget);
+    expect(find.byType(EchoSkeleton), findsOneWidget);
     expect(find.bySemanticsLabel('专辑封面'), findsOneWidget);
   });
 
@@ -60,5 +61,54 @@ void main() {
     );
 
     expect(find.bySemanticsLabel('测试歌曲封面'), findsOneWidget);
+  });
+
+  testWidgets('size-null loading skeleton stays finite in loose constraints', (
+    tester,
+  ) async {
+    Widget subject({
+      required Widget Function(Widget) layout,
+      required String id,
+    }) {
+      return ProviderScope(
+        child: MaterialApp(
+          home: Scaffold(
+            body: layout(
+              CoverArtImage(
+                coverArtId: toTrustedCoverUrlRef(
+                  'https://img.example.com/$id.jpg',
+                ),
+                semanticLabel: '$id 封面',
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
+    await tester.pumpWidget(
+      subject(
+        id: 'bounded',
+        layout: (child) =>
+            Center(child: SizedBox(width: 120, height: 80, child: child)),
+      ),
+    );
+    await tester.pump();
+
+    expect(tester.getSize(find.byType(EchoSkeleton)), const Size(120, 80));
+    expect(find.bySemanticsLabel('bounded 封面'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+
+    await tester.pumpWidget(
+      subject(
+        id: 'unbounded',
+        layout: (child) => UnconstrainedBox(child: child),
+      ),
+    );
+    await tester.pump();
+
+    expect(tester.getSize(find.byType(EchoSkeleton)), const Size(48, 48));
+    expect(find.bySemanticsLabel('unbounded 封面'), findsOneWidget);
+    expect(tester.takeException(), isNull);
   });
 }

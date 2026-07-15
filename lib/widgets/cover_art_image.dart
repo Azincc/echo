@@ -5,7 +5,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../core/design/echo_design.dart';
 import '../core/utils/cover_ref_security.dart';
 import '../providers/api_provider.dart';
-import 'shimmer_loading.dart';
 
 class CoverArtImage extends ConsumerWidget {
   final String? coverArtId;
@@ -122,7 +121,7 @@ class CoverArtImage extends ConsumerWidget {
       width: size,
       height: size,
       child: isLoading
-          ? ShimmerEffect(child: ColoredBox(color: bgColor))
+          ? _buildLoadingSkeleton()
           : ColoredBox(
               color: bgColor,
               child: Center(
@@ -142,6 +141,26 @@ class CoverArtImage extends ConsumerWidget {
       label:
           accessibilityLabel ?? (isLoading ? '封面加载中' : semanticLabel ?? '暂无封面'),
       child: ExcludeSemantics(child: placeholder),
+    );
+  }
+
+  Widget _buildLoadingSkeleton() {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final boundedWidth = constraints.hasBoundedWidth
+            ? constraints.maxWidth
+            : null;
+        final boundedHeight = constraints.hasBoundedHeight
+            ? constraints.maxHeight
+            : null;
+        final fallbackExtent = boundedWidth ?? boundedHeight ?? 48.0;
+
+        return EchoSkeleton(
+          width: size ?? boundedWidth ?? fallbackExtent,
+          height: size ?? boundedHeight ?? fallbackExtent,
+          borderRadius: BorderRadius.zero,
+        );
+      },
     );
   }
 

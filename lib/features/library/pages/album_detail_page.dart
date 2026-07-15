@@ -250,6 +250,7 @@ class _AlbumIdentityHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MediaDetailHeaderSurface(
+      coverArtId: album.coverArt,
       child: Padding(
         padding: EdgeInsets.all(context.echoSpacing.lg),
         child: LayoutBuilder(

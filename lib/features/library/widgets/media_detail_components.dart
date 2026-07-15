@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/design/echo_design.dart';
 import '../../../data/models/album.dart';
+import '../../../providers/palette_provider.dart';
 import '../../../widgets/cover_art_image.dart';
 import '../utils/library_sorting.dart';
 
@@ -40,27 +42,44 @@ Future<SongSortOption?> showMediaSongSortSheet({
   );
 }
 
-class MediaDetailHeaderSurface extends StatelessWidget {
+class MediaDetailHeaderSurface extends ConsumerWidget {
   const MediaDetailHeaderSurface({
     super.key,
     required this.child,
+    this.coverArtId,
     this.useContentTint = true,
   });
 
   final Widget child;
+  final String? coverArtId;
   final bool useContentTint;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final colors = context.echoColors;
+    final normalizedCoverArtId = coverArtId?.trim() ?? '';
+    final palette = useContentTint && normalizedCoverArtId.isNotEmpty
+        ? ref
+              .watch(
+                mediaPaletteProvider(
+                  MediaPaletteRequest.coverReference(normalizedCoverArtId),
+                ),
+              )
+              .valueOrNull
+        : null;
+    final paletteColor =
+        palette?.dominantColor?.color ??
+        palette?.vibrantColor?.color ??
+        palette?.mutedColor?.color;
     final background = useContentTint
-        ? Color.alphaBlend(
-            colors.contentTint.withValues(alpha: 0.12),
-            colors.canvas,
-          )
+        ? mediaDetailHeaderBackgroundColor(context, paletteColor)
         : colors.canvas;
+    final motion = context.echoMotion;
 
-    return DecoratedBox(
+    return AnimatedContainer(
+      key: const ValueKey<String>('media-detail-header-surface'),
+      duration: motion.resolve(context, motion.state),
+      curve: motion.easeOut,
       decoration: BoxDecoration(
         color: background,
         border: Border(bottom: BorderSide(color: colors.divider)),
@@ -68,6 +87,32 @@ class MediaDetailHeaderSurface extends StatelessWidget {
       child: child,
     );
   }
+}
+
+/// Builds a restrained artwork tint while keeping Echo text readable.
+///
+/// The fallback seed is [EchoColors.contentTint], so missing artwork and
+/// extraction failures retain the same stable visual identity. Tint strength
+/// is reduced until both primary and secondary text meet WCAG AA.
+Color mediaDetailHeaderBackgroundColor(BuildContext context, Color? seed) {
+  final colors = context.echoColors;
+  final tint = seed ?? colors.contentTint;
+  var strength = Theme.of(context).brightness == Brightness.dark ? 0.24 : 0.16;
+
+  for (var attempt = 0; attempt < 10; attempt += 1) {
+    final candidate = Color.alphaBlend(
+      tint.withValues(alpha: strength),
+      colors.canvas,
+    );
+    final inkRatio = EchoColors.contrastRatio(colors.ink, candidate);
+    final mutedRatio = EchoColors.contrastRatio(colors.muted, candidate);
+    if (inkRatio >= 4.5 && mutedRatio >= 4.5) {
+      return candidate;
+    }
+    strength *= 0.65;
+  }
+
+  return colors.canvas;
 }
 
 class MediaDetailArtwork extends StatelessWidget {

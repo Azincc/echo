@@ -359,7 +359,7 @@ class _PlaylistIdentityHeader extends StatelessWidget {
     final owner = playlist.owner?.trim();
 
     return MediaDetailHeaderSurface(
-      useContentTint: false,
+      coverArtId: playlist.coverArt,
       child: Padding(
         padding: EdgeInsets.all(context.echoSpacing.lg),
         child: LayoutBuilder(

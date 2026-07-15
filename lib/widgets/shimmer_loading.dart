@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../core/design/echo_design.dart';
+
 /// 微光动画效果容器
 ///
 /// 在子组件上叠加一个从左向右循环流动的线性渐变，
@@ -16,6 +18,7 @@ class ShimmerEffect extends StatefulWidget {
 class _ShimmerEffectState extends State<ShimmerEffect>
     with SingleTickerProviderStateMixin {
   late final AnimationController _controller;
+  bool _reduceMotion = false;
 
   @override
   void initState() {
@@ -23,7 +26,26 @@ class _ShimmerEffectState extends State<ShimmerEffect>
     _controller = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 1500),
-    )..repeat();
+    );
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final reduceMotion = context.echoReduceMotion;
+    if (_reduceMotion == reduceMotion &&
+        (reduceMotion || _controller.isAnimating)) {
+      return;
+    }
+
+    _reduceMotion = reduceMotion;
+    if (reduceMotion) {
+      _controller
+        ..stop()
+        ..value = 0.5;
+    } else {
+      _controller.repeat();
+    }
   }
 
   @override
@@ -34,36 +56,43 @@ class _ShimmerEffectState extends State<ShimmerEffect>
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final baseColor = isDark
-        ? const Color(0xFF2A2A2A)
-        : const Color(0xFFE0E0E0);
-    final highlightColor = isDark
-        ? const Color(0xFF3D3D3D)
-        : const Color(0xFFF5F5F5);
+    final colors = context.echoColors;
+    final baseColor = colors.raised;
+    final highlightColor = Color.alphaBlend(
+      colors.ink.withValues(alpha: 0.1),
+      baseColor,
+    );
 
-    return AnimatedBuilder(
-      animation: _controller,
-      builder: (context, child) {
-        return ShaderMask(
-          blendMode: BlendMode.srcATop,
-          shaderCallback: (bounds) {
-            final double slide = _controller.value * 2 - 0.5;
-            return LinearGradient(
-              begin: Alignment.centerLeft,
-              end: Alignment.centerRight,
-              colors: [baseColor, highlightColor, baseColor],
-              stops: [
-                (slide - 0.3).clamp(0.0, 1.0),
-                slide.clamp(0.0, 1.0),
-                (slide + 0.3).clamp(0.0, 1.0),
-              ],
-            ).createShader(bounds);
+    if (_reduceMotion) {
+      return ExcludeSemantics(child: RepaintBoundary(child: widget.child));
+    }
+
+    return ExcludeSemantics(
+      child: RepaintBoundary(
+        child: AnimatedBuilder(
+          animation: _controller,
+          builder: (context, child) {
+            return ShaderMask(
+              blendMode: BlendMode.srcATop,
+              shaderCallback: (bounds) {
+                final slide = _controller.value * 2 - 0.5;
+                return LinearGradient(
+                  begin: Alignment.centerLeft,
+                  end: Alignment.centerRight,
+                  colors: <Color>[baseColor, highlightColor, baseColor],
+                  stops: <double>[
+                    (slide - 0.3).clamp(0.0, 1.0),
+                    slide.clamp(0.0, 1.0),
+                    (slide + 0.3).clamp(0.0, 1.0),
+                  ],
+                ).createShader(bounds);
+              },
+              child: child,
+            );
           },
-          child: child,
-        );
-      },
-      child: widget.child,
+          child: widget.child,
+        ),
+      ),
     );
   }
 }
@@ -94,16 +123,17 @@ class SkeletonBox extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final color = isDark ? const Color(0xFF2A2A2A) : const Color(0xFFE0E0E0);
-
-    return Container(
-      width: width,
-      height: height,
-      decoration: BoxDecoration(
-        color: color,
-        shape: isCircle ? BoxShape.circle : BoxShape.rectangle,
-        borderRadius: isCircle ? null : BorderRadius.circular(borderRadius),
+    return ExcludeSemantics(
+      child: RepaintBoundary(
+        child: Container(
+          width: width,
+          height: height,
+          decoration: BoxDecoration(
+            color: context.echoColors.raised,
+            shape: isCircle ? BoxShape.circle : BoxShape.rectangle,
+            borderRadius: isCircle ? null : BorderRadius.circular(borderRadius),
+          ),
+        ),
       ),
     );
   }

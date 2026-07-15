@@ -277,6 +277,7 @@ class _DownloadTaskRow extends ConsumerWidget {
       padding: EdgeInsets.only(bottom: context.echoSpacing.xs),
       child: EchoPressable(
         semanticLabel: _taskSemanticLabel(task, progress),
+        semanticsMode: EchoPressableSemanticsMode.explicitChildren,
         onPressed: isPlayable ? () => _playTask(context, ref, task) : null,
         onLongPress: isPlayable
             ? () => _showTaskActions(context, ref, task)
@@ -290,50 +291,55 @@ class _DownloadTaskRow extends ConsumerWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: <Widget>[
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: <Widget>[
-                  ClipRRect(
-                    borderRadius: context.echoRadii.detail,
-                    child: CoverArtImage(
-                      coverArtId: task.coverArt,
-                      size: 48,
-                      requestSize: 192,
-                      semanticLabel: '${task.title} 封面',
+              ExcludeSemantics(
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: <Widget>[
+                    ClipRRect(
+                      borderRadius: context.echoRadii.detail,
+                      child: CoverArtImage(
+                        coverArtId: task.coverArt,
+                        size: 48,
+                        requestSize: 192,
+                        semanticLabel: '${task.title} 封面',
+                      ),
                     ),
-                  ),
-                  SizedBox(width: context.echoSpacing.sm),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: <Widget>[
-                        Text(task.title, style: context.echoTypography.title),
-                        if (task.artist?.trim().isNotEmpty == true) ...<Widget>[
+                    SizedBox(width: context.echoSpacing.sm),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: <Widget>[
+                          Text(task.title, style: context.echoTypography.title),
+                          if (task.artist?.trim().isNotEmpty ==
+                              true) ...<Widget>[
+                            SizedBox(height: context.echoSpacing.xxs),
+                            Text(
+                              task.artist!.trim(),
+                              style: context.echoTypography.body.copyWith(
+                                color: context.echoColors.muted,
+                              ),
+                            ),
+                          ],
                           SizedBox(height: context.echoSpacing.xxs),
                           Text(
-                            task.artist!.trim(),
-                            style: context.echoTypography.body.copyWith(
-                              color: context.echoColors.muted,
+                            _taskStatusText(task),
+                            style: context.echoTypography.metadata.copyWith(
+                              color: task.status == DownloadTaskStatus.failed
+                                  ? context.echoColors.error
+                                  : context.echoColors.muted,
                             ),
                           ),
                         ],
-                        SizedBox(height: context.echoSpacing.xxs),
-                        Text(
-                          _taskStatusText(task),
-                          style: context.echoTypography.metadata.copyWith(
-                            color: task.status == DownloadTaskStatus.failed
-                                ? context.echoColors.error
-                                : context.echoColors.muted,
-                          ),
-                        ),
-                      ],
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
               if (task.status == DownloadTaskStatus.downloading) ...<Widget>[
                 SizedBox(height: context.echoSpacing.xs),
-                EchoProgressBar(value: progress, height: 4),
+                ExcludeSemantics(
+                  child: EchoProgressBar(value: progress, height: 4),
+                ),
               ],
               SizedBox(height: context.echoSpacing.xs),
               Align(

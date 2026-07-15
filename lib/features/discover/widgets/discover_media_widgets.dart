@@ -27,6 +27,7 @@ class DiscoverSongTile extends StatelessWidget {
 
     return EchoPressable(
       semanticLabel: '${song.title}，$artistLabel',
+      semanticsMode: EchoPressableSemanticsMode.explicitChildren,
       onPressed: onPressed,
       onLongPress: onLongPress ?? onOpenActions,
       minimumSize: const Size(double.infinity, 72),
@@ -36,30 +37,34 @@ class DiscoverSongTile extends StatelessWidget {
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.center,
           children: <Widget>[
-            ClipRRect(
-              borderRadius: context.echoRadii.detail,
-              child: CoverArtImage(
-                coverArtId: song.coverArt,
-                size: 48,
-                requestSize: 192,
-                semanticLabel: '${song.title} 封面',
+            ExcludeSemantics(
+              child: ClipRRect(
+                borderRadius: context.echoRadii.detail,
+                child: CoverArtImage(
+                  coverArtId: song.coverArt,
+                  size: 48,
+                  requestSize: 192,
+                  semanticLabel: '${song.title} 封面',
+                ),
               ),
             ),
             SizedBox(width: context.echoSpacing.sm),
             Expanded(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: <Widget>[
-                  Text(song.title, style: context.echoTypography.title),
-                  SizedBox(height: context.echoSpacing.xxs),
-                  Text(
-                    artistLabel,
-                    style: context.echoTypography.body.copyWith(
-                      color: context.echoColors.muted,
+              child: ExcludeSemantics(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Text(song.title, style: context.echoTypography.title),
+                    SizedBox(height: context.echoSpacing.xxs),
+                    Text(
+                      artistLabel,
+                      style: context.echoTypography.body.copyWith(
+                        color: context.echoColors.muted,
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
             SizedBox(width: context.echoSpacing.xs),

@@ -245,6 +245,7 @@ class ExploreRemoteSongRow extends StatelessWidget {
         if (selected) '已选择',
         if (resolving) '正在解析播放地址',
       ].join('，'),
+      semanticsMode: EchoPressableSemanticsMode.explicitChildren,
       selected: selected,
       onPressed: onPressed,
       onLongPress: onLongPress,
@@ -260,27 +261,29 @@ class ExploreRemoteSongRow extends StatelessWidget {
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.center,
             children: <Widget>[
-              _RemoteCover(song: song),
+              ExcludeSemantics(child: _RemoteCover(song: song)),
               SizedBox(width: context.echoSpacing.sm),
               Expanded(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: <Widget>[
-                    Text(song.title, style: context.echoTypography.title),
-                    SizedBox(height: context.echoSpacing.xxs),
-                    Text(
-                      metadata,
-                      style: context.echoTypography.body.copyWith(
-                        color: colors.muted,
+                child: ExcludeSemantics(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: <Widget>[
+                      Text(song.title, style: context.echoTypography.title),
+                      SizedBox(height: context.echoSpacing.xxs),
+                      Text(
+                        metadata,
+                        style: context.echoTypography.body.copyWith(
+                          color: colors.muted,
+                        ),
                       ),
-                    ),
-                    SizedBox(height: context.echoSpacing.xxs),
-                    const _InlineMetadata(
-                      icon: AppIcons.headphones,
-                      label: '试听',
-                    ),
-                  ],
+                      SizedBox(height: context.echoSpacing.xxs),
+                      const _InlineMetadata(
+                        icon: AppIcons.headphones,
+                        label: '试听',
+                      ),
+                    ],
+                  ),
                 ),
               ),
               SizedBox(width: context.echoSpacing.xs),

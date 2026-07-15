@@ -3,6 +3,24 @@ import 'package:flutter/services.dart';
 
 import '../echo_context.dart';
 
+/// Controls how [EchoPressable] exposes the semantics of its
+/// [EchoPressable.child].
+enum EchoPressableSemanticsMode {
+  /// Exposes the pressable as one semantic node.
+  ///
+  /// When [EchoPressable.semanticLabel] is provided, descendant semantics are
+  /// replaced by that label. This is the default for simple buttons and media
+  /// rows, where announcing visible text a second time would be redundant.
+  singleNode,
+
+  /// Keeps semantic descendants as explicit nodes below the pressable.
+  ///
+  /// Use this for composite rows that contain independently actionable child
+  /// controls. Descriptive content already covered by the parent label should
+  /// be wrapped in [ExcludeSemantics] by the caller to avoid duplicate speech.
+  explicitChildren,
+}
+
 /// Echo's shared interaction target.
 ///
 /// Pointer feedback is delegated to [InkWell]. Keyboard activation is exposed
@@ -19,9 +37,15 @@ class EchoPressable extends StatelessWidget {
     this.minimumSize = const Size.square(48),
     this.borderRadius,
     this.selected,
+    this.toggled,
+    this.semanticsMode = EchoPressableSemanticsMode.singleNode,
     this.enableHaptics = false,
     this.autofocus = false,
-  });
+  }) : assert(
+         semanticsMode != EchoPressableSemanticsMode.explicitChildren ||
+             semanticLabel != null,
+         'explicitChildren requires a semanticLabel for the parent node.',
+       );
 
   final Widget child;
   final VoidCallback? onPressed;
@@ -30,6 +54,8 @@ class EchoPressable extends StatelessWidget {
   final Size minimumSize;
   final BorderRadius? borderRadius;
   final bool? selected;
+  final bool? toggled;
+  final EchoPressableSemanticsMode semanticsMode;
   final bool enableHaptics;
   final bool autofocus;
 
@@ -46,18 +72,17 @@ class EchoPressable extends StatelessWidget {
     final motion = context.echoMotion;
     final colors = context.echoColors;
     final interaction = context.echoInteraction;
-
-    Widget semanticsChild = child;
-    if (semanticLabel != null) {
-      semanticsChild = ExcludeSemantics(child: semanticsChild);
-    }
+    final hasExplicitChildren =
+        semanticsMode == EchoPressableSemanticsMode.explicitChildren;
+    final exposesControlRole = !hasExplicitChildren || interactive;
+    final visuallyEnabled = interactive || hasExplicitChildren;
 
     Widget target = ConstrainedBox(
       constraints: BoxConstraints(
         minWidth: minimumSize.width.isFinite ? minimumSize.width : 0,
         minHeight: minimumSize.height.isFinite ? minimumSize.height : 0,
       ),
-      child: semanticsChild,
+      child: child,
     );
     if (!minimumSize.width.isFinite) {
       target = SizedBox(width: double.infinity, child: target);
@@ -68,10 +93,15 @@ class EchoPressable extends StatelessWidget {
 
     return Semantics(
       container: true,
-      button: true,
-      enabled: interactive,
+      explicitChildNodes: hasExplicitChildren,
+      excludeSemantics:
+          semanticLabel != null &&
+          semanticsMode == EchoPressableSemanticsMode.singleNode,
+      button: exposesControlRole,
+      enabled: interactive ? true : (exposesControlRole ? false : null),
       focusable: interactive,
       selected: selected,
+      toggled: toggled,
       label: semanticLabel,
       onTap: onPressed,
       onLongPress: onLongPress,
@@ -99,7 +129,7 @@ class EchoPressable extends StatelessWidget {
                 return AnimatedOpacity(
                   duration: motion.resolve(context, motion.feedback),
                   curve: motion.easeOut,
-                  opacity: interactive ? 1 : 0.5,
+                  opacity: visuallyEnabled ? 1 : 0.5,
                   child: AnimatedContainer(
                     duration: motion.resolve(context, motion.feedback),
                     curve: motion.easeOut,

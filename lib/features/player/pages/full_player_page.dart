@@ -405,30 +405,227 @@ class _FullPlayerPageState extends ConsumerState<FullPlayerPage>
                 ),
               ),
               SafeArea(
-                child: FadeTransition(
-                  opacity: _sceneController,
-                  child: Column(
-                    children: <Widget>[
-                      _PlayerTopBar(
-                        song: currentSong,
-                        onClose: _closeToMini,
-                        onOpenActions: () => _showSongActions(currentSong),
-                      ),
-                      Expanded(
-                        child: _buildMiddleContent(
-                          currentSong,
-                          subtitle: subtitle,
-                        ),
-                      ),
-                      _buildControlPanel(currentSong),
-                    ],
-                  ),
+                child: LayoutBuilder(
+                  builder: (context, constraints) {
+                    final useWideLayout =
+                        constraints.maxWidth > constraints.maxHeight ||
+                        constraints.maxWidth >=
+                            context.echoBreakpoints.expanded;
+                    return FadeTransition(
+                      opacity: _sceneController,
+                      child: useWideLayout
+                          ? _buildWidePlayerLayout(
+                              currentSong,
+                              subtitle: subtitle,
+                            )
+                          : _buildPortraitPlayerLayout(
+                              currentSong,
+                              subtitle: subtitle,
+                            ),
+                    );
+                  },
                 ),
               ),
             ],
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildPortraitPlayerLayout(Song song, {required String subtitle}) {
+    return Column(
+      key: const ValueKey<String>('full_player_portrait_layout'),
+      children: <Widget>[
+        _PlayerTopBar(
+          song: song,
+          onClose: _closeToMini,
+          onOpenActions: () => _showSongActions(song),
+        ),
+        Expanded(child: _buildMiddleContent(song, subtitle: subtitle)),
+        _buildControlPanel(song),
+      ],
+    );
+  }
+
+  Widget _buildWidePlayerLayout(Song song, {required String subtitle}) {
+    final spacing = context.echoSpacing;
+    final horizontalPadding = context.echoWindowClass == EchoWindowClass.compact
+        ? spacing.md
+        : context.echoPageHorizontalPadding;
+
+    return Column(
+      key: const ValueKey<String>('full_player_wide_layout'),
+      children: <Widget>[
+        _PlayerTopBar(
+          song: song,
+          onClose: _closeToMini,
+          onOpenActions: () => _showSongActions(song),
+        ),
+        Expanded(
+          child: Padding(
+            padding: EdgeInsets.fromLTRB(
+              horizontalPadding,
+              spacing.xxs,
+              horizontalPadding,
+              spacing.xs,
+            ),
+            child: Center(
+              child: ConstrainedBox(
+                constraints: BoxConstraints(
+                  maxWidth: context.echoBreakpoints.maxContentWidth,
+                ),
+                child: SizedBox(
+                  width: double.infinity,
+                  child: LayoutBuilder(
+                    builder: (context, constraints) {
+                      final compactWidth =
+                          constraints.maxWidth < context.echoBreakpoints.medium;
+                      final columnGap = compactWidth ? spacing.sm : spacing.lg;
+                      final minimumDetailsWidth = compactWidth ? 248.0 : 320.0;
+                      final maxArtworkByWidth =
+                          (constraints.maxWidth -
+                                  columnGap -
+                                  minimumDetailsWidth)
+                              .clamp(spacing.xxl, 520.0)
+                              .toDouble();
+                      final maxArtworkByHeight = constraints.maxHeight
+                          .clamp(spacing.xxl, 520.0)
+                          .toDouble();
+                      final artworkPaneWidth =
+                          maxArtworkByWidth < maxArtworkByHeight
+                          ? maxArtworkByWidth
+                          : maxArtworkByHeight;
+
+                      return Row(
+                        children: <Widget>[
+                          SizedBox(
+                            key: const ValueKey<String>(
+                              'full_player_artwork_pane',
+                            ),
+                            width: artworkPaneWidth,
+                            child: _buildWideArtworkPane(song),
+                          ),
+                          SizedBox(width: columnGap),
+                          Expanded(
+                            child: _buildWideDetailsPane(
+                              song,
+                              subtitle: subtitle,
+                            ),
+                          ),
+                        ],
+                      );
+                    },
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildWideArtworkPane(Song song) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final spacing = context.echoSpacing;
+        final maxCoverByWidth = (constraints.maxWidth - spacing.xs * 2).clamp(
+          0.0,
+          520.0,
+        );
+        final maxCoverByHeight = (constraints.maxHeight - spacing.xs * 2).clamp(
+          0.0,
+          520.0,
+        );
+        final coverSize = maxCoverByWidth < maxCoverByHeight
+            ? maxCoverByWidth
+            : maxCoverByHeight;
+
+        return AnimatedBuilder(
+          animation: _lyricsProgress,
+          builder: (context, child) {
+            final progress = _lyricsProgress.value;
+            final currentCoverSize = coverSize * (1 - progress);
+            final shouldBuildLyrics = _showLyrics || progress > 0.001;
+
+            return Stack(
+              alignment: Alignment.center,
+              fit: StackFit.expand,
+              children: <Widget>[
+                if (currentCoverSize > 0.5)
+                  Center(
+                    child: _buildCoverHero(
+                      song,
+                      currentCoverSize,
+                      opacity: 1 - progress,
+                    ),
+                  ),
+                if (shouldBuildLyrics)
+                  ExcludeSemantics(
+                    excluding: progress < 0.5,
+                    child: IgnorePointer(
+                      ignoring: progress < 0.5,
+                      child: Opacity(
+                        opacity: progress,
+                        child: const _PlayerLyricsPane(),
+                      ),
+                    ),
+                  ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildWideDetailsPane(Song song, {required String subtitle}) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final spacing = context.echoSpacing;
+        final compactHeight = constraints.maxHeight < 520;
+        final titleStyle =
+            (compactHeight
+                    ? context.echoTypography.title
+                    : context.echoTypography.headline)
+                .copyWith(color: Colors.white);
+        final subtitleStyle =
+            (compactHeight
+                    ? context.echoTypography.metadata
+                    : context.echoTypography.body)
+                .copyWith(color: Colors.white.withValues(alpha: 0.88));
+
+        return SingleChildScrollView(
+          key: const ValueKey<String>('full_player_details_pane'),
+          primary: false,
+          physics: const ClampingScrollPhysics(),
+          child: ConstrainedBox(
+            constraints: BoxConstraints(minHeight: constraints.maxHeight),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: <Widget>[
+                _buildSongIdentity(
+                  song: song,
+                  subtitle: subtitle,
+                  titleStyle: titleStyle,
+                  subtitleStyle: subtitleStyle,
+                  textAlign: TextAlign.start,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  titleMaxLines: 2,
+                  subtitleMaxLines: compactHeight ? 1 : 2,
+                  overflow: TextOverflow.ellipsis,
+                  scrollable: false,
+                ),
+                SizedBox(height: spacing.xs),
+                _buildControlPanel(song, compact: true),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 
@@ -501,36 +698,10 @@ class _FullPlayerPageState extends ConsumerState<FullPlayerPage>
                 children: <Widget>[
                   SizedBox(height: topSpace),
                   if (currentCoverSize > 0.5)
-                    Opacity(
+                    _buildCoverHero(
+                      song,
+                      currentCoverSize,
                       opacity: 1 - progress,
-                      child: Hero(
-                        tag: playerCoverHeroTag,
-                        createRectTween: playerCoverRectTween,
-                        child: RepaintBoundary(
-                          child: DecoratedBox(
-                            decoration: BoxDecoration(
-                              color: context.echoColors.raised,
-                              borderRadius: context.echoRadii.surface,
-                              boxShadow: <BoxShadow>[
-                                BoxShadow(
-                                  color: const Color(
-                                    0xFF04080C,
-                                  ).withValues(alpha: 0.24),
-                                  blurRadius: 40,
-                                  offset: const Offset(0, 16),
-                                ),
-                              ],
-                            ),
-                            child: ClipRRect(
-                              borderRadius: context.echoRadii.surface,
-                              child: SizedBox.square(
-                                dimension: currentCoverSize,
-                                child: _buildSongCover(song, currentCoverSize),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
                     ),
                   SizedBox(height: coverGap),
                   if (shouldBuildLyrics) ...<Widget>[
@@ -568,54 +739,133 @@ class _FullPlayerPageState extends ConsumerState<FullPlayerPage>
     );
   }
 
+  Widget _buildCoverHero(Song song, double size, {double opacity = 1}) {
+    return Opacity(
+      key: const ValueKey<String>('full_player_cover'),
+      opacity: opacity,
+      child: Hero(
+        tag: playerCoverHeroTag,
+        createRectTween: playerCoverRectTween,
+        child: RepaintBoundary(
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              color: context.echoColors.raised,
+              borderRadius: context.echoRadii.surface,
+              boxShadow: <BoxShadow>[
+                BoxShadow(
+                  color: const Color(0xFF04080C).withValues(alpha: 0.24),
+                  blurRadius: 40,
+                  offset: const Offset(0, 16),
+                ),
+              ],
+            ),
+            child: ClipRRect(
+              borderRadius: context.echoRadii.surface,
+              child: SizedBox.square(
+                dimension: size,
+                child: _buildSongCover(song, size),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildSongIdentity({
     required Song song,
     required String subtitle,
     required TextStyle titleStyle,
     required TextStyle subtitleStyle,
+    TextAlign textAlign = TextAlign.center,
+    CrossAxisAlignment crossAxisAlignment = CrossAxisAlignment.center,
+    int? titleMaxLines,
+    int? subtitleMaxLines,
+    TextOverflow? overflow,
+    bool scrollable = true,
   }) {
-    return SingleChildScrollView(
-      primary: false,
-      physics: const ClampingScrollPhysics(),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: <Widget>[
+    final identity = Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: crossAxisAlignment,
+      children: <Widget>[
+        Hero(
+          tag: playerTitleHeroTag,
+          createRectTween: playerLinearRectTween,
+          flightShuttleBuilder: playerTextFlightShuttleBuilder,
+          child: Material(
+            type: MaterialType.transparency,
+            child: Text(
+              song.title,
+              style: titleStyle,
+              textAlign: textAlign,
+              maxLines: titleMaxLines,
+              overflow: overflow,
+            ),
+          ),
+        ),
+        if (subtitle.isNotEmpty) ...<Widget>[
+          SizedBox(height: context.echoSpacing.xxs),
           Hero(
-            tag: playerTitleHeroTag,
+            tag: playerSubtitleHeroTag,
             createRectTween: playerLinearRectTween,
             flightShuttleBuilder: playerTextFlightShuttleBuilder,
             child: Material(
               type: MaterialType.transparency,
               child: Text(
-                song.title,
-                style: titleStyle,
-                textAlign: TextAlign.center,
+                subtitle,
+                style: subtitleStyle,
+                textAlign: textAlign,
+                maxLines: subtitleMaxLines,
+                overflow: overflow,
               ),
             ),
           ),
-          if (subtitle.isNotEmpty) ...<Widget>[
-            SizedBox(height: context.echoSpacing.xxs),
-            Hero(
-              tag: playerSubtitleHeroTag,
-              createRectTween: playerLinearRectTween,
-              flightShuttleBuilder: playerTextFlightShuttleBuilder,
-              child: Material(
-                type: MaterialType.transparency,
-                child: Text(
-                  subtitle,
-                  style: subtitleStyle,
-                  textAlign: TextAlign.center,
-                ),
-              ),
-            ),
-          ],
         ],
-      ),
+      ],
+    );
+
+    if (!scrollable) return identity;
+    return SingleChildScrollView(
+      primary: false,
+      physics: const ClampingScrollPhysics(),
+      child: identity,
     );
   }
 
-  Widget _buildControlPanel(Song song) {
+  Widget _buildControlPanel(Song song, {bool compact = false}) {
     final spacing = context.echoSpacing;
+    if (compact) {
+      return Column(
+        key: const ValueKey<String>('full_player_control_panel'),
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          const ProgressBar(),
+          SizedBox(height: spacing.xxs),
+          PlaybackControls(currentSong: song, compact: true),
+          SizedBox(height: spacing.xxs),
+          Row(
+            children: <Widget>[
+              _PlayerIconButton(
+                icon: _showLyrics ? AppIcons.lyricsFilled : AppIcons.lyrics,
+                label: _showLyrics ? '显示封面' : '显示歌词',
+                selected: _showLyrics,
+                onPressed: _toggleLyrics,
+              ),
+              SizedBox(width: spacing.xxs),
+              _PlayerIconButton(
+                icon: AppIcons.queue,
+                label: '播放队列',
+                onPressed: () =>
+                    unawaited(showPlayQueueSheet(context: context)),
+              ),
+              SizedBox(width: spacing.xs),
+              Expanded(child: _buildQualityIndicator()),
+            ],
+          ),
+        ],
+      );
+    }
+
     final horizontalPadding = context.echoWindowClass == EchoWindowClass.compact
         ? spacing.md
         : spacing.xl;
@@ -1164,9 +1414,14 @@ class _ProgressBarState extends ConsumerState<ProgressBar>
 /// Playback controls keep business actions in the provider while using a
 /// provider-selected record so position ticks do not rebuild the row.
 class PlaybackControls extends ConsumerWidget {
-  const PlaybackControls({super.key, required this.currentSong});
+  const PlaybackControls({
+    super.key,
+    required this.currentSong,
+    this.compact = false,
+  });
 
   final Song currentSong;
+  final bool compact;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -1198,56 +1453,71 @@ class PlaybackControls extends ConsumerWidget {
       PlaybackMode.repeatOne => '单曲循环，点击切换到随机播放',
     };
 
+    final playDimension = compact ? 56.0 : 64.0;
+    final buttons = <Widget>[
+      _PlayerIconButton(
+        icon: modeIcon,
+        label: modeLabel,
+        selected: mode != PlaybackMode.repeatAll,
+        onPressed: () {
+          ref.read(playerProvider.notifier).cyclePlaybackMode();
+        },
+      ),
+      _PlayerIconButton(
+        icon: AppIcons.previous,
+        label: '上一首',
+        iconSize: 30,
+        onPressed: !state.hasPrevious
+            ? null
+            : () => unawaited(ref.read(playerProvider.notifier).previous()),
+      ),
+      _PlayerIconButton(
+        icon: state.isPlaying ? AppIcons.pause : AppIcons.play,
+        label: state.isPlaying ? '暂停' : '播放',
+        emphasized: true,
+        dimension: playDimension,
+        iconSize: compact ? 30 : 32,
+        onPressed: () =>
+            unawaited(ref.read(playerProvider.notifier).togglePlayPause()),
+      ),
+      _PlayerIconButton(
+        icon: AppIcons.next,
+        label: '下一首',
+        iconSize: 30,
+        onPressed: !state.hasNext
+            ? null
+            : () => unawaited(ref.read(playerProvider.notifier).next()),
+      ),
+      _PlayerIconButton(
+        icon: state.starred ? AppIcons.heart : AppIcons.heartOutline,
+        label: state.starred ? '取消红心' : '红心',
+        selected: state.starred,
+        onPressed: () {
+          ref.read(playerProvider.notifier).toggleFavorite();
+        },
+      ),
+    ];
+    final minimumRowWidth = 48 * 4 + playDimension;
+
     return Center(
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 390),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: <Widget>[
-            _PlayerIconButton(
-              icon: modeIcon,
-              label: modeLabel,
-              selected: mode != PlaybackMode.repeatAll,
-              onPressed: () {
-                ref.read(playerProvider.notifier).cyclePlaybackMode();
-              },
-            ),
-            _PlayerIconButton(
-              icon: AppIcons.previous,
-              label: '上一首',
-              iconSize: 30,
-              onPressed: !state.hasPrevious
-                  ? null
-                  : () =>
-                        unawaited(ref.read(playerProvider.notifier).previous()),
-            ),
-            _PlayerIconButton(
-              icon: state.isPlaying ? AppIcons.pause : AppIcons.play,
-              label: state.isPlaying ? '暂停' : '播放',
-              emphasized: true,
-              dimension: 64,
-              iconSize: 32,
-              onPressed: () => unawaited(
-                ref.read(playerProvider.notifier).togglePlayPause(),
-              ),
-            ),
-            _PlayerIconButton(
-              icon: AppIcons.next,
-              label: '下一首',
-              iconSize: 30,
-              onPressed: !state.hasNext
-                  ? null
-                  : () => unawaited(ref.read(playerProvider.notifier).next()),
-            ),
-            _PlayerIconButton(
-              icon: state.starred ? AppIcons.heart : AppIcons.heartOutline,
-              label: state.starred ? '取消红心' : '红心',
-              selected: state.starred,
-              onPressed: () {
-                ref.read(playerProvider.notifier).toggleFavorite();
-              },
-            ),
-          ],
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            if (constraints.maxWidth < minimumRowWidth) {
+              return Wrap(
+                alignment: WrapAlignment.center,
+                runAlignment: WrapAlignment.center,
+                spacing: context.echoSpacing.xxs,
+                runSpacing: context.echoSpacing.xxs,
+                children: buttons,
+              );
+            }
+            return Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: buttons,
+            );
+          },
         ),
       ),
     );

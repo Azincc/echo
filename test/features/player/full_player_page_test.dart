@@ -109,8 +109,138 @@ void main() {
     expect(find.bySemanticsLabel('显示歌词'), findsOneWidget);
     expect(find.bySemanticsLabel('播放队列'), findsOneWidget);
     expect(
+      find.byKey(const ValueKey<String>('full_player_portrait_layout')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey<String>('full_player_wide_layout')),
+      findsNothing,
+    );
+    expect(
       tester.getSize(find.bySemanticsLabel('收起播放器')).height,
       greaterThanOrEqualTo(48),
+    );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets(
+    'landscape player uses two columns and keeps controls reachable at 130%',
+    (tester) async {
+      tester.view.devicePixelRatio = 1;
+      tester.view.physicalSize = const Size(800, 360);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      addTearDown(tester.view.resetPhysicalSize);
+
+      final notifier = TestPlayerNotifier(initialState());
+      await tester.pumpWidget(
+        providerApp(
+          notifier: notifier,
+          textScale: 1.3,
+          disableAnimations: false,
+          home: const FullPlayerPage(),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final wideLayout = find.byKey(
+        const ValueKey<String>('full_player_wide_layout'),
+      );
+      final artworkPane = find.byKey(
+        const ValueKey<String>('full_player_artwork_pane'),
+      );
+      final detailsPane = find.byKey(
+        const ValueKey<String>('full_player_details_pane'),
+      );
+      expect(wideLayout, findsOneWidget);
+      expect(
+        find.byKey(const ValueKey<String>('full_player_portrait_layout')),
+        findsNothing,
+      );
+      expect(
+        find.byKey(const ValueKey<String>('full_player_cover')),
+        findsOneWidget,
+      );
+      expect(find.byType(EchoSlider), findsOneWidget);
+      final heroTags = tester
+          .widgetList<Hero>(find.byType(Hero))
+          .map((hero) => hero.tag)
+          .toSet();
+      expect(
+        heroTags,
+        containsAll(<Object>[
+          playerBackgroundHeroTag,
+          playerCoverHeroTag,
+          playerTitleHeroTag,
+          playerSubtitleHeroTag,
+        ]),
+      );
+
+      final artworkRect = tester.getRect(artworkPane);
+      final detailsRect = tester.getRect(detailsPane);
+      expect(artworkRect.right, lessThan(detailsRect.left));
+      expect(artworkRect.height, closeTo(detailsRect.height, 0.1));
+
+      for (final label in <String>['暂停', '显示歌词', '播放队列']) {
+        final target = find.bySemanticsLabel(label);
+        expect(target, findsOneWidget);
+        final targetRect = tester.getRect(target);
+        expect(targetRect.width, greaterThanOrEqualTo(48));
+        expect(targetRect.height, greaterThanOrEqualTo(48));
+        expect(targetRect.top, greaterThanOrEqualTo(detailsRect.top));
+        expect(targetRect.bottom, lessThanOrEqualTo(detailsRect.bottom));
+      }
+      expect(tester.takeException(), isNull);
+
+      await tester.tap(find.bySemanticsLabel('显示歌词'));
+      await tester.pump(const Duration(milliseconds: 100));
+      expect(tester.takeException(), isNull);
+      await tester.pumpAndSettle();
+
+      expect(find.text('暂无歌词'), findsOneWidget);
+      expect(find.bySemanticsLabel('显示封面'), findsOneWidget);
+      expect(
+        tester.getRect(find.text('暂无歌词')).center.dx,
+        lessThan(detailsRect.left),
+      );
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets('expanded portrait width also uses the player split layout', (
+    tester,
+  ) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(900, 1200);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    addTearDown(tester.view.resetPhysicalSize);
+
+    final notifier = TestPlayerNotifier(initialState());
+    await tester.pumpWidget(
+      providerApp(
+        notifier: notifier,
+        textScale: 1.3,
+        home: const FullPlayerPage(),
+      ),
+    );
+    await tester.pump();
+
+    expect(
+      find.byKey(const ValueKey<String>('full_player_wide_layout')),
+      findsOneWidget,
+    );
+    expect(
+      tester
+          .getRect(
+            find.byKey(const ValueKey<String>('full_player_artwork_pane')),
+          )
+          .right,
+      lessThan(
+        tester
+            .getRect(
+              find.byKey(const ValueKey<String>('full_player_details_pane')),
+            )
+            .left,
+      ),
     );
     expect(tester.takeException(), isNull);
   });

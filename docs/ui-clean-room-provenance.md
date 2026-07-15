@@ -50,3 +50,40 @@ clean-room 完成需要同时满足：
 UI 阶段发现的 service、repository、provider、API 或播放行为缺陷必须独立提交，不得借 P5 resilience 混入 UI 提交。
 
 P2-P6 必须在只包含当前 clean-room 分支历史的隔离 clone 中实现。该 clone 不得包含 Glasslike refs、Glasslike Git 对象、旧污染 stash 或指向含这些对象仓库的 remote；阶段完成后仅导出提交到主仓库进行来源审计。
+
+## Final Audit - 2026-07-15
+
+最终 UI 代码审计对象为：
+
+- 分支：`codex/zero-reuse-ui`
+- 代码 HEAD：`f9615e727660b85429a168994f23767db020f539`
+
+跨仓只读冻结对象扫描结果：
+
+- Glasslike UI 提交祖先交集：`0 / 6`
+- stable patch-id 交集：`0 / 6`
+- Glasslike UI 新 blob：89 个，隔离仓存在 `0`
+- 三行来源窗口命中：`0`
+- 36-token 精确窗口命中：`0`
+- 52-token canonical 窗口命中：`0`
+- legacy mechanical structure 命中：`0`
+- `Icons.*`：`0`
+- 明列禁用 Material 构造器：`0`
+- Glass / MusicChrome runtime 标记：`0`
+
+对象隔离检查覆盖 206 个 Glasslike 范围对象，其中 205 个在隔离仓中不存在。唯一共享对象仍是已批准的 `.gitignore` 缓存清理 blob，对应 Glasslike `e0d5d29d` 与主线 `9ddc28df`，不含 UI、业务源码或测试实现。
+
+在 `98c1f788` 的最终预审中，门禁曾发现 `app_drawer.dart` 的“切换线路”条目有一个三行窗口与 Glasslike 历史完全相同。该片段没有获得例外豁免，而是在 `f9615e72` 中依据当前业务语义独立改写，并重新执行全部门禁；最终所有来源窗口计数均为零。
+
+隔离仓按设计不含两条 Glasslike ref，因此直接运行依赖本地 ref 的审计入口会返回退出码 `2`。最终结论使用相同扫描口径，从主仓冻结对象只读生成 Glasslike 集合，再与隔离仓进行比较；没有向隔离仓导入 ref、commit、tree、blob、remote 或 stash。
+
+## Final Verification
+
+在代码 HEAD `f9615e72` 上完成：
+
+- `flutter analyze`：0 个问题
+- `flutter test`：225 / 225 通过，0 跳过，0 失败
+- `git diff --check`：通过
+- `test/widgets/app_drawer_test.dart`：3 / 3 通过
+
+在此前 UI HEAD `98c1f788` 上已完成 Debug 与 Release APK 构建。`f9615e72` 只改变抽屉副标题的等价表达，不涉及构建、签名或可见 UI；完整分析与测试已在该代码 HEAD 上重新通过。

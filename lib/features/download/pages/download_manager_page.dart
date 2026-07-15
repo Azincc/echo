@@ -1,5 +1,10 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import '../../../core/design/echo_design.dart';
+import '../../../core/utils/toast_notifier.dart';
 import '../../../data/models/download_task.dart';
 import '../../../data/models/song.dart';
 import '../../../providers/download_provider.dart';
@@ -7,565 +12,687 @@ import '../../../providers/music_provider.dart';
 import '../../../providers/player_provider.dart';
 import '../../../widgets/cover_art_image.dart';
 
-/// 下载管理器页面
+typedef _DownloadScanResult = ({int valid, int missing, int orphan});
+
 class DownloadManagerPage extends ConsumerWidget {
   const DownloadManagerPage({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final tasksAsync = ref.watch(downloadTasksProvider);
-    final progressAsync = ref.watch(downloadProgressProvider);
-    final progress = progressAsync.valueOrNull ?? {};
+    final completedCount =
+        tasksAsync.valueOrNull
+            ?.where((task) => task.status == DownloadTaskStatus.completed)
+            .length ??
+        0;
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('下载管理'),
-        actions: [
-          PopupMenuButton<String>(
-            onSelected: (value) async {
-              final service = ref.read(downloadServiceProvider);
-              switch (value) {
-                case 'pause_all':
-                  service.pauseAll();
-                  break;
-                case 'resume_all':
-                  service.resumeAll();
-                  break;
-                case 'clear_completed':
-                  service.clearCompleted();
-                  break;
-                case 'scan_files':
-                  await _scanLocalFiles(context, ref);
-                  break;
-              }
-            },
-            itemBuilder: (context) => [
-              const PopupMenuItem(
-                value: 'pause_all',
-                child: ListTile(
-                  leading: Icon(Icons.pause),
-                  title: Text('全部暂停'),
-                  contentPadding: EdgeInsets.zero,
-                ),
-              ),
-              const PopupMenuItem(
-                value: 'resume_all',
-                child: ListTile(
-                  leading: Icon(Icons.play_arrow),
-                  title: Text('全部恢复'),
-                  contentPadding: EdgeInsets.zero,
-                ),
-              ),
-              const PopupMenuItem(
-                value: 'clear_completed',
-                child: ListTile(
-                  leading: Icon(Icons.clear_all),
-                  title: Text('清除已完成'),
-                  contentPadding: EdgeInsets.zero,
-                ),
-              ),
-              const PopupMenuItem(
-                value: 'scan_files',
-                child: ListTile(
-                  leading: Icon(Icons.find_in_page_outlined),
-                  title: Text('扫描本地文件'),
-                  contentPadding: EdgeInsets.zero,
-                ),
-              ),
-            ],
+    return EchoScaffold(
+      topBar: EchoTopBar.back(
+        context: context,
+        title: '下载管理',
+        actions: <Widget>[
+          EchoIconButton(
+            icon: AppIcons.more,
+            label: '下载批量操作',
+            onPressed: () => _showBulkActions(context, ref),
           ),
         ],
       ),
-      body: tasksAsync.when(
-        data: (tasks) {
-          // 按状态分组
-          final downloading = tasks
-              .where(
-                (t) =>
-                    t.status == DownloadTaskStatus.downloading ||
-                    t.status == DownloadTaskStatus.pending,
-              )
-              .toList();
-          final paused = tasks
-              .where((t) => t.status == DownloadTaskStatus.paused)
-              .toList();
-          final completed = tasks
-              .where((t) => t.status == DownloadTaskStatus.completed)
-              .toList();
-          final failed = tasks
-              .where((t) => t.status == DownloadTaskStatus.failed)
-              .toList();
-
-          return Column(
-            children: [
-              // 下载目录路径展示
-              FutureBuilder<String>(
-                future: ref.read(downloadServiceProvider).getDownloadDir(),
-                builder: (context, snapshot) {
-                  final path = snapshot.data ?? '...';
-                  return Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 10,
-                    ),
-                    decoration: BoxDecoration(
-                      color: Theme.of(context)
-                          .colorScheme
-                          .surfaceContainerHighest
-                          .withValues(alpha: 0.5),
-                    ),
-                    child: Row(
-                      children: [
-                        Icon(
-                          Icons.folder_outlined,
-                          size: 16,
-                          color: Theme.of(context).colorScheme.onSurfaceVariant,
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            path,
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: Theme.of(
-                                context,
-                              ).colorScheme.onSurfaceVariant,
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                      ],
-                    ),
-                  );
-                },
-              ),
-
-              // 任务列表
-              Expanded(
-                child: tasks.isEmpty
-                    ? const Center(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(
-                              Icons.download_done,
-                              size: 64,
-                              color: Colors.grey,
-                            ),
-                            SizedBox(height: 16),
-                            Text(
-                              '暂无下载任务',
-                              style: TextStyle(color: Colors.grey),
-                            ),
-                          ],
-                        ),
-                      )
-                    : ListView(
-                        children: [
-                          if (downloading.isNotEmpty) ...[
-                            _buildSectionHeader(
-                              context,
-                              '下载中',
-                              downloading.length,
-                            ),
-                            ...downloading.map(
-                              (t) => _buildTaskTile(context, ref, t, progress),
-                            ),
-                          ],
-                          if (paused.isNotEmpty) ...[
-                            _buildSectionHeader(context, '已暂停', paused.length),
-                            ...paused.map(
-                              (t) => _buildTaskTile(context, ref, t, progress),
-                            ),
-                          ],
-                          if (failed.isNotEmpty) ...[
-                            _buildSectionHeader(context, '失败', failed.length),
-                            ...failed.map(
-                              (t) => _buildTaskTile(context, ref, t, progress),
-                            ),
-                          ],
-                          if (completed.isNotEmpty) ...[
-                            _buildSectionHeader(
-                              context,
-                              '已完成',
-                              completed.length,
-                            ),
-                            ...completed.map(
-                              (t) => _buildTaskTile(context, ref, t, progress),
-                            ),
-                          ],
-                        ],
-                      ),
-              ),
-            ],
-          );
-        },
-        error: (err, stack) => Center(child: Text('错误: $err')),
-        loading: () => const Center(child: CircularProgressIndicator()),
-      ),
-      // 播放全部已下载歌曲 FAB
-      floatingActionButton: tasksAsync.whenOrNull(
-        data: (tasks) {
-          final completedCount = tasks
-              .where((t) => t.status == DownloadTaskStatus.completed)
-              .length;
-          if (completedCount == 0) return null;
-          return FloatingActionButton.extended(
-            onPressed: () => _playAllDownloaded(context, ref),
-            icon: const Icon(Icons.play_arrow),
-            label: const Text('播放全部'),
-          );
-        },
-      ),
-    );
-  }
-
-  Widget _buildSectionHeader(BuildContext context, String title, int count) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-      child: Text(
-        '$title ($count)',
-        style: Theme.of(context).textTheme.titleSmall?.copyWith(
-          color: Theme.of(context).colorScheme.primary,
-          fontWeight: FontWeight.bold,
-        ),
-      ),
-    );
-  }
-
-  Widget _buildTaskTile(
-    BuildContext context,
-    WidgetRef ref,
-    DownloadTask task,
-    Map<String, double> progress,
-  ) {
-    final currentProgress = progress[task.id] ?? task.progress;
-
-    return ListTile(
-      leading: SizedBox(
-        width: 48,
-        height: 48,
-        child: task.coverArt != null
-            ? ClipRRect(
-                borderRadius: BorderRadius.circular(4),
-                child: CoverArtImage(coverArtId: task.coverArt, size: 48),
-              )
-            : Container(
-                decoration: BoxDecoration(
-                  color: Colors.grey[300],
-                  borderRadius: BorderRadius.circular(4),
+      bottomBar: completedCount > 0
+          ? SafeArea(
+              top: false,
+              child: Padding(
+                padding: EdgeInsets.fromLTRB(
+                  context.echoSpacing.md,
+                  context.echoSpacing.xs,
+                  context.echoSpacing.md,
+                  context.echoSpacing.sm,
                 ),
-                child: const Icon(Icons.music_note, color: Colors.grey),
-              ),
-      ),
-      title: Text(task.title, maxLines: 1, overflow: TextOverflow.ellipsis),
-      subtitle: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          if (task.artist != null)
-            Text(
-              task.artist!,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(fontSize: 12),
-            ),
-          if (task.status == DownloadTaskStatus.downloading)
-            Padding(
-              padding: const EdgeInsets.only(top: 4),
-              child: LinearProgressIndicator(
-                value: currentProgress,
-                minHeight: 3,
+                child: EchoButton.primary(
+                  label: '播放全部已下载歌曲',
+                  leadingIcon: AppIcons.play,
+                  expand: true,
+                  onPressed: () => _playAllDownloaded(context, ref),
+                ),
               ),
             )
-          else
-            Text(
-              task.status.displayName +
-                  (task.status == DownloadTaskStatus.failed &&
-                          task.errorMessage != null
-                      ? ': ${task.errorMessage}'
-                      : ''),
-              style: TextStyle(
-                fontSize: 11,
-                color: task.status == DownloadTaskStatus.failed
-                    ? Colors.red
-                    : Colors.grey,
-              ),
-            ),
-        ],
+          : null,
+      body: tasksAsync.when(
+        data: (tasks) => _DownloadTaskList(tasks: tasks),
+        error: (error, stackTrace) => EchoErrorState(
+          title: '下载任务加载失败',
+          description: '无法读取下载记录，请稍后重试。',
+          actionLabel: '重试',
+          onAction: () => ref.invalidate(downloadTasksProvider),
+        ),
+        loading: () => const _DownloadTaskSkeleton(),
       ),
-      trailing: _buildTrailingActions(context, ref, task),
-      // 点击已完成任务 → 播放
-      onTap: task.status == DownloadTaskStatus.completed
-          ? () => _playTask(context, ref, task)
-          : null,
-      // 长按已完成任务 → 操作菜单
-      onLongPress: task.status == DownloadTaskStatus.completed
-          ? () => _showTaskMenu(context, ref, task)
-          : null,
     );
   }
 
-  Widget _buildTrailingActions(
-    BuildContext context,
-    WidgetRef ref,
-    DownloadTask task,
-  ) {
+  Future<void> _showBulkActions(BuildContext context, WidgetRef ref) async {
     final service = ref.read(downloadServiceProvider);
-
-    return switch (task.status) {
-      DownloadTaskStatus.downloading => IconButton(
-        icon: const Icon(Icons.pause),
-        onPressed: () => service.pause(task.id),
-      ),
-      DownloadTaskStatus.pending => const SizedBox(
-        width: 24,
-        height: 24,
-        child: CircularProgressIndicator(strokeWidth: 2),
-      ),
-      DownloadTaskStatus.paused => Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          IconButton(
-            icon: const Icon(Icons.play_arrow),
-            onPressed: () => service.resume(task.id),
-          ),
-          IconButton(
-            icon: const Icon(Icons.close, size: 20),
-            onPressed: () => service.cancel(task.id),
-          ),
-        ],
-      ),
-      DownloadTaskStatus.failed => Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            onPressed: () => service.resume(task.id),
-          ),
-          IconButton(
-            icon: const Icon(Icons.close, size: 20),
-            onPressed: () => service.cancel(task.id),
-          ),
-        ],
-      ),
-      DownloadTaskStatus.completed => Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          // 播放按钮
-          IconButton(
-            icon: const Icon(Icons.play_arrow, size: 20),
-            tooltip: '播放',
-            onPressed: () => _playTask(context, ref, task),
-          ),
-          IconButton(
-            icon: const Icon(Icons.delete_outline, size: 20),
-            tooltip: '删除',
-            onPressed: () => service.cancel(task.id),
-          ),
-        ],
-      ),
-    };
-  }
-
-  // ---------------------------------------------------------------------------
-  // 播放联动
-  // ---------------------------------------------------------------------------
-
-  /// 播放单个已下载任务（从 API 获取完整 Song 元数据）
-  Future<void> _playTask(
-    BuildContext context,
-    WidgetRef ref,
-    DownloadTask task,
-  ) async {
-    final musicRepo = ref.read(musicRepositoryProvider);
-    if (musicRepo == null) return;
-
-    final song = await musicRepo.getSong(task.songId);
-    if (song == null) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('无法获取歌曲信息')));
-      }
-      return;
-    }
-
-    ref.read(playerProvider.notifier).playSong(song);
-
-    if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('正在播放: ${task.title}'),
-          duration: const Duration(seconds: 1),
+    await showEchoBottomSheet<void>(
+      context: context,
+      useRootNavigator: true,
+      builder: (sheetContext) => EchoBottomSheet(
+        title: '下载批量操作',
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            EchoActionRow(
+              icon: AppIcons.pause,
+              title: '全部暂停',
+              onPressed: () {
+                Navigator.of(sheetContext).pop();
+                service.pauseAll();
+              },
+            ),
+            EchoActionRow(
+              icon: AppIcons.play,
+              title: '全部恢复',
+              onPressed: () {
+                Navigator.of(sheetContext).pop();
+                service.resumeAll();
+              },
+            ),
+            EchoActionRow(
+              icon: AppIcons.clearAll,
+              title: '清除已完成记录',
+              onPressed: () {
+                Navigator.of(sheetContext).pop();
+                service.clearCompleted();
+              },
+            ),
+            EchoActionRow(
+              icon: AppIcons.fileSearch,
+              title: '扫描本地文件',
+              onPressed: () {
+                Navigator.of(sheetContext).pop();
+                Future<void>.microtask(() {
+                  if (!context.mounted) return;
+                  _showScanSheet(context, ref);
+                });
+              },
+            ),
+          ],
         ),
-      );
-    }
+      ),
+    );
   }
 
-  /// 播放全部已下载歌曲（从 API 获取完整 Song 元数据）
+  Future<void> _showScanSheet(BuildContext context, WidgetRef ref) async {
+    final service = ref.read(downloadServiceProvider);
+    await showEchoBottomSheet<void>(
+      context: context,
+      useRootNavigator: true,
+      isScrollControlled: true,
+      builder: (_) => _DownloadScanSheet(
+        onScan: service.scanLocalFiles,
+        onCleanOrphans: service.cleanOrphanFiles,
+      ),
+    );
+  }
+
   Future<void> _playAllDownloaded(BuildContext context, WidgetRef ref) async {
     final service = ref.read(downloadServiceProvider);
-    final musicRepo = ref.read(musicRepositoryProvider);
-    if (musicRepo == null) return;
+    final repository = ref.read(musicRepositoryProvider);
+    if (repository == null) return;
 
     final tasks = await service.getDownloadedTasks();
     if (tasks.isEmpty) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('没有已下载的歌曲')));
-      }
+      ToastNotifier.show('没有已下载的歌曲');
       return;
     }
 
     final songs = <Song>[];
     for (final task in tasks) {
-      final song = await musicRepo.getSong(task.songId);
+      final song = await repository.getSong(task.songId);
       if (song != null) songs.add(song);
     }
+    if (songs.isEmpty) {
+      ToastNotifier.show('无法读取已下载歌曲的信息');
+      return;
+    }
 
-    if (songs.isEmpty) return;
+    unawaited(
+      ref
+          .read(playerProvider.notifier)
+          .playSong(songs.first, queue: songs, index: 0),
+    );
+    ToastNotifier.show('播放 ${songs.length} 首已下载歌曲');
+  }
+}
 
-    ref
-        .read(playerProvider.notifier)
-        .playSong(songs.first, queue: songs, index: 0);
+class _DownloadTaskList extends ConsumerWidget {
+  const _DownloadTaskList({required this.tasks});
 
-    if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('播放 ${songs.length} 首已下载歌曲'),
-          duration: const Duration(seconds: 1),
-        ),
+  final List<DownloadTask> tasks;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    if (tasks.isEmpty) {
+      return const EchoEmptyState(
+        title: '暂无下载任务',
+        description: '在歌曲、专辑或歌单操作中选择下载，任务会显示在这里。',
+        icon: AppIcons.downloadCloud,
       );
+    }
+
+    final groups = <_TaskGroup>[
+      _TaskGroup(
+        title: '下载中',
+        tasks: tasks
+            .where(
+              (task) =>
+                  task.status == DownloadTaskStatus.downloading ||
+                  task.status == DownloadTaskStatus.pending,
+            )
+            .toList(),
+      ),
+      _TaskGroup(
+        title: '已暂停',
+        tasks: tasks
+            .where((task) => task.status == DownloadTaskStatus.paused)
+            .toList(),
+      ),
+      _TaskGroup(
+        title: '失败',
+        tasks: tasks
+            .where((task) => task.status == DownloadTaskStatus.failed)
+            .toList(),
+      ),
+      _TaskGroup(
+        title: '已完成',
+        tasks: tasks
+            .where((task) => task.status == DownloadTaskStatus.completed)
+            .toList(),
+      ),
+    ].where((group) => group.tasks.isNotEmpty).toList();
+
+    return Column(
+      children: <Widget>[
+        FutureBuilder<String>(
+          future: ref.read(downloadServiceProvider).getDownloadDir(),
+          builder: (context, snapshot) =>
+              _DownloadDirectory(path: snapshot.data),
+        ),
+        Expanded(
+          child: Align(
+            alignment: Alignment.topCenter,
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 840),
+              child: ListView.builder(
+                padding: EdgeInsets.fromLTRB(
+                  context.echoSpacing.md,
+                  context.echoSpacing.sm,
+                  context.echoSpacing.md,
+                  context.echoSpacing.xxl,
+                ),
+                itemCount: groups.length,
+                itemBuilder: (context, index) {
+                  final group = groups[index];
+                  return Padding(
+                    padding: EdgeInsets.only(bottom: context.echoSpacing.lg),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: <Widget>[
+                        EchoSectionHeader(
+                          title: group.title,
+                          description: '${group.tasks.length} 项',
+                        ),
+                        SizedBox(height: context.echoSpacing.xs),
+                        for (final task in group.tasks)
+                          _DownloadTaskRow(task: task),
+                      ],
+                    ),
+                  );
+                },
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _DownloadTaskRow extends ConsumerWidget {
+  const _DownloadTaskRow({required this.task});
+
+  final DownloadTask task;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final streamedProgress = ref.watch(
+      downloadProgressProvider.select((state) => state.valueOrNull?[task.id]),
+    );
+    final progress = (streamedProgress ?? task.progress)
+        .clamp(0.0, 1.0)
+        .toDouble();
+    final service = ref.read(downloadServiceProvider);
+    final isPlayable = task.status == DownloadTaskStatus.completed;
+
+    return Padding(
+      padding: EdgeInsets.only(bottom: context.echoSpacing.xs),
+      child: EchoPressable(
+        semanticLabel: _taskSemanticLabel(task, progress),
+        onPressed: isPlayable ? () => _playTask(context, ref, task) : null,
+        onLongPress: isPlayable
+            ? () => _showTaskActions(context, ref, task)
+            : null,
+        minimumSize: const Size(double.infinity, 72),
+        child: Padding(
+          padding: EdgeInsets.symmetric(
+            horizontal: context.echoSpacing.xs,
+            vertical: context.echoSpacing.xs,
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: <Widget>[
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: <Widget>[
+                  ClipRRect(
+                    borderRadius: context.echoRadii.detail,
+                    child: CoverArtImage(
+                      coverArtId: task.coverArt,
+                      size: 48,
+                      requestSize: 192,
+                      semanticLabel: '${task.title} 封面',
+                    ),
+                  ),
+                  SizedBox(width: context.echoSpacing.sm),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: <Widget>[
+                        Text(task.title, style: context.echoTypography.title),
+                        if (task.artist?.trim().isNotEmpty == true) ...<Widget>[
+                          SizedBox(height: context.echoSpacing.xxs),
+                          Text(
+                            task.artist!.trim(),
+                            style: context.echoTypography.body.copyWith(
+                              color: context.echoColors.muted,
+                            ),
+                          ),
+                        ],
+                        SizedBox(height: context.echoSpacing.xxs),
+                        Text(
+                          _taskStatusText(task),
+                          style: context.echoTypography.metadata.copyWith(
+                            color: task.status == DownloadTaskStatus.failed
+                                ? context.echoColors.error
+                                : context.echoColors.muted,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              if (task.status == DownloadTaskStatus.downloading) ...<Widget>[
+                SizedBox(height: context.echoSpacing.xs),
+                EchoProgressBar(value: progress, height: 4),
+              ],
+              SizedBox(height: context.echoSpacing.xs),
+              Align(
+                alignment: AlignmentDirectional.centerEnd,
+                child: Wrap(
+                  spacing: context.echoSpacing.xs,
+                  children: _taskActions(
+                    task: task,
+                    onPause: () => service.pause(task.id),
+                    onResume: () => service.resume(task.id),
+                    onCancel: () => service.cancel(task.id),
+                    onPlay: () => _playTask(context, ref, task),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _DownloadDirectory extends StatelessWidget {
+  const _DownloadDirectory({this.path});
+
+  final String? path;
+
+  @override
+  Widget build(BuildContext context) {
+    return EchoSurface(
+      level: EchoSurfaceLevel.raised,
+      borderRadius: BorderRadius.zero,
+      padding: EdgeInsets.symmetric(
+        horizontal: context.echoSpacing.md,
+        vertical: context.echoSpacing.xs,
+      ),
+      child: Semantics(
+        label: '下载目录，${path ?? '正在读取'}',
+        child: ExcludeSemantics(
+          child: Row(
+            children: <Widget>[
+              Icon(
+                AppIcons.folderOpen,
+                size: 18,
+                color: context.echoColors.muted,
+              ),
+              SizedBox(width: context.echoSpacing.xs),
+              Expanded(
+                child: Text(
+                  path ?? '正在读取下载目录',
+                  style: context.echoTypography.metadata.copyWith(
+                    color: context.echoColors.muted,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _DownloadScanSheet extends StatefulWidget {
+  const _DownloadScanSheet({
+    required this.onScan,
+    required this.onCleanOrphans,
+  });
+
+  final Future<_DownloadScanResult> Function() onScan;
+  final Future<int> Function() onCleanOrphans;
+
+  @override
+  State<_DownloadScanSheet> createState() => _DownloadScanSheetState();
+}
+
+class _DownloadScanSheetState extends State<_DownloadScanSheet> {
+  late Future<_DownloadScanResult> _scan;
+  bool _cleaning = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _scan = widget.onScan();
+  }
+
+  void _retry() => setState(() => _scan = widget.onScan());
+
+  Future<void> _cleanOrphans() async {
+    if (_cleaning) return;
+    setState(() => _cleaning = true);
+    try {
+      final cleaned = await widget.onCleanOrphans();
+      ToastNotifier.show('已清理 $cleaned 个孤立文件');
+      if (mounted) Navigator.of(context).pop();
+    } finally {
+      if (mounted) setState(() => _cleaning = false);
     }
   }
 
-  // ---------------------------------------------------------------------------
-  // 文件扫描
-  // ---------------------------------------------------------------------------
+  @override
+  Widget build(BuildContext context) {
+    return EchoBottomSheet(
+      title: '扫描本地文件',
+      subtitle: '核对下载记录与实际文件。',
+      child: FutureBuilder<_DownloadScanResult>(
+        future: _scan,
+        builder: (context, snapshot) {
+          if (snapshot.connectionState != ConnectionState.done) {
+            return const _ScanSkeleton();
+          }
+          if (snapshot.hasError || snapshot.data == null) {
+            return EchoErrorState(
+              title: '扫描失败',
+              description: '无法完成本地文件核对，请重试。',
+              actionLabel: '重试',
+              onAction: _retry,
+              padding: const EdgeInsets.all(24),
+            );
+          }
 
-  Future<void> _scanLocalFiles(BuildContext context, WidgetRef ref) async {
-    final service = ref.read(downloadServiceProvider);
-
-    // 显示加载指示
-    if (!context.mounted) return;
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => const Center(child: CircularProgressIndicator()),
-    );
-
-    try {
-      final result = await service.scanLocalFiles();
-
-      if (!context.mounted) return;
-      Navigator.pop(context); // 关闭加载
-
-      showDialog(
-        context: context,
-        builder: (context) => AlertDialog(
-          title: const Text('扫描结果'),
-          content: Column(
+          final result = snapshot.data!;
+          return Column(
             mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _scanResultRow('正常文件', result.valid, Colors.green),
-              if (result.missing > 0)
-                _scanResultRow('缺失文件', result.missing, Colors.red),
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: <Widget>[
+              _ScanResultRow(
+                label: '正常文件',
+                count: result.valid,
+                icon: AppIcons.checkCircle,
+                color: context.echoColors.accent,
+              ),
+              _ScanResultRow(
+                label: '缺失文件',
+                count: result.missing,
+                icon: AppIcons.error,
+                color: context.echoColors.error,
+              ),
+              _ScanResultRow(
+                label: '孤立文件',
+                count: result.orphan,
+                icon: AppIcons.warning,
+                color: context.echoColors.warning,
+              ),
+              SizedBox(height: context.echoSpacing.lg),
               if (result.orphan > 0)
-                _scanResultRow('孤立文件', result.orphan, Colors.orange),
-              if (result.missing == 0 && result.orphan == 0)
-                const Padding(
-                  padding: EdgeInsets.only(top: 8),
-                  child: Text(
-                    '所有文件状态正常 ✓',
-                    style: TextStyle(color: Colors.green),
+                EchoButton.destructive(
+                  label: _cleaning ? '正在清理' : '清理孤立文件',
+                  leadingIcon: AppIcons.delete,
+                  expand: true,
+                  onPressed: _cleaning ? null : _cleanOrphans,
+                )
+              else
+                Text(
+                  '所有文件状态正常。',
+                  textAlign: TextAlign.center,
+                  style: context.echoTypography.body.copyWith(
+                    color: context.echoColors.muted,
                   ),
                 ),
             ],
-          ),
-          actions: [
-            if (result.orphan > 0)
-              TextButton(
-                onPressed: () async {
-                  Navigator.pop(context);
-                  final cleaned = await service.cleanOrphanFiles();
-                  if (context.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('已清理 $cleaned 个孤立文件')),
-                    );
-                  }
-                },
-                child: const Text('清理孤立文件'),
-              ),
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('关闭'),
-            ),
-          ],
-        ),
-      );
-    } catch (e) {
-      if (!context.mounted) return;
-      Navigator.pop(context);
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('扫描失败: $e')));
-    }
+          );
+        },
+      ),
+    );
   }
+}
 
-  Widget _scanResultRow(String label, int count, Color color) {
+class _ScanResultRow extends StatelessWidget {
+  const _ScanResultRow({
+    required this.label,
+    required this.count,
+    required this.icon,
+    required this.color,
+  });
+
+  final String label;
+  final int count;
+  final IconData icon;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
+      padding: EdgeInsets.symmetric(vertical: context.echoSpacing.xs),
       child: Row(
-        children: [
-          Icon(Icons.circle, size: 10, color: color),
-          const SizedBox(width: 8),
-          Text(label),
-          const Spacer(),
+        children: <Widget>[
+          Icon(icon, size: 22, color: color),
+          SizedBox(width: context.echoSpacing.sm),
+          Expanded(child: Text(label, style: context.echoTypography.title)),
           Text(
             '$count',
-            style: TextStyle(fontWeight: FontWeight.bold, color: color),
+            style: context.echoTypography.title.copyWith(
+              color: color,
+              fontFeatures: const <FontFeature>[FontFeature.tabularFigures()],
+            ),
           ),
         ],
       ),
     );
   }
+}
 
-  // ---------------------------------------------------------------------------
-  // 长按菜单
-  // ---------------------------------------------------------------------------
+class _DownloadTaskSkeleton extends StatelessWidget {
+  const _DownloadTaskSkeleton();
 
-  void _showTaskMenu(BuildContext context, WidgetRef ref, DownloadTask task) {
-    final service = ref.read(downloadServiceProvider);
-
-    showModalBottomSheet(
-      context: context,
-      builder: (context) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            ListTile(
-              leading: const Icon(Icons.play_arrow),
-              title: const Text('播放'),
-              onTap: () {
-                Navigator.pop(context);
-                _playTask(context, ref, task);
-              },
+  @override
+  Widget build(BuildContext context) {
+    return ListView.separated(
+      padding: EdgeInsets.all(context.echoSpacing.md),
+      itemCount: 5,
+      separatorBuilder: (context, index) =>
+          SizedBox(height: context.echoSpacing.md),
+      itemBuilder: (context, index) => Row(
+        children: <Widget>[
+          const EchoSkeleton(width: 48, height: 48),
+          SizedBox(width: context.echoSpacing.sm),
+          const Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                EchoSkeleton.line(width: 190),
+                SizedBox(height: 8),
+                EchoSkeleton.line(width: 120, height: 10),
+              ],
             ),
-            ListTile(
-              leading: const Icon(Icons.delete_outline),
-              title: const Text('删除下载'),
-              onTap: () {
-                Navigator.pop(context);
-                service.cancel(task.id);
-              },
-            ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
+}
+
+class _ScanSkeleton extends StatelessWidget {
+  const _ScanSkeleton();
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: <Widget>[
+        for (var index = 0; index < 3; index++) ...<Widget>[
+          const EchoSkeleton.line(),
+          if (index < 2) SizedBox(height: context.echoSpacing.sm),
+        ],
+      ],
+    );
+  }
+}
+
+class _TaskGroup {
+  const _TaskGroup({required this.title, required this.tasks});
+
+  final String title;
+  final List<DownloadTask> tasks;
+}
+
+List<Widget> _taskActions({
+  required DownloadTask task,
+  required VoidCallback onPause,
+  required VoidCallback onResume,
+  required VoidCallback onCancel,
+  required VoidCallback onPlay,
+}) {
+  EchoIconButton action(IconData icon, String label, VoidCallback onPressed) {
+    return EchoIconButton(icon: icon, label: label, onPressed: onPressed);
+  }
+
+  return switch (task.status) {
+    DownloadTaskStatus.downloading => <Widget>[
+      action(AppIcons.pause, '暂停 ${task.title}', onPause),
+    ],
+    DownloadTaskStatus.pending => const <Widget>[EchoSkeleton.circle(size: 32)],
+    DownloadTaskStatus.paused => <Widget>[
+      action(AppIcons.play, '继续 ${task.title}', onResume),
+      action(AppIcons.close, '取消 ${task.title}', onCancel),
+    ],
+    DownloadTaskStatus.failed => <Widget>[
+      action(AppIcons.refresh, '重试 ${task.title}', onResume),
+      action(AppIcons.close, '取消 ${task.title}', onCancel),
+    ],
+    DownloadTaskStatus.completed => <Widget>[
+      action(AppIcons.play, '播放 ${task.title}', onPlay),
+      action(AppIcons.delete, '删除 ${task.title}', onCancel),
+    ],
+  };
+}
+
+String _taskStatusText(DownloadTask task) {
+  if (task.status == DownloadTaskStatus.failed &&
+      task.errorMessage?.trim().isNotEmpty == true) {
+    return '${task.status.displayName} · ${task.errorMessage!.trim()}';
+  }
+  return task.status.displayName;
+}
+
+String _taskSemanticLabel(DownloadTask task, double progress) {
+  final percentage = (progress * 100).round();
+  return <String>[
+    task.title,
+    if (task.artist?.trim().isNotEmpty == true) task.artist!.trim(),
+    task.status.displayName,
+    if (task.status == DownloadTaskStatus.downloading) '$percentage%',
+    if (task.errorMessage?.trim().isNotEmpty == true) task.errorMessage!.trim(),
+  ].join('，');
+}
+
+Future<void> _playTask(
+  BuildContext context,
+  WidgetRef ref,
+  DownloadTask task,
+) async {
+  final repository = ref.read(musicRepositoryProvider);
+  if (repository == null) return;
+
+  final song = await repository.getSong(task.songId);
+  if (song == null) {
+    ToastNotifier.show('无法获取歌曲信息');
+    return;
+  }
+  unawaited(ref.read(playerProvider.notifier).playSong(song));
+  ToastNotifier.show('正在播放：${task.title}');
+}
+
+Future<void> _showTaskActions(
+  BuildContext context,
+  WidgetRef ref,
+  DownloadTask task,
+) async {
+  final service = ref.read(downloadServiceProvider);
+  await showEchoBottomSheet<void>(
+    context: context,
+    useRootNavigator: true,
+    builder: (sheetContext) => EchoBottomSheet(
+      title: task.title,
+      subtitle: task.artist,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          EchoActionRow(
+            icon: AppIcons.play,
+            title: '播放',
+            onPressed: () {
+              Navigator.of(sheetContext).pop();
+              unawaited(_playTask(context, ref, task));
+            },
+          ),
+          EchoActionRow(
+            icon: AppIcons.delete,
+            title: '删除下载',
+            destructive: true,
+            onPressed: () {
+              Navigator.of(sheetContext).pop();
+              service.cancel(task.id);
+            },
+          ),
+        ],
+      ),
+    ),
+  );
 }

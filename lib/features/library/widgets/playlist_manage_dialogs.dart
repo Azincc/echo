@@ -1,15 +1,17 @@
 import 'package:flutter/material.dart';
 
-class PlaylistFormResult {
-  final String name;
-  final String comment;
-  final bool isPublic;
+import '../../../core/design/echo_design.dart';
 
+class PlaylistFormResult {
   const PlaylistFormResult({
     required this.name,
     required this.comment,
     required this.isPublic,
   });
+
+  final String name;
+  final String comment;
+  final bool isPublic;
 }
 
 Future<PlaylistFormResult?> showPlaylistFormDialog({
@@ -20,9 +22,11 @@ Future<PlaylistFormResult?> showPlaylistFormDialog({
   String initialComment = '',
   bool initialPublic = false,
 }) async {
-  return showDialog<PlaylistFormResult>(
+  return showEchoBottomSheet<PlaylistFormResult>(
     context: context,
-    builder: (dialogContext) => _PlaylistFormDialog(
+    useRootNavigator: true,
+    isScrollControlled: true,
+    builder: (sheetContext) => _PlaylistFormSheet(
       title: title,
       confirmText: confirmText,
       initialName: initialName,
@@ -36,35 +40,51 @@ Future<bool> showDeletePlaylistConfirmDialog({
   required BuildContext context,
   required String playlistName,
 }) async {
-  final confirmed = await showDialog<bool>(
+  final confirmed = await showEchoBottomSheet<bool>(
     context: context,
-    builder: (context) => AlertDialog(
-      title: const Text('删除歌单'),
-      content: Text('确定要删除歌单「$playlistName」吗？此操作不可恢复。'),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(false),
-          child: const Text('取消'),
-        ),
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(true),
-          child: const Text('删除'),
-        ),
-      ],
+    useRootNavigator: true,
+    isScrollControlled: true,
+    builder: (sheetContext) => EchoBottomSheet(
+      title: '删除歌单',
+      subtitle: '此操作不可恢复。',
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: <Widget>[
+          Text(
+            '确定要删除歌单「$playlistName」吗？',
+            style: sheetContext.echoTypography.body.copyWith(
+              color: sheetContext.echoColors.muted,
+            ),
+          ),
+          SizedBox(height: sheetContext.echoSpacing.lg),
+          Row(
+            children: <Widget>[
+              Expanded(
+                child: EchoButton.secondary(
+                  label: '取消',
+                  onPressed: () => Navigator.of(sheetContext).pop(false),
+                ),
+              ),
+              SizedBox(width: sheetContext.echoSpacing.sm),
+              Expanded(
+                child: EchoButton.destructive(
+                  label: '删除',
+                  onPressed: () => Navigator.of(sheetContext).pop(true),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
     ),
   );
 
   return confirmed ?? false;
 }
 
-class _PlaylistFormDialog extends StatefulWidget {
-  final String title;
-  final String confirmText;
-  final String initialName;
-  final String initialComment;
-  final bool initialPublic;
-
-  const _PlaylistFormDialog({
+class _PlaylistFormSheet extends StatefulWidget {
+  const _PlaylistFormSheet({
     required this.title,
     required this.confirmText,
     required this.initialName,
@@ -72,15 +92,21 @@ class _PlaylistFormDialog extends StatefulWidget {
     required this.initialPublic,
   });
 
+  final String title;
+  final String confirmText;
+  final String initialName;
+  final String initialComment;
+  final bool initialPublic;
+
   @override
-  State<_PlaylistFormDialog> createState() => _PlaylistFormDialogState();
+  State<_PlaylistFormSheet> createState() => _PlaylistFormSheetState();
 }
 
-class _PlaylistFormDialogState extends State<_PlaylistFormDialog> {
+class _PlaylistFormSheetState extends State<_PlaylistFormSheet> {
+  final _formKey = GlobalKey<FormState>();
   late final TextEditingController _nameController;
   late final TextEditingController _commentController;
   late bool _isPublic;
-  String? _nameError;
 
   @override
   void initState() {
@@ -98,17 +124,10 @@ class _PlaylistFormDialogState extends State<_PlaylistFormDialog> {
   }
 
   void _submit() {
-    final name = _nameController.text.trim();
-    if (name.isEmpty) {
-      setState(() {
-        _nameError = '歌单名称不能为空';
-      });
-      return;
-    }
-
+    if (!(_formKey.currentState?.validate() ?? false)) return;
     Navigator.of(context).pop(
       PlaylistFormResult(
-        name: name,
+        name: _nameController.text.trim(),
         comment: _commentController.text.trim(),
         isPublic: _isPublic,
       ),
@@ -117,59 +136,163 @@ class _PlaylistFormDialogState extends State<_PlaylistFormDialog> {
 
   @override
   Widget build(BuildContext context) {
-    return AlertDialog(
-      title: Text(widget.title),
-      content: SingleChildScrollView(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: _nameController,
-              autofocus: true,
-              textInputAction: TextInputAction.next,
-              decoration: InputDecoration(
-                labelText: '歌单名称',
-                hintText: '请输入歌单名称',
-                errorText: _nameError,
+    final keyboardInset = MediaQuery.viewInsetsOf(context).bottom;
+    final motion = context.echoMotion;
+
+    return AnimatedPadding(
+      duration: motion.resolve(context, motion.state),
+      curve: motion.easeOut,
+      padding: EdgeInsets.only(bottom: keyboardInset),
+      child: EchoBottomSheet(
+        title: widget.title,
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+            maxHeight: MediaQuery.sizeOf(context).height * 0.72,
+          ),
+          child: Form(
+            key: _formKey,
+            child: SingleChildScrollView(
+              keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: <Widget>[
+                  EchoTextField(
+                    controller: _nameController,
+                    label: '歌单名称',
+                    hintText: '请输入歌单名称',
+                    leadingIcon: AppIcons.playlist,
+                    autofocus: true,
+                    textInputAction: TextInputAction.next,
+                    validator: (value) => value == null || value.trim().isEmpty
+                        ? '歌单名称不能为空'
+                        : null,
+                    onSubmitted: (_) => FocusScope.of(context).nextFocus(),
+                  ),
+                  SizedBox(height: context.echoSpacing.md),
+                  EchoTextField(
+                    controller: _commentController,
+                    label: '简介（可选）',
+                    hintText: '例如：通勤歌单',
+                    leadingIcon: AppIcons.fileText,
+                    minLines: 2,
+                    maxLines: 4,
+                    textInputAction: TextInputAction.newline,
+                  ),
+                  SizedBox(height: context.echoSpacing.md),
+                  _EchoToggleRow(
+                    title: '公开歌单',
+                    description: _isPublic
+                        ? '服务器上的其他用户可以看到这个歌单。'
+                        : '只有当前账户可以看到这个歌单。',
+                    value: _isPublic,
+                    onChanged: (value) => setState(() => _isPublic = value),
+                  ),
+                  SizedBox(height: context.echoSpacing.lg),
+                  Row(
+                    children: <Widget>[
+                      Expanded(
+                        child: EchoButton.secondary(
+                          label: '取消',
+                          onPressed: () => Navigator.of(context).pop(),
+                        ),
+                      ),
+                      SizedBox(width: context.echoSpacing.sm),
+                      Expanded(
+                        child: EchoButton.primary(
+                          label: widget.confirmText,
+                          onPressed: _submit,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
               ),
-              onChanged: (_) {
-                if (_nameError == null) return;
-                setState(() {
-                  _nameError = null;
-                });
-              },
             ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: _commentController,
-              textInputAction: TextInputAction.done,
-              maxLines: 2,
-              decoration: const InputDecoration(
-                labelText: '简介（可选）',
-                hintText: '例如：通勤歌单',
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _EchoToggleRow extends StatelessWidget {
+  const _EchoToggleRow({
+    required this.title,
+    required this.description,
+    required this.value,
+    required this.onChanged,
+  });
+
+  final String title;
+  final String description;
+  final bool value;
+  final ValueChanged<bool> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.echoColors;
+    final motion = context.echoMotion;
+
+    return EchoPressable(
+      semanticLabel: '$title，${value ? '已开启' : '已关闭'}，$description',
+      selected: value,
+      onPressed: () => onChanged(!value),
+      minimumSize: const Size(double.infinity, 72),
+      child: Padding(
+        padding: EdgeInsets.symmetric(
+          horizontal: context.echoSpacing.sm,
+          vertical: context.echoSpacing.xs,
+        ),
+        child: Row(
+          children: <Widget>[
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Text(title, style: context.echoTypography.title),
+                  SizedBox(height: context.echoSpacing.xxs),
+                  Text(
+                    description,
+                    style: context.echoTypography.body.copyWith(
+                      color: colors.muted,
+                    ),
+                  ),
+                ],
               ),
             ),
-            const SizedBox(height: 12),
-            SwitchListTile(
-              contentPadding: EdgeInsets.zero,
-              title: const Text('公开歌单'),
-              value: _isPublic,
-              onChanged: (value) {
-                setState(() {
-                  _isPublic = value;
-                });
-              },
+            SizedBox(width: context.echoSpacing.sm),
+            AnimatedContainer(
+              duration: motion.resolve(context, motion.state),
+              curve: motion.easeOut,
+              width: 52,
+              height: 30,
+              padding: const EdgeInsets.all(3),
+              decoration: BoxDecoration(
+                color: value ? colors.accent : colors.raised,
+                borderRadius: context.echoRadii.pill,
+                border: Border.all(
+                  color: value ? colors.accent : colors.controlBoundary,
+                ),
+              ),
+              child: AnimatedAlign(
+                duration: motion.resolve(context, motion.state),
+                curve: motion.easeOut,
+                alignment: value
+                    ? AlignmentDirectional.centerEnd
+                    : AlignmentDirectional.centerStart,
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: value ? colors.onAccent : colors.muted,
+                    shape: BoxShape.circle,
+                  ),
+                  child: const SizedBox.square(dimension: 22),
+                ),
+              ),
             ),
           ],
         ),
       ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(),
-          child: const Text('取消'),
-        ),
-        FilledButton(onPressed: _submit, child: Text(widget.confirmText)),
-      ],
     );
   }
 }

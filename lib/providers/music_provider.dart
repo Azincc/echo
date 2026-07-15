@@ -37,7 +37,7 @@ final starredLoadFailedProvider = StateProvider<bool>((ref) => false);
 final topSongsByArtistLoadFailedProvider = StateProvider.family<bool, String>(
   (ref, artistName) => false,
 );
-final searchLoadFailedProvider = StateProvider.family<bool, String>(
+final searchLoadFailedProvider = StateProvider.autoDispose.family<bool, String>(
   (ref, query) => false,
 );
 
@@ -330,12 +330,15 @@ final searchProvider = FutureProvider.autoDispose.family<SearchResult, String>((
   ref,
   query,
 ) async {
+  final emptyResult = SearchResult(artists: [], albums: [], songs: []);
+  var disposed = false;
+  ref.onDispose(() => disposed = true);
   final repository = ref.watch(musicRepositoryProvider);
   if (query.isEmpty || repository == null) {
-    if (query.isNotEmpty) {
+    if (query.isNotEmpty && !disposed) {
       ref.read(searchLoadFailedProvider(query).notifier).state = false;
     }
-    return SearchResult(artists: [], albums: [], songs: []);
+    return emptyResult;
   }
   try {
     await ref.read(ensureActiveAddressProvider.future);
@@ -345,13 +348,14 @@ final searchProvider = FutureProvider.autoDispose.family<SearchResult, String>((
       albumCount: 20,
       songCount: 30,
     );
+    if (disposed) return emptyResult;
     ref.read(searchLoadFailedProvider(query).notifier).state = false;
     return result;
   } catch (e) {
+    if (disposed) return emptyResult;
     Logger.warnWithTag(_musicLogTag, 'search failed: query=$query', e);
-    NetworkErrorNotifier.show('网络异常，搜索失败');
     ref.read(searchLoadFailedProvider(query).notifier).state = true;
-    return SearchResult(artists: [], albums: [], songs: []);
+    return emptyResult;
   }
 });
 

@@ -61,6 +61,9 @@ void main() {
       expect(find.byIcon(AppIcons.download), findsOneWidget);
       expect(find.byIcon(AppIcons.cloud), findsOneWidget);
       expect(find.byIcon(AppIcons.more), findsOneWidget);
+      final title = tester.widget<Text>(find.text(song.title));
+      expect(title.maxLines, isNull);
+      expect(title.overflow, TextOverflow.visible);
       expect(tester.takeException(), isNull);
 
       await tester.tap(rowSemantics);

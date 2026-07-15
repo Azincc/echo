@@ -92,12 +92,16 @@ void main() {
     );
     expect(tester.takeException(), isNull);
 
+    await tester.ensureVisible(find.text(songs[1].title));
+    await tester.pump();
     await tester.tap(find.text(songs[1].title));
     await tester.pump();
     expect(selected, <int>[1]);
     expect(opened, isEmpty);
 
     final secondMore = find.bySemanticsLabel('${songs[1].title}，更多操作');
+    await tester.drag(find.byType(ListView), const Offset(0, -160));
+    await tester.pump();
     final moreSize = tester.getSize(secondMore);
     expect(moreSize.width, greaterThanOrEqualTo(48));
     expect(moreSize.height, greaterThanOrEqualTo(48));
@@ -106,12 +110,15 @@ void main() {
     expect(selected, <int>[1]);
     expect(opened, <int>[1]);
 
+    await tester.drag(find.byType(ListView), const Offset(0, 600));
+    await tester.pumpAndSettle();
     await tester.longPress(find.text(songs.first.title));
     await tester.pump();
     expect(selected, <int>[1]);
     expect(opened, <int>[1, 0]);
 
-    await tester.tap(find.bySemanticsLabel(RegExp('清空后续播放队列')));
+    final clearQueue = find.bySemanticsLabel(RegExp('清空后续播放队列'));
+    await tester.tap(clearQueue);
     await tester.pump();
     expect(cleared, 1);
   });

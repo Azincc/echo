@@ -108,6 +108,7 @@ class EchoSongRow extends StatelessWidget {
   }
 
   Widget _buildDetails(BuildContext context, String artistText) {
+    final showFullText = MediaQuery.textScalerOf(context).scale(1) > 1.3;
     final statusMarkers = <Widget>[
       if (_favorite)
         const _SongStatusMarker(icon: AppIcons.heart, label: '已收藏'),
@@ -122,8 +123,8 @@ class EchoSongRow extends StatelessWidget {
       children: <Widget>[
         Text(
           song.title,
-          maxLines: 2,
-          overflow: TextOverflow.ellipsis,
+          maxLines: showFullText ? null : 2,
+          overflow: showFullText ? TextOverflow.visible : TextOverflow.ellipsis,
           style: context.echoTypography.title.copyWith(
             color: isCurrent
                 ? context.echoColors.accent
@@ -133,7 +134,7 @@ class EchoSongRow extends StatelessWidget {
         SizedBox(height: context.echoSpacing.xxs),
         EchoMetadataLine(
           items: <String?>[artistText, song.durationString],
-          maxLines: 2,
+          maxLines: showFullText ? null : 2,
         ),
         if (statusMarkers.isNotEmpty) ...<Widget>[
           SizedBox(height: context.echoSpacing.xxs),

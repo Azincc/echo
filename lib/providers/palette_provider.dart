@@ -6,10 +6,13 @@ import 'package:flutter/painting.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:palette_generator/palette_generator.dart';
 
+import '../core/design/media/echo_media_visuals.dart';
 import '../core/utils/cover_ref_security.dart';
 import 'api_provider.dart';
 import 'library_provider.dart';
 import 'player_provider.dart';
+
+export '../core/design/media/echo_media_visuals.dart';
 
 enum MediaPaletteSourceKind { coverReference, previewUrl }
 
@@ -135,6 +138,17 @@ final mediaPaletteProvider = FutureProvider.autoDispose
       }
     });
 
+/// Artwork-derived semantic colours for player and media-adjacent surfaces.
+///
+/// Raw palette extraction remains available through [mediaPaletteProvider] for
+/// compatibility. New UI should consume this provider so swatch selection,
+/// light/dark foreground choice, and contrast guarantees stay centralized.
+final mediaVisualsProvider = FutureProvider.autoDispose
+    .family<EchoMediaVisuals, MediaPaletteRequest>((ref, request) async {
+      final palette = await ref.watch(mediaPaletteProvider(request).future);
+      return EchoMediaVisuals.fromPalette(palette);
+    });
+
 /// Current-player compatibility provider.
 ///
 /// It keeps the existing API while delegating extraction to the shared,
@@ -154,6 +168,20 @@ final currentSongPaletteProvider =
       if (request.reference.trim().isEmpty) return null;
 
       return await ref.watch(mediaPaletteProvider(request).future);
+    });
+
+/// Semantic media visuals for the active song.
+///
+/// A song without usable artwork receives the stable Echo fallback. No active
+/// song remains `null`, matching the lifecycle of [currentSongPaletteProvider]
+/// without forcing player chrome to render when playback has no current item.
+final currentSongMediaVisualsProvider =
+    FutureProvider.autoDispose<EchoMediaVisuals?>((ref) async {
+      final song = ref.watch(playerProvider.select((s) => s.currentSong));
+      if (song == null) return null;
+
+      final palette = await ref.watch(currentSongPaletteProvider.future);
+      return EchoMediaVisuals.fromPalette(palette);
     });
 
 _MediaPaletteResource? _resolvePaletteResource(

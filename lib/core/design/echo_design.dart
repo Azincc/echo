@@ -19,6 +19,7 @@ export 'components/echo_slider.dart';
 export 'components/echo_surface.dart';
 export 'components/echo_text_field.dart';
 export 'echo_context.dart';
+export 'media/echo_media_visuals.dart';
 export 'tokens/echo_breakpoints.dart';
 export 'tokens/echo_colors.dart';
 export 'tokens/echo_interaction.dart';

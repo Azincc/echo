@@ -1,6 +1,7 @@
 import 'package:echoes/core/theme/app_theme.dart';
 import 'package:echoes/providers/navigation_provider.dart';
 import 'package:echoes/widgets/main_scaffold.dart';
+import 'package:echoes/widgets/echo_app_shell/echo_network_status_bar.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -173,6 +174,7 @@ Future<_MainScaffoldHarness> _pumpMainScaffold(WidgetTester tester) async {
                 branchNavigatorKeys: branchNavigatorKeys,
                 showExploreTabOverride: showExploreTab,
                 showMiniPlayerOverride: false,
+                networkStatusOverride: EchoNetworkStatus.online,
                 drawerOverride: const SizedBox(width: 320),
                 miniPlayerOverride: const SizedBox(height: 72),
               );

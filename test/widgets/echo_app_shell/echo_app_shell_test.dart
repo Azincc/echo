@@ -3,6 +3,7 @@ import 'dart:ui' show Tristate;
 import 'package:echoes/core/design/echo_design.dart';
 import 'package:echoes/core/theme/app_theme.dart';
 import 'package:echoes/widgets/echo_app_shell/echo_app_shell.dart';
+import 'package:echoes/widgets/echo_app_shell/echo_network_status_bar.dart';
 import 'package:echoes/widgets/echo_app_shell/echo_shell_navigation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -99,6 +100,23 @@ void main() {
   });
 
   group('EchoAppShell MiniPlayer slot', () {
+    testWidgets('network status reserves space instead of covering content', (
+      tester,
+    ) async {
+      await _pumpShell(
+        tester,
+        size: const Size(390, 800),
+        showMiniPlayer: true,
+        networkStatus: EchoNetworkStatus.offline,
+      );
+
+      final contentRect = tester.getRect(_content);
+      final statusRect = tester.getRect(_networkStatusSlot);
+      final playerRect = tester.getRect(_miniPlayer);
+      expect(contentRect.bottom, lessThanOrEqualTo(statusRect.top));
+      expect(statusRect.bottom, lessThanOrEqualTo(playerRect.top));
+    });
+
     testWidgets('reserves measured MiniPlayer space without covering content', (
       tester,
     ) async {
@@ -175,6 +193,8 @@ Finder get _miniPlayer =>
     find.byKey(const ValueKey<String>('test-mini-player'));
 Finder get _miniPlayerSlot =>
     find.byKey(const ValueKey<String>('echo-mini-player-slot'));
+Finder get _networkStatusSlot =>
+    find.byKey(const ValueKey<String>('echo-network-status-slot'));
 
 Future<void> _pumpShell(
   WidgetTester tester, {
@@ -183,6 +203,7 @@ Future<void> _pumpShell(
   double bottomSafeArea = 0,
   bool showMiniPlayer = false,
   bool disableAnimations = false,
+  EchoNetworkStatus networkStatus = EchoNetworkStatus.online,
   ValueChanged<int>? onDestinationSelected,
 }) async {
   tester.view.devicePixelRatio = 1;
@@ -206,6 +227,7 @@ Future<void> _pumpShell(
           selectedBranchIndex: 0,
           onDestinationSelected: onDestinationSelected ?? (_) {},
           showMiniPlayer: showMiniPlayer,
+          networkStatus: networkStatus,
           miniPlayer: const SizedBox(
             key: ValueKey<String>('test-mini-player'),
             height: 72,

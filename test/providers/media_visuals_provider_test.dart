@@ -84,6 +84,7 @@ void main() {
       );
 
       expect(empty, missing);
+      expect(missing, EchoMediaVisuals.fallback());
       _expectAccessibleVisuals(missing);
     });
 
@@ -270,6 +271,100 @@ void main() {
         await songContainer.read(currentSongMediaVisualsProvider.future),
         EchoMediaVisuals.fromPalette(null),
       );
+    });
+
+    test(
+      'resolved visuals retain one previous value while reloading',
+      () async {
+        final generationProvider = StateProvider<int>((_) => 0);
+        final pending = <int, Completer<EchoMediaVisuals?>>{
+          0: Completer<EchoMediaVisuals?>(),
+          1: Completer<EchoMediaVisuals?>(),
+        };
+        final first = EchoMediaVisuals.fallback(seed: const Color(0xFF183A54));
+        final second = EchoMediaVisuals.fallback(seed: const Color(0xFFF0C55A));
+        final container = ProviderContainer(
+          overrides: <Override>[
+            currentSongMediaVisualsProvider.overrideWith((ref) {
+              final generation = ref.watch(generationProvider);
+              return pending[generation]!.future;
+            }),
+          ],
+        );
+        addTearDown(container.dispose);
+        final emitted = <EchoMediaVisuals>[];
+        final subscription = container.listen(
+          resolvedCurrentSongMediaVisualsProvider,
+          (_, next) => emitted.add(next),
+          fireImmediately: true,
+        );
+        addTearDown(subscription.close);
+
+        expect(subscription.read(), EchoMediaVisuals.fallback());
+        pending[0]!.complete(first);
+        await container.pump();
+        expect(subscription.read(), first);
+
+        container.read(generationProvider.notifier).state = 1;
+        await container.pump();
+        final loading = container.read(currentSongMediaVisualsProvider);
+        expect(loading.isLoading, isTrue);
+        expect(loading.valueOrNull, first);
+        expect(subscription.read(), first);
+
+        pending[1]!.complete(second);
+        await container.pump();
+        expect(subscription.read(), second);
+        expect(emitted, <EchoMediaVisuals>[
+          EchoMediaVisuals.fallback(),
+          first,
+          second,
+        ]);
+      },
+    );
+
+    test('late palette result cannot replace a newer song request', () async {
+      final generationProvider = StateProvider<int>((_) => 0);
+      final pending = <int, Completer<EchoMediaVisuals?>>{
+        0: Completer<EchoMediaVisuals?>(),
+        1: Completer<EchoMediaVisuals?>(),
+        2: Completer<EchoMediaVisuals?>(),
+      };
+      final first = EchoMediaVisuals.fallback(seed: const Color(0xFF244B5A));
+      final stale = EchoMediaVisuals.fallback(seed: const Color(0xFF9B4054));
+      final newest = EchoMediaVisuals.fallback(seed: const Color(0xFFE6D36A));
+      final container = ProviderContainer(
+        overrides: <Override>[
+          currentSongMediaVisualsProvider.overrideWith((ref) {
+            final generation = ref.watch(generationProvider);
+            return pending[generation]!.future;
+          }),
+        ],
+      );
+      addTearDown(container.dispose);
+      final subscription = container.listen(
+        resolvedCurrentSongMediaVisualsProvider,
+        (_, _) {},
+        fireImmediately: true,
+      );
+      addTearDown(subscription.close);
+
+      pending[0]!.complete(first);
+      await container.pump();
+      expect(subscription.read(), first);
+
+      container.read(generationProvider.notifier).state = 1;
+      await container.pump();
+      container.read(generationProvider.notifier).state = 2;
+      await container.pump();
+
+      pending[1]!.complete(stale);
+      await container.pump();
+      expect(subscription.read(), first);
+
+      pending[2]!.complete(newest);
+      await container.pump();
+      expect(subscription.read(), newest);
     });
   });
 }

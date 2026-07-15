@@ -184,6 +184,18 @@ final currentSongMediaVisualsProvider =
       return EchoMediaVisuals.fromPalette(palette);
     });
 
+/// Always-available visuals for player chrome.
+///
+/// Riverpod preserves the previous FutureProvider value while a dependency is
+/// reloading. Reading [valueOrNull] therefore keeps one stable colour state
+/// during rapid song changes instead of flashing through fallback colours.
+final resolvedCurrentSongMediaVisualsProvider = Provider<EchoMediaVisuals>((
+  ref,
+) {
+  final visuals = ref.watch(currentSongMediaVisualsProvider);
+  return visuals.valueOrNull ?? EchoMediaVisuals.fallback();
+});
+
 _MediaPaletteResource? _resolvePaletteResource(
   Ref ref,
   MediaPaletteRequest request,

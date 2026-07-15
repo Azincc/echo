@@ -115,6 +115,13 @@ class EchoMediaVisuals {
     );
   }
 
+  /// Stable media visuals used before artwork is available or has no palette.
+  factory EchoMediaVisuals.fallback({
+    Color seed = EchoColors.contentTintFallback,
+  }) {
+    return EchoMediaVisuals.fromPalette(null, fallbackSeed: seed);
+  }
+
   final Color stageBase;
   final Color stageGlow;
   final Color stageBottom;

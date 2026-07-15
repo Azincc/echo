@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'core/design/echo_design.dart';
 import 'core/utils/logger.dart';
 import 'core/utils/toast_notifier.dart';
 import 'core/theme/app_theme.dart';
@@ -187,15 +188,33 @@ final routerProvider = Provider<GoRouter>((ref) {
     },
     routes: [
       // 登录页
-      GoRoute(path: '/login', builder: (context, state) => const LoginPage()),
+      GoRoute(
+        path: '/login',
+        pageBuilder: (context, state) => EchoTransitionPage<void>(
+          key: state.pageKey,
+          name: state.name ?? state.path,
+          arguments: <String, String>{
+            ...state.pathParameters,
+            ...state.uri.queryParameters,
+          },
+          restorationId: state.pageKey.value,
+          child: const LoginPage(),
+        ),
+      ),
       // Library Edit
       GoRoute(
         path: '/library/edit/:id',
         parentNavigatorKey: rootNavigatorKey,
-        builder: (context, state) {
-          final id = state.pathParameters['id']!;
-          return EditLibraryPage(libraryId: id);
-        },
+        pageBuilder: (context, state) => EchoTransitionPage<void>(
+          key: state.pageKey,
+          name: state.name ?? state.path,
+          arguments: <String, String>{
+            ...state.pathParameters,
+            ...state.uri.queryParameters,
+          },
+          restorationId: state.pageKey.value,
+          child: EditLibraryPage(libraryId: state.pathParameters['id']!),
+        ),
       ),
       // StatefulShellRoute 为主要导航结构
       StatefulShellRoute.indexedStack(

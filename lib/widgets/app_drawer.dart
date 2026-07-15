@@ -1,3 +1,6 @@
+import 'dart:async';
+
+import 'package:echoes/core/design/echo_design.dart';
 import 'package:echoes/data/models/music_library.dart';
 import 'package:echoes/data/models/server_address.dart';
 import 'package:echoes/features/download/pages/download_manager_page.dart';
@@ -15,10 +18,14 @@ import '../providers/music_provider.dart';
 import '../providers/offline_download_provider.dart';
 import '../providers/player_provider.dart';
 import '../providers/playlist_provider.dart';
+import 'echo_app_shell/echo_drawer.dart';
 
-/// 应用侧栏
+/// Echo's application drawer. [Scaffold] still supplies platform drawer
+/// routing, focus, and back behavior; every visible surface is owned here.
 class AppDrawer extends ConsumerStatefulWidget {
-  const AppDrawer({super.key});
+  const AppDrawer({super.key, this.onReturnFocus});
+
+  final VoidCallback? onReturnFocus;
 
   @override
   ConsumerState<AppDrawer> createState() => _AppDrawerState();
@@ -33,284 +40,196 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
     final activeLibrary = authState.currentLibrary;
     final activeAddress = ref.watch(activeAddressProvider);
 
-    return Drawer(
-      child: Column(
-        children: [
-          _buildHeader(context, activeLibrary, activeAddress),
-          Expanded(
-            child: _showLibraries
-                ? _buildLibraryList(context, activeLibrary)
-                : _buildNavigationList(context),
-          ),
-        ],
+    return EchoDrawerFrame(
+      header: EchoDrawerIdentityHeader(
+        username: activeLibrary?.username ?? 'Guest',
+        libraryName: activeLibrary?.name ?? '未选择',
+        addressLabel: activeAddress?.label ?? '没有活动线路',
+        connectionState: _connectionState(activeAddress),
+        avatarUrl: resolveEchoDrawerAvatarUrl(activeLibrary),
+        showingLibraries: _showLibraries,
+        onToggleLibraries: () {
+          setState(() {
+            _showLibraries = !_showLibraries;
+          });
+        },
       ),
+      child: _showLibraries
+          ? _buildLibraryList(activeLibrary)
+          : _buildNavigationList(activeAddress),
     );
   }
 
-  Widget _buildHeader(
-    BuildContext context,
-    MusicLibrary? activeLibrary,
-    ServerAddress? activeAddress,
-  ) {
-    final primary = Theme.of(context).colorScheme.primary;
-    final primaryContainer = Theme.of(context).colorScheme.primaryContainer;
-    final onPrimary = Theme.of(context).colorScheme.onPrimary;
-    final avatarUrl = _resolveAvatarUrl(activeLibrary);
+  Widget _buildLibraryList(MusicLibrary? activeLibrary) {
+    final libraries = ref.watch(librariesProvider);
 
-    return DrawerHeader(
-      margin: EdgeInsets.zero,
-      padding: const EdgeInsets.fromLTRB(16, 16, 8, 16),
-      decoration: BoxDecoration(
-        color: primary,
-        gradient: LinearGradient(
-          colors: [primary, primaryContainer],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          CircleAvatar(
-            radius: 28,
-            backgroundColor: onPrimary,
-            foregroundImage: avatarUrl != null ? NetworkImage(avatarUrl) : null,
-            child: avatarUrl == null
-                ? Icon(Icons.person, size: 32, color: primary)
-                : null,
-          ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  activeLibrary?.username ?? 'Guest',
-                  style: TextStyle(
-                    color: onPrimary,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 18,
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  activeLibrary?.name ?? '未选择',
-                  style: TextStyle(
-                    color: onPrimary.withValues(alpha: 0.9),
-                    fontSize: 13,
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                const SizedBox(height: 4),
-                Row(
-                  children: [
-                    Container(
-                      width: 8,
-                      height: 8,
-                      decoration: BoxDecoration(
-                        color: activeAddress == null
-                            ? Colors.grey.shade300
-                            : (activeAddress.status == ServerAddressStatus.ok
-                                  ? Colors.greenAccent
-                                  : Colors.redAccent),
-                        shape: BoxShape.circle,
-                        border: Border.all(
-                          color: Colors.white.withValues(alpha: 0.5),
-                          width: 1,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 6),
-                    Expanded(
-                      child: Text(
-                        activeAddress?.label ?? '未连接',
-                        style: TextStyle(
-                          color: onPrimary.withValues(alpha: 0.8),
-                          fontSize: 11,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-          IconButton(
-            icon: Icon(
-              _showLibraries
-                  ? Icons.keyboard_arrow_up
-                  : Icons.keyboard_arrow_down,
-              color: onPrimary,
-            ),
-            tooltip: '切换音乐库视图',
-            onPressed: () {
-              setState(() {
-                _showLibraries = !_showLibraries;
-              });
-            },
-          ),
-        ],
-      ),
-    );
-  }
+    return libraries.when(
+      data: (items) {
+        if (items.isEmpty) {
+          return EchoEmptyState(
+            title: '还没有音乐库',
+            description: '添加一个 Navidrome、Subsonic 或 OpenSubsonic 音乐库后即可开始聆听。',
+            icon: AppIcons.library,
+            actionLabel: '添加音乐库',
+            onAction: () => _closeDrawerAndPushLocation('/login?add=true'),
+          );
+        }
 
-  String? _resolveAvatarUrl(MusicLibrary? library) {
-    if (library == null) return null;
-    final raw = library.extensions['avatarUrl'];
-    if (raw is! String || raw.trim().isEmpty) return null;
-    final uri = Uri.tryParse(raw.trim());
-    if (uri == null || (!uri.hasScheme && !uri.hasAbsolutePath)) return null;
-    return raw.trim();
-  }
-
-  Widget _buildLibraryList(BuildContext context, MusicLibrary? activeLibrary) {
-    final asyncLibraries = ref.watch(librariesProvider);
-
-    return asyncLibraries.when(
-      data: (libs) {
-        return ListView(
-          padding: EdgeInsets.zero,
-          children: [
-            ...libs.map((lib) {
-              final isActive = lib.id == activeLibrary?.id;
-              return ListTile(
-                leading: isActive
-                    ? const Icon(Icons.check, color: Colors.green)
-                    : const Icon(Icons.library_music),
-                title: Text(lib.name),
-                subtitle: Text(lib.addresses.firstOrNull?.url ?? 'No Address'),
-                onTap: () {
-                  if (!isActive) {
-                    _switchLibrary(lib);
-                  }
-                  setState(() {
-                    _showLibraries = false;
-                  });
-                  Navigator.pop(context);
-                },
-                trailing: IconButton(
-                  icon: const Icon(Icons.edit),
-                  onPressed: () {
-                    context.push('/library/edit/${lib.id}');
+        return ListView.builder(
+          key: const PageStorageKey<String>('echo-drawer-libraries'),
+          padding: EdgeInsets.symmetric(vertical: context.echoSpacing.xs),
+          keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+          itemCount: items.length + 2,
+          itemBuilder: (context, index) {
+            if (index < items.length) {
+              final library = items[index];
+              final isActive = library.id == activeLibrary?.id;
+              return Padding(
+                padding: EdgeInsets.only(bottom: context.echoSpacing.xs),
+                child: EchoDrawerLibraryRow(
+                  title: library.name,
+                  subtitle: library.addresses.firstOrNull?.url ?? '未配置服务器地址',
+                  selected: isActive,
+                  onSelected: () {
+                    if (!isActive) {
+                      _switchLibrary(library);
+                    }
+                    setState(() {
+                      _showLibraries = false;
+                    });
+                    Navigator.of(context).pop();
                   },
+                  onEdit: () => _closeDrawerAndPushLocation(
+                    '/library/edit/${library.id}',
+                  ),
                 ),
               );
-            }),
-            const Divider(),
-            ListTile(
-              leading: const Icon(Icons.add),
-              title: const Text('添加新音乐库'),
-              onTap: () {
-                context.push('/login?add=true');
-              },
-            ),
-          ],
+            }
+
+            if (index == items.length) {
+              return Padding(
+                padding: EdgeInsets.fromLTRB(
+                  context.echoSpacing.md,
+                  context.echoSpacing.xxs,
+                  context.echoSpacing.md,
+                  context.echoSpacing.sm,
+                ),
+                child: const EchoDivider(),
+              );
+            }
+
+            return Padding(
+              padding: EdgeInsets.symmetric(horizontal: context.echoSpacing.xs),
+              child: EchoActionRow(
+                icon: AppIcons.add,
+                title: '添加新音乐库',
+                subtitle: '连接另一台服务器或另一个账户',
+                onPressed: () => _closeDrawerAndPushLocation('/login?add=true'),
+              ),
+            );
+          },
         );
       },
-      error: (err, stack) => Center(child: Text('Error: $err')),
-      loading: () => const Center(child: CircularProgressIndicator()),
+      loading: () => const _DrawerSkeletonList(),
+      error: (error, stackTrace) => EchoErrorState(
+        title: '无法读取音乐库',
+        description: '音乐库列表暂时不可用。重试不会影响当前正在播放的内容。',
+        actionLabel: '重试',
+        onAction: () => ref.invalidate(librariesProvider),
+      ),
     );
   }
 
-  Widget _buildNavigationList(BuildContext context) {
+  Widget _buildNavigationList(ServerAddress? activeAddress) {
     final downloadSummary = ref.watch(offlineDownloadSummaryProvider);
+    final routeLabel = activeAddress?.label.trim();
+    final entries = <_DrawerNavigationEntry?>[
+      _DrawerNavigationEntry(
+        title: '切换线路',
+        icon: AppIcons.router,
+        subtitle: routeLabel == null || routeLabel.isEmpty
+            ? '自动选择'
+            : routeLabel,
+        onPressed: _closeDrawerAndShowRouteSelection,
+      ),
+      null,
+      _DrawerNavigationEntry(
+        icon: AppIcons.analytics,
+        title: '统计信息',
+        onPressed: () =>
+            _closeDrawerAndPushPage((context) => const PlaybackStatsPage()),
+      ),
+      _DrawerNavigationEntry(
+        icon: AppIcons.downloadOutline,
+        title: '下载管理',
+        onPressed: () =>
+            _closeDrawerAndPushPage((context) => const DownloadManagerPage()),
+      ),
+      _DrawerNavigationEntry(
+        icon: AppIcons.offline,
+        title: '离线下载状态',
+        subtitle: downloadSummary.total == 0
+            ? '暂无任务'
+            : '进行中 ${downloadSummary.active} · 完成 ${downloadSummary.completed} · '
+                  '失败 ${downloadSummary.failed}',
+        onPressed: () => _closeDrawerAndPushPage(
+          (context) => const OfflineDownloadStatusPage(),
+        ),
+      ),
+      null,
+      _DrawerNavigationEntry(
+        icon: AppIcons.settings,
+        title: '设置',
+        onPressed: () =>
+            _closeDrawerAndPushPage((context) => const AppSettingsPage()),
+      ),
+    ];
 
-    return ListView(
-      padding: EdgeInsets.zero,
-      children: [
-        ListTile(
-          leading: const Icon(Icons.router),
-          title: const Text('切换线路'),
-          subtitle: Consumer(
-            builder: (context, ref, child) {
-              final activeAddress = ref.watch(activeAddressProvider);
-              return Text(
-                activeAddress?.label ?? '自动选择',
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(fontSize: 10),
-              );
-            },
+    return ListView.builder(
+      key: const PageStorageKey<String>('echo-drawer-navigation'),
+      padding: EdgeInsets.symmetric(vertical: context.echoSpacing.xs),
+      itemCount: entries.length,
+      itemBuilder: (context, index) {
+        final entry = entries[index];
+        if (entry == null) {
+          return Padding(
+            padding: EdgeInsets.fromLTRB(
+              context.echoSpacing.md,
+              context.echoSpacing.xxs,
+              context.echoSpacing.md,
+              context.echoSpacing.xs,
+            ),
+            child: const EchoDivider(),
+          );
+        }
+
+        return Padding(
+          padding: EdgeInsets.fromLTRB(
+            context.echoSpacing.xs,
+            0,
+            context.echoSpacing.xs,
+            context.echoSpacing.xs,
           ),
-          onTap: () {
-            Navigator.pop(context);
-            _showRouteSelectionDialog(context);
-          },
-        ),
-        const Divider(),
-        ListTile(
-          leading: const Icon(Icons.analytics_outlined),
-          title: const Text('统计信息'),
-          onTap: () {
-            Navigator.pop(context);
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (context) => const PlaybackStatsPage(),
-              ),
-            );
-          },
-        ),
-        ListTile(
-          leading: const Icon(Icons.download_outlined),
-          title: const Text('下载管理'),
-          onTap: () {
-            Navigator.pop(context);
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (context) => const DownloadManagerPage(),
-              ),
-            );
-          },
-        ),
-        ListTile(
-          leading: const Icon(Icons.offline_pin_outlined),
-          title: const Text('离线下载状态'),
-          subtitle: Text(
-            downloadSummary.total == 0
-                ? '暂无任务'
-                : '进行中 ${downloadSummary.active} · 完成 ${downloadSummary.completed} · 失败 ${downloadSummary.failed}',
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(fontSize: 10),
+          child: EchoActionRow(
+            icon: entry.icon,
+            title: entry.title,
+            subtitle: entry.subtitle,
+            trailing: Icon(
+              AppIcons.chevronRight,
+              size: context.echoInteraction.smallIconSize,
+              color: context.echoColors.muted,
+            ),
+            onPressed: entry.onPressed,
           ),
-          onTap: () {
-            Navigator.pop(context);
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (context) => const OfflineDownloadStatusPage(),
-              ),
-            );
-          },
-        ),
-        const Divider(),
-        ListTile(
-          leading: const Icon(Icons.settings_outlined),
-          title: const Text('设置'),
-          onTap: () {
-            Navigator.pop(context);
-            Navigator.push(
-              context,
-              MaterialPageRoute(builder: (context) => const AppSettingsPage()),
-            );
-          },
-        ),
-      ],
+        );
+      },
     );
   }
 
-  Future<void> _switchLibrary(MusicLibrary lib) async {
-    final repo = ref.read(libraryRepositoryProvider);
-    await repo.setActiveLibrary(lib.id);
-    ref.read(authStateProvider.notifier).switchLibrary(lib);
+  Future<void> _switchLibrary(MusicLibrary library) async {
+    final repository = ref.read(libraryRepositoryProvider);
+    await repository.setActiveLibrary(library.id);
+    ref.read(authStateProvider.notifier).switchLibrary(library);
 
     ref.invalidate(playerProvider);
     ref.invalidate(randomSongsProvider);
@@ -320,118 +239,321 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
     ref.invalidate(starredProvider);
   }
 
-  Future<void> _showRouteSelectionDialog(BuildContext context) async {
-    showDialog(
-      context: context,
-      builder: (context) => Consumer(
-        builder: (context, ref, _) {
-          final authState = ref.watch(authStateProvider);
-          final activeLibId = authState.currentLibrary?.id;
-          final librariesAsync = ref.watch(librariesProvider);
-          final activeAddress = ref.watch(activeAddressProvider);
-          final addressPool = ref.read(addressPoolProvider);
-
-          return AlertDialog(
-            title: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                const Text('切换线路'),
-                IconButton(
-                  icon: const Icon(Icons.refresh),
-                  tooltip: '检测延迟',
-                  onPressed: () {
-                    addressPool.probeAll();
-                  },
-                ),
-              ],
-            ),
-            content: librariesAsync.when(
-              data: (libs) {
-                // 使用 addressPool 中的实时地址状态，而非 DB 中可能过期的快照
-                final poolAddresses = addressPool.addresses;
-                final addresses = List<ServerAddress>.from(
-                  poolAddresses.isNotEmpty
-                      ? poolAddresses
-                      : libs
-                            .firstWhere(
-                              (l) => l.id == activeLibId,
-                              orElse: () => libs.first,
-                            )
-                            .addresses,
-                )..sort((a, b) => a.priority.compareTo(b.priority));
-
-                final isAuto = !addresses.any(
-                  (a) => a.isLocked && a.id == activeAddress?.id,
-                );
-
-                return SizedBox(
-                  width: double.maxFinite,
-                  child: ListView(
-                    shrinkWrap: true,
-                    children: [
-                      ListTile(
-                        leading: const Icon(Icons.hdr_auto),
-                        title: const Text('自动选择'),
-                        subtitle: isAuto
-                            ? Text('当前: ${activeAddress?.label}')
-                            : null,
-                        trailing: isAuto
-                            ? const Icon(Icons.check, color: Colors.green)
-                            : null,
-                        onTap: () {
-                          addressPool.setAutoMode();
-                          Navigator.pop(context);
-                        },
-                      ),
-                      const Divider(),
-                      ...addresses.map((addr) {
-                        final isSelected =
-                            activeAddress?.id == addr.id && addr.isLocked;
-                        return ListTile(
-                          title: Text(addr.label),
-                          subtitle: Text(
-                            '${addr.url}\n延迟: ${addr.lastLatencyMs != null ? "${addr.lastLatencyMs}ms" : "未知"}',
-                          ),
-                          isThreeLine: true,
-                          trailing: isSelected
-                              ? const Icon(Icons.check, color: Colors.green)
-                              : _getStatusIcon(addr.status),
-                          onTap: () {
-                            addressPool.setManualMode(addr);
-                            Navigator.pop(context);
-                          },
-                        );
-                      }),
-                    ],
-                  ),
-                );
-              },
-              loading: () => const SizedBox(
-                height: 100,
-                child: Center(child: CircularProgressIndicator()),
-              ),
-              error: (err, stack) => Text('Error: $err'),
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text('取消'),
-              ),
-            ],
-          );
-        },
-      ),
-    );
+  void _closeDrawerAndPushPage(WidgetBuilder builder) {
+    final navigator = Navigator.of(context);
+    navigator.pop();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!navigator.mounted) return;
+      navigator.push(
+        EchoPageRoute<void>(context: navigator.context, builder: builder),
+      );
+    });
   }
 
-  Widget _getStatusIcon(ServerAddressStatus status) {
-    switch (status) {
-      case ServerAddressStatus.ok:
-        return const Icon(Icons.circle, color: Colors.green, size: 12);
-      case ServerAddressStatus.failed:
-        return const Icon(Icons.error, color: Colors.red, size: 12);
-      case ServerAddressStatus.unknown:
-        return const Icon(Icons.help, color: Colors.grey, size: 12);
+  void _closeDrawerAndPushLocation(String location) {
+    final router = GoRouter.of(context);
+    final navigator = Navigator.of(context);
+    navigator.pop();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!navigator.mounted) return;
+      router.push(location);
+    });
+  }
+
+  void _closeDrawerAndShowRouteSelection() {
+    final navigator = Navigator.of(context);
+    final onReturnFocus = widget.onReturnFocus;
+    navigator.pop();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!navigator.mounted) return;
+      unawaited(
+        _showRouteSelectionSheet(navigator.context, onClosed: onReturnFocus),
+      );
+    });
+  }
+
+  Future<void> _showRouteSelectionSheet(
+    BuildContext hostContext, {
+    VoidCallback? onClosed,
+  }) async {
+    try {
+      await showEchoBottomSheet<void>(
+        context: hostContext,
+        useRootNavigator: true,
+        isScrollControlled: true,
+        builder: (sheetContext) {
+          return Consumer(
+            builder: (context, ref, child) {
+              final authState = ref.watch(authStateProvider);
+              final activeLibraryId = authState.currentLibrary?.id;
+              final libraries = ref.watch(librariesProvider);
+              final activeAddress = ref.watch(activeAddressProvider);
+              final addressPool = ref.read(addressPoolProvider);
+
+              return EchoBottomSheet(
+                title: '切换线路',
+                subtitle: '手动锁定一条线路，或让 Echo 根据可用性和延迟自动选择。',
+                constrainToAvailableHeight: true,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: <Widget>[
+                    EchoButton.ghost(
+                      label: '重新检测延迟',
+                      leadingIcon: AppIcons.refresh,
+                      expand: true,
+                      onPressed: () {
+                        addressPool.probeAll();
+                      },
+                    ),
+                    SizedBox(height: context.echoSpacing.sm),
+                    Flexible(
+                      child: libraries.when(
+                        data: (items) {
+                          final fallbackLibrary =
+                              items
+                                  .where(
+                                    (library) => library.id == activeLibraryId,
+                                  )
+                                  .firstOrNull ??
+                              items.firstOrNull;
+                          final poolAddresses = addressPool.addresses;
+                          final addresses =
+                              List<ServerAddress>.from(
+                                poolAddresses.isNotEmpty
+                                    ? poolAddresses
+                                    : fallbackLibrary?.addresses ??
+                                          const <ServerAddress>[],
+                              )..sort(
+                                (first, second) =>
+                                    first.priority.compareTo(second.priority),
+                              );
+
+                          if (addresses.isEmpty) {
+                            return const SingleChildScrollView(
+                              child: EchoEmptyState(
+                                title: '没有可用线路',
+                                description: '请先在音乐库设置中添加至少一个服务器地址。',
+                                icon: AppIcons.route,
+                                padding: EdgeInsets.all(24),
+                              ),
+                            );
+                          }
+
+                          final isAuto = !addresses.any(
+                            (address) =>
+                                address.isLocked &&
+                                address.id == activeAddress?.id,
+                          );
+
+                          return ListView.builder(
+                            shrinkWrap: true,
+                            itemCount: addresses.length + 2,
+                            itemBuilder: (context, index) {
+                              if (index == 0) {
+                                return EchoActionRow(
+                                  icon: AppIcons.route,
+                                  title: '自动选择',
+                                  subtitle: isAuto
+                                      ? '当前已开启${activeAddress == null ? '' : ' · ${activeAddress.label}'}'
+                                      : '根据可用性和延迟选择线路',
+                                  selected: isAuto,
+                                  trailing: isAuto
+                                      ? Icon(
+                                          AppIcons.check,
+                                          color: context.echoColors.accent,
+                                        )
+                                      : null,
+                                  onPressed: () {
+                                    addressPool.setAutoMode();
+                                    Navigator.of(sheetContext).pop();
+                                  },
+                                );
+                              }
+
+                              if (index == 1) {
+                                return Padding(
+                                  padding: EdgeInsets.symmetric(
+                                    vertical: context.echoSpacing.xs,
+                                  ),
+                                  child: const EchoDivider(),
+                                );
+                              }
+
+                              final address = addresses[index - 2];
+                              final isSelected =
+                                  activeAddress?.id == address.id &&
+                                  address.isLocked;
+                              final status = _addressStatusPresentation(
+                                address,
+                              );
+                              return Padding(
+                                padding: EdgeInsets.only(
+                                  bottom: context.echoSpacing.xs,
+                                ),
+                                child: EchoActionRow(
+                                  icon: AppIcons.signalTower,
+                                  title: address.label,
+                                  subtitle:
+                                      '${address.url}\n${status.label} · '
+                                      '延迟 ${address.lastLatencyMs == null ? '未知' : '${address.lastLatencyMs}ms'}',
+                                  selected: isSelected,
+                                  trailing: Semantics(
+                                    label: status.label,
+                                    child: Icon(
+                                      isSelected ? AppIcons.check : status.icon,
+                                      size: 20,
+                                      color: isSelected
+                                          ? context.echoColors.accent
+                                          : status.color(context),
+                                    ),
+                                  ),
+                                  onPressed: () {
+                                    addressPool.setManualMode(address);
+                                    Navigator.of(sheetContext).pop();
+                                  },
+                                ),
+                              );
+                            },
+                          );
+                        },
+                        loading: () => const _DrawerSkeletonList(itemCount: 3),
+                        error: (error, stackTrace) => SingleChildScrollView(
+                          child: EchoErrorState(
+                            title: '无法读取线路',
+                            description: '线路信息暂时不可用。请重试，或稍后打开音乐库设置检查地址。',
+                            actionLabel: '重试',
+                            onAction: () => ref.invalidate(librariesProvider),
+                            padding: const EdgeInsets.all(24),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            },
+          );
+        },
+      );
+    } finally {
+      onClosed?.call();
     }
+  }
+}
+
+@visibleForTesting
+String? resolveEchoDrawerAvatarUrl(MusicLibrary? library) {
+  if (library == null) return null;
+  final raw = library.extensions['avatarUrl'];
+  if (raw is! String || raw.trim().isEmpty) return null;
+  final uri = Uri.tryParse(raw.trim());
+  if (uri == null || (!uri.hasScheme && !uri.hasAbsolutePath)) return null;
+  return raw.trim();
+}
+
+EchoDrawerConnectionState _connectionState(ServerAddress? address) {
+  if (address == null) return EchoDrawerConnectionState.disconnected;
+  return switch (address.status) {
+    ServerAddressStatus.ok => EchoDrawerConnectionState.connected,
+    ServerAddressStatus.failed => EchoDrawerConnectionState.failed,
+    ServerAddressStatus.unknown => EchoDrawerConnectionState.unknown,
+  };
+}
+
+_AddressStatusPresentation _addressStatusPresentation(ServerAddress address) {
+  return switch (address.status) {
+    ServerAddressStatus.ok => const _AddressStatusPresentation(
+      label: '连接正常',
+      icon: AppIcons.checkCircle,
+      kind: _AddressStatusKind.connected,
+    ),
+    ServerAddressStatus.failed => const _AddressStatusPresentation(
+      label: '连接失败',
+      icon: AppIcons.error,
+      kind: _AddressStatusKind.failed,
+    ),
+    ServerAddressStatus.unknown => const _AddressStatusPresentation(
+      label: '等待检测',
+      icon: AppIcons.help,
+      kind: _AddressStatusKind.unknown,
+    ),
+  };
+}
+
+class _DrawerNavigationEntry {
+  const _DrawerNavigationEntry({
+    required this.icon,
+    required this.title,
+    required this.onPressed,
+    this.subtitle,
+  });
+
+  final IconData icon;
+  final String title;
+  final String? subtitle;
+  final VoidCallback onPressed;
+}
+
+enum _AddressStatusKind { connected, failed, unknown }
+
+class _AddressStatusPresentation {
+  const _AddressStatusPresentation({
+    required this.label,
+    required this.icon,
+    required this.kind,
+  });
+
+  final String label;
+  final IconData icon;
+  final _AddressStatusKind kind;
+
+  Color color(BuildContext context) {
+    return switch (kind) {
+      _AddressStatusKind.connected => context.echoColors.accent,
+      _AddressStatusKind.failed => context.echoColors.error,
+      _AddressStatusKind.unknown => context.echoColors.muted,
+    };
+  }
+}
+
+class _DrawerSkeletonList extends StatelessWidget {
+  const _DrawerSkeletonList({this.itemCount = 4});
+
+  final int itemCount;
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView.builder(
+      padding: EdgeInsets.symmetric(
+        horizontal: context.echoSpacing.md,
+        vertical: context.echoSpacing.sm,
+      ),
+      itemCount: itemCount,
+      itemBuilder: (context, index) {
+        return Padding(
+          padding: EdgeInsets.only(bottom: context.echoSpacing.md),
+          child: Row(
+            children: <Widget>[
+              const EchoSkeleton.circle(),
+              SizedBox(width: context.echoSpacing.sm),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    EchoSkeleton.line(
+                      width: index.isEven ? 140 : 112,
+                      height: 16,
+                    ),
+                    SizedBox(height: context.echoSpacing.xs),
+                    const EchoSkeleton.line(width: 196),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
   }
 }

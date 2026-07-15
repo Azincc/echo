@@ -3,15 +3,100 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../core/design/echo_design.dart';
 import '../core/utils/logger.dart';
 import '../features/player/widgets/mini_player.dart';
 import '../providers/navigation_provider.dart';
 import '../providers/offline_download_provider.dart';
 import '../providers/player_provider.dart';
 import 'app_drawer.dart';
+import 'echo_app_shell/echo_app_shell.dart';
+import 'echo_app_shell/echo_shell_navigation.dart';
 
 // GlobalKey used to access Scaffold state (e.g. opening drawer).
 final scaffoldKey = GlobalKey<ScaffoldState>();
+FocusNode? _appDrawerTriggerFocus;
+
+/// Opens the application drawer while retaining the keyboard focus origin.
+///
+/// Compact pages and the wide shell share this entry point so a drawer-owned
+/// overlay can return focus to the exact menu control that launched it.
+void openEchoAppDrawer() {
+  final currentFocus = FocusManager.instance.primaryFocus;
+  if (currentFocus != null &&
+      currentFocus.context != null &&
+      currentFocus.canRequestFocus) {
+    _appDrawerTriggerFocus = currentFocus;
+  }
+  scaffoldKey.currentState?.openDrawer();
+}
+
+void _restoreEchoAppDrawerFocus() {
+  final triggerFocus = _appDrawerTriggerFocus;
+  _appDrawerTriggerFocus = null;
+  if (triggerFocus == null ||
+      triggerFocus.context == null ||
+      !triggerFocus.canRequestFocus) {
+    return;
+  }
+  triggerFocus.requestFocus();
+}
+
+enum EchoBackAction {
+  closeDrawer,
+  popRootNavigator,
+  popBranchNavigator,
+  switchToDiscover,
+  moveAppToBackground,
+}
+
+@visibleForTesting
+EchoBackAction resolveEchoBackAction({
+  required bool drawerOpen,
+  required bool rootCanPop,
+  required bool branchCanPop,
+  required int currentBranchIndex,
+}) {
+  if (drawerOpen) return EchoBackAction.closeDrawer;
+  if (rootCanPop) return EchoBackAction.popRootNavigator;
+  if (branchCanPop) return EchoBackAction.popBranchNavigator;
+  if (currentBranchIndex != discoverBranchIndex) {
+    return EchoBackAction.switchToDiscover;
+  }
+  return EchoBackAction.moveAppToBackground;
+}
+
+const EchoShellDestination _discoverDestination = EchoShellDestination(
+  branchIndex: discoverBranchIndex,
+  label: '音乐流',
+  icon: AppIcons.home,
+  selectedIcon: AppIcons.homeFilled,
+);
+
+const EchoShellDestination _exploreDestination = EchoShellDestination(
+  branchIndex: exploreBranchIndex,
+  label: '探索',
+  icon: AppIcons.discover,
+  selectedIcon: AppIcons.discoverFilled,
+);
+
+const EchoShellDestination _libraryDestination = EchoShellDestination(
+  branchIndex: libraryBranchIndex,
+  label: '我的',
+  icon: AppIcons.library,
+  selectedIcon: AppIcons.libraryFilled,
+);
+
+@visibleForTesting
+List<EchoShellDestination> echoMainDestinations({
+  required bool showExploreTab,
+}) {
+  return <EchoShellDestination>[
+    _discoverDestination,
+    if (showExploreTab) _exploreDestination,
+    _libraryDestination,
+  ];
+}
 
 class MainScaffold extends ConsumerStatefulWidget {
   final StatefulNavigationShell navigationShell;
@@ -21,19 +106,35 @@ class MainScaffold extends ConsumerStatefulWidget {
     super.key,
     required this.navigationShell,
     required this.branchNavigatorKeys,
+    this.drawerOverride,
+    this.miniPlayerOverride,
+    this.showMiniPlayerOverride,
+    this.showExploreTabOverride,
   });
+
+  @visibleForTesting
+  final Widget? drawerOverride;
+
+  @visibleForTesting
+  final Widget? miniPlayerOverride;
+
+  @visibleForTesting
+  final bool? showMiniPlayerOverride;
+
+  @visibleForTesting
+  final bool? showExploreTabOverride;
 
   @override
   ConsumerState<MainScaffold> createState() => _MainScaffoldState();
 }
 
 class _MainScaffoldState extends ConsumerState<MainScaffold> {
-  static const double _miniPlayerHeight = 72;
   static const _logTag = 'BACK';
   static const MethodChannel _appLifecycleChannel = MethodChannel(
     'com.az1n.echoes/app_lifecycle',
   );
   int? _lastSyncedBranchIndex;
+  bool _branchFallbackScheduled = false;
 
   @override
   void initState() {
@@ -55,7 +156,44 @@ class _MainScaffoldState extends ConsumerState<MainScaffold> {
     _lastSyncedBranchIndex = currentIndex;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-      ref.read(currentVisibleBranchIndexProvider.notifier).state = currentIndex;
+      if (widget.navigationShell.currentIndex != currentIndex) return;
+      _syncVisibleBranch(currentIndex);
+    });
+  }
+
+  void _syncVisibleBranch(int branchIndex) {
+    _lastSyncedBranchIndex = branchIndex;
+    ref.read(currentVisibleBranchIndexProvider.notifier).state = branchIndex;
+  }
+
+  void _goToBranch(int branchIndex, {bool initialLocation = false}) {
+    _syncVisibleBranch(branchIndex);
+    widget.navigationShell.goBranch(
+      branchIndex,
+      initialLocation: initialLocation,
+    );
+  }
+
+  void _scheduleHiddenBranchFallback() {
+    if (_branchFallbackScheduled) return;
+    _branchFallbackScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _branchFallbackScheduled = false;
+      if (!mounted) return;
+      final currentIndex = widget.navigationShell.currentIndex;
+      final currentDestinations = echoMainDestinations(
+        showExploreTab: ref.read(
+          activeEmbedServiceConfigProvider.select((config) {
+            return config.isEnabledAndConfigured;
+          }),
+        ),
+      );
+      final stillHidden = !currentDestinations.any(
+        (destination) => destination.branchIndex == currentIndex,
+      );
+      if (stillHidden) {
+        _goToBranch(discoverBranchIndex);
+      }
     });
   }
 
@@ -67,39 +205,19 @@ class _MainScaffoldState extends ConsumerState<MainScaffold> {
       'back pressed, branchIndex=$index, branchCount=$branchCount',
     );
 
-    // 1. If the drawer is open, close it first.
     final scaffold = scaffoldKey.currentState;
-    if (scaffold != null && scaffold.isDrawerOpen) {
-      Logger.infoWithTag(_logTag, 'drawer is open, closing drawer');
-      scaffold.closeDrawer();
-      return;
-    }
-
-    // 2. Check if the root navigator can pop (e.g. settings page pushed via
-    //    Navigator.push on top of MainScaffold).
     final rootNavigator = Navigator.of(context);
-    if (rootNavigator.canPop()) {
-      Logger.infoWithTag(_logTag, 'root navigator can pop, popping');
-      rootNavigator.pop();
-      return;
-    }
-
-    // 3. Check if the current branch navigator can pop.
+    NavigatorState? branchNavigator;
     if (index >= 0 && index < branchCount) {
       final navigatorKey = widget.branchNavigatorKeys[index];
-      final navigator = navigatorKey.currentState;
+      branchNavigator = navigatorKey.currentState;
       Logger.infoWithTag(
         _logTag,
         'navigator for branch $index: '
         'key=$navigatorKey, '
-        'state=${navigator != null ? "present" : "null"}, '
-        'canPop=${navigator?.canPop()}',
+        'state=${branchNavigator != null ? "present" : "null"}, '
+        'canPop=${branchNavigator?.canPop()}',
       );
-      if (navigator != null && navigator.canPop()) {
-        Logger.infoWithTag(_logTag, 'branch $index can pop, popping');
-        navigator.pop();
-        return;
-      }
     } else {
       Logger.warnWithTag(
         _logTag,
@@ -107,20 +225,35 @@ class _MainScaffoldState extends ConsumerState<MainScaffold> {
       );
     }
 
-    // 4. Only move to background when on the home tab (index 0).
-    //    On other tabs, switch back to the home tab instead.
-    if (index == 0) {
-      Logger.infoWithTag(
-        _logTag,
-        'home branch root reached (index=0), move app to background',
-      );
-      await _moveAppToBackground();
-    } else {
-      Logger.infoWithTag(
-        _logTag,
-        'non-home branch root reached (index=$index), switching to home tab',
-      );
-      widget.navigationShell.goBranch(0);
+    final action = resolveEchoBackAction(
+      drawerOpen: scaffold?.isDrawerOpen ?? false,
+      rootCanPop: rootNavigator.canPop(),
+      branchCanPop: branchNavigator?.canPop() ?? false,
+      currentBranchIndex: index,
+    );
+
+    switch (action) {
+      case EchoBackAction.closeDrawer:
+        Logger.infoWithTag(_logTag, 'drawer is open, closing drawer');
+        scaffold?.closeDrawer();
+      case EchoBackAction.popRootNavigator:
+        Logger.infoWithTag(_logTag, 'root navigator can pop, popping');
+        rootNavigator.pop();
+      case EchoBackAction.popBranchNavigator:
+        Logger.infoWithTag(_logTag, 'branch $index can pop, popping');
+        branchNavigator?.pop();
+      case EchoBackAction.switchToDiscover:
+        Logger.infoWithTag(
+          _logTag,
+          'non-home branch root reached (index=$index), switching to home tab',
+        );
+        _goToBranch(discoverBranchIndex);
+      case EchoBackAction.moveAppToBackground:
+        Logger.infoWithTag(
+          _logTag,
+          'home branch root reached (index=0), move app to background',
+        );
+        await _moveAppToBackground();
     }
   }
 
@@ -140,27 +273,26 @@ class _MainScaffoldState extends ConsumerState<MainScaffold> {
   @override
   Widget build(BuildContext context) {
     _scheduleVisibleBranchSync();
-    final hasMiniPlayer = ref.watch(
-      playerProvider.select((state) => state.currentSong != null),
-    );
-    final showExploreTab = ref.watch(
-      activeEmbedServiceConfigProvider.select((config) {
-        return config.isEnabledAndConfigured;
-      }),
-    );
+    final bool hasMiniPlayer = widget.showMiniPlayerOverride != null
+        ? widget.showMiniPlayerOverride!
+        : ref.watch(
+            playerProvider.select((state) => state.currentSong != null),
+          );
+    final bool showExploreTab = widget.showExploreTabOverride != null
+        ? widget.showExploreTabOverride!
+        : ref.watch(
+            activeEmbedServiceConfigProvider.select((config) {
+              return config.isEnabledAndConfigured;
+            }),
+          );
     final currentBranchIndex = widget.navigationShell.currentIndex;
-    final visibleBranchIndices = <int>[
-      discoverBranchIndex,
-      if (showExploreTab) exploreBranchIndex,
-      libraryBranchIndex,
-    ];
-    final selectedIndex = visibleBranchIndices.indexOf(currentBranchIndex);
+    final destinations = echoMainDestinations(showExploreTab: showExploreTab);
+    final currentBranchIsVisible = destinations.any(
+      (destination) => destination.branchIndex == currentBranchIndex,
+    );
 
-    if (selectedIndex == -1) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted) return;
-        widget.navigationShell.goBranch(discoverBranchIndex);
-      });
+    if (!currentBranchIsVisible) {
+      _scheduleHiddenBranchFallback();
     }
 
     return BackButtonListener(
@@ -168,46 +300,25 @@ class _MainScaffoldState extends ConsumerState<MainScaffold> {
         await _handleBackPressed();
         return true;
       },
-      child: Scaffold(
-        key: scaffoldKey,
-        drawer: const AppDrawer(),
-        body: AnimatedPadding(
-          duration: const Duration(milliseconds: 180),
-          curve: Curves.easeOut,
-          padding: EdgeInsets.only(
-            bottom: hasMiniPlayer ? _miniPlayerHeight : 0,
-          ),
-          child: widget.navigationShell,
-        ),
-        bottomSheet: const MiniPlayer(),
-        bottomNavigationBar: NavigationBar(
-          selectedIndex: selectedIndex == -1 ? 0 : selectedIndex,
-          onDestinationSelected: (index) {
-            final branchIndex = visibleBranchIndices[index];
-            widget.navigationShell.goBranch(
-              branchIndex,
-              initialLocation: branchIndex == currentBranchIndex,
-            );
-          },
-          destinations: [
-            const NavigationDestination(
-              icon: Icon(Icons.explore_outlined),
-              selectedIcon: Icon(Icons.explore),
-              label: '音乐流',
-            ),
-            if (showExploreTab)
-              const NavigationDestination(
-                icon: Icon(Icons.travel_explore_outlined),
-                selectedIcon: Icon(Icons.travel_explore),
-                label: '探索',
-              ),
-            const NavigationDestination(
-              icon: Icon(Icons.library_music_outlined),
-              selectedIcon: Icon(Icons.library_music),
-              label: '我的',
-            ),
-          ],
-        ),
+      child: EchoAppShell(
+        scaffoldKey: scaffoldKey,
+        drawer:
+            widget.drawerOverride ??
+            AppDrawer(onReturnFocus: _restoreEchoAppDrawerFocus),
+        body: widget.navigationShell,
+        destinations: destinations,
+        selectedBranchIndex: currentBranchIsVisible
+            ? currentBranchIndex
+            : discoverBranchIndex,
+        onDestinationSelected: (branchIndex) {
+          _goToBranch(
+            branchIndex,
+            initialLocation: branchIndex == currentBranchIndex,
+          );
+        },
+        miniPlayer: widget.miniPlayerOverride ?? const MiniPlayer(),
+        showMiniPlayer: hasMiniPlayer,
+        onOpenDrawer: openEchoAppDrawer,
       ),
     );
   }

@@ -274,9 +274,7 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
         appBar: AppBar(
           leading: IconButton(
             icon: const Icon(Icons.menu),
-            onPressed: () {
-              scaffoldKey.currentState?.openDrawer();
-            },
+            onPressed: openEchoAppDrawer,
           ),
           title: const Text('我的'),
         ),

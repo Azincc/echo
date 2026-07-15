@@ -37,6 +37,16 @@ void openEchoAppDrawer() {
   scaffoldKey.currentState?.openDrawer();
 }
 
+/// Page headers own the drawer trigger only in the compact shell.
+///
+/// Medium and expanded layouts expose the same action from their persistent
+/// navigation surface, so retaining the page-level button would create a
+/// duplicate control and a confusing accessibility traversal order.
+bool shouldShowPageDrawerTrigger(BuildContext context) {
+  final width = MediaQuery.sizeOf(context).width;
+  return context.echoBreakpoints.classify(width) == EchoWindowClass.compact;
+}
+
 void _restoreEchoAppDrawerFocus() {
   final triggerFocus = _appDrawerTriggerFocus;
   _appDrawerTriggerFocus = null;

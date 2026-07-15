@@ -59,6 +59,31 @@ void main() {
   });
 
   group('MainScaffold destination mapping', () {
+    testWidgets('page drawer trigger is compact-only', (tester) async {
+      Future<void> pumpAtWidth(double width) async {
+        tester.view.devicePixelRatio = 1;
+        tester.view.physicalSize = Size(width, 800);
+        await tester.pumpWidget(
+          MaterialApp(
+            theme: AppTheme.light(),
+            home: Builder(
+              builder: (context) => Text(
+                shouldShowPageDrawerTrigger(context) ? 'compact' : 'wide',
+              ),
+            ),
+          ),
+        );
+        await tester.pump();
+      }
+
+      addTearDown(tester.view.reset);
+      await pumpAtWidth(599);
+      expect(find.text('compact'), findsOneWidget);
+
+      await pumpAtWidth(600);
+      expect(find.text('wide'), findsOneWidget);
+    });
+
     test('keeps fixed branch indices while Explore is dynamically visible', () {
       expect(
         echoMainDestinations(

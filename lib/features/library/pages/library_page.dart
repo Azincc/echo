@@ -280,11 +280,13 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
         topBar: EchoTopBar(
           title: '资料库',
           subtitle: '收藏、歌单与完整曲库',
-          leading: EchoIconButton(
-            icon: AppIcons.menu,
-            label: '打开应用菜单',
-            onPressed: openEchoAppDrawer,
-          ),
+          leading: shouldShowPageDrawerTrigger(context)
+              ? EchoIconButton(
+                  icon: AppIcons.menu,
+                  label: '打开应用菜单',
+                  onPressed: openEchoAppDrawer,
+                )
+              : null,
         ),
         body: EchoRefreshView(
           onRefresh: () async {

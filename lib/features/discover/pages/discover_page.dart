@@ -65,11 +65,13 @@ class _DiscoverPageState extends ConsumerState<DiscoverPage> {
             children: <Widget>[
               EchoPageHeader(
                 title: '音乐流',
-                leading: EchoIconButton(
-                  icon: AppIcons.menu,
-                  label: '打开应用菜单',
-                  onPressed: openEchoAppDrawer,
-                ),
+                leading: shouldShowPageDrawerTrigger(context)
+                    ? EchoIconButton(
+                        icon: AppIcons.menu,
+                        label: '打开应用菜单',
+                        onPressed: openEchoAppDrawer,
+                      )
+                    : null,
                 trailing: EchoIconButton(
                   icon: AppIcons.search,
                   label: '搜索音乐库',

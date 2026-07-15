@@ -45,6 +45,10 @@ void main() {
       expect(_mediumNavigation, findsOneWidget);
       expect(_expandedNavigation, findsNothing);
       expect(find.byType(NavigationRail), findsNothing);
+      expect(find.bySemanticsLabel('打开应用菜单'), findsOneWidget);
+      expect(find.bySemanticsLabel('音乐流'), findsOneWidget);
+      expect(find.bySemanticsLabel('探索'), findsOneWidget);
+      expect(find.bySemanticsLabel('我的'), findsOneWidget);
 
       await _pumpShell(tester, size: const Size(839, 800));
       expect(_mediumNavigation, findsOneWidget);

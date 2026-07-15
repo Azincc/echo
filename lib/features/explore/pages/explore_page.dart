@@ -461,11 +461,13 @@ class _ExplorePageState extends ConsumerState<ExplorePage> {
             children: <Widget>[
               EchoPageHeader(
                 title: '探索',
-                leading: EchoIconButton(
-                  icon: AppIcons.menu,
-                  label: '打开应用菜单',
-                  onPressed: () => scaffoldKey.currentState?.openDrawer(),
-                ),
+                leading: shouldShowPageDrawerTrigger(context)
+                    ? EchoIconButton(
+                        icon: AppIcons.menu,
+                        label: '打开应用菜单',
+                        onPressed: openEchoAppDrawer,
+                      )
+                    : null,
                 trailing: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: <Widget>[

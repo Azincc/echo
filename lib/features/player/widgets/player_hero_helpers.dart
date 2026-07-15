@@ -1,45 +1,11 @@
 import 'package:flutter/material.dart';
 
-import '../../../core/design/echo_design.dart';
+export 'player_backdrop.dart';
 
 const playerBackgroundHeroTag = 'player-background';
 const playerCoverHeroTag = 'player-cover';
 const playerTitleHeroTag = 'player-title';
 const playerSubtitleHeroTag = 'player-subtitle';
-
-/// A restrained album-derived surface used only by player-adjacent chrome.
-/// It keeps the stable Echo surface readable while allowing the artwork to
-/// provide a small amount of local colour.
-Color playerMiniSurfaceColor(BuildContext context, Color? albumColor) {
-  final colors = context.echoColors;
-  if (albumColor == null) return colors.surface;
-
-  var strength = Theme.of(context).brightness == Brightness.dark ? 0.28 : 0.16;
-  var candidate = Color.alphaBlend(
-    albumColor.withValues(alpha: strength),
-    colors.surface,
-  );
-  while (EchoColors.contrastRatio(colors.ink, candidate) < 4.5 &&
-      strength > 0.02) {
-    strength *= 0.7;
-    candidate = Color.alphaBlend(
-      albumColor.withValues(alpha: strength),
-      colors.surface,
-    );
-  }
-  return candidate;
-}
-
-/// Produces the immersive player-stage colour while guaranteeing readable
-/// white foreground controls and text.
-Color playerStageColor(BuildContext context, Color? albumColor) {
-  final seed = albumColor ?? context.echoColors.contentTint;
-  return EchoColors.ensureForegroundContrast(
-    seed,
-    foreground: Colors.white,
-    minimumRatio: 7,
-  );
-}
 
 RectTween playerLinearRectTween(Rect? begin, Rect? end) {
   return RectTween(begin: begin ?? Rect.zero, end: end ?? Rect.zero);

@@ -1,3 +1,4 @@
+import 'package:echoes/core/design/echo_design.dart';
 import 'package:echoes/core/theme/app_theme.dart';
 import 'package:echoes/data/models/song.dart';
 import 'package:echoes/features/player/widgets/play_queue_sheet.dart';
@@ -21,6 +22,8 @@ void main() {
     required Future<void> Function() onClear,
     required QueueSongAction onOpenSongActions,
     double textScale = 1,
+    EchoMediaVisuals? mediaVisuals,
+    Color? albumColor,
   }) {
     return MaterialApp(
       theme: AppTheme.dark(),
@@ -38,6 +41,8 @@ void main() {
         body: SizedBox.expand(
           child: PlayQueueSheetView(
             playerState: state,
+            mediaVisuals: mediaVisuals,
+            albumColor: albumColor,
             onSelect: onSelect,
             onClear: onClear,
             onOpenSongActions: onOpenSongActions,
@@ -49,7 +54,7 @@ void main() {
 
   testWidgets('queue rows remain operable at 200% text', (tester) async {
     tester.view.devicePixelRatio = 1;
-    tester.view.physicalSize = const Size(360, 800);
+    tester.view.physicalSize = const Size(320, 800);
     addTearDown(tester.view.resetDevicePixelRatio);
     addTearDown(tester.view.resetPhysicalSize);
 
@@ -87,6 +92,34 @@ void main() {
     await tester.tap(find.bySemanticsLabel(RegExp('清空后续播放队列')));
     await tester.pump();
     expect(cleared, 1);
+  });
+
+  testWidgets('queue content consumes the panel media color scope', (
+    tester,
+  ) async {
+    final visuals = EchoMediaVisuals.fallback(seed: const Color(0xFFBFD7EA));
+    await tester.pumpWidget(
+      buildSubject(
+        state: PlayerState(
+          currentSong: songs.first,
+          queue: songs,
+          currentIndex: 0,
+        ),
+        mediaVisuals: visuals,
+        albumColor: const Color(0xFF7B1E3A),
+        onSelect: (_) async {},
+        onClear: () async {},
+        onOpenSongActions: (context, index, song) async {},
+      ),
+    );
+    await tester.pump();
+
+    final surface = tester.widget<EchoSurface>(find.byType(EchoSurface).first);
+    final currentTitle = tester.widget<Text>(find.text(songs.first.title));
+    final playingIcon = tester.widget<Icon>(find.byIcon(AppIcons.equalizer));
+    expect(surface.color, visuals.panelSurface);
+    expect(currentTitle.style?.color, visuals.controlAccent);
+    expect(playingIcon.color, visuals.controlAccent);
   });
 
   testWidgets('empty queue explains the state and disables clear', (

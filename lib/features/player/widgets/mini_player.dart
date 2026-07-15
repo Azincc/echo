@@ -43,13 +43,13 @@ class MiniPlayer extends ConsumerWidget {
       shuffleEnabled: snapshot.shuffleEnabled,
       duration: snapshot.duration,
     );
-    final palette = ref.watch(currentSongPaletteProvider).valueOrNull;
+    final visuals = ref.watch(resolvedCurrentSongMediaVisualsProvider);
     final currentSong = playerState.currentSong;
     if (currentSong == null) return const SizedBox.shrink();
 
     return MiniPlayerView(
       playerState: playerState,
-      albumColor: palette?.dominantColor?.color,
+      mediaVisuals: visuals,
       onOpenPlayer: () => _openFullPlayer(context),
       onTogglePlayPause: () =>
           ref.read(playerProvider.notifier).togglePlayPause(),
@@ -178,11 +178,15 @@ class MiniPlayerView extends StatefulWidget {
     required this.onNext,
     required this.onSeek,
     required this.onOpenActions,
+    this.mediaVisuals,
     this.albumColor,
     this.progressLayer,
   });
 
   final PlayerState playerState;
+  final EchoMediaVisuals? mediaVisuals;
+
+  /// Compatibility seed for provider-free tests and older call sites.
   final Color? albumColor;
   final VoidCallback onOpenPlayer;
   final Future<void> Function() onTogglePlayPause;
@@ -205,6 +209,7 @@ class _MiniPlayerViewState extends State<MiniPlayerView> {
   double _verticalDragDy = 0;
   Song? _pendingVisualSong;
   bool _settlingSwipe = false;
+  bool _awaitingSongConfirmation = false;
 
   PlayerState get _playerState => widget.playerState;
 
@@ -216,6 +221,7 @@ class _MiniPlayerViewState extends State<MiniPlayerView> {
       _pendingVisualSong = null;
       _horizontalDragDx = 0;
       _settlingSwipe = false;
+      _awaitingSongConfirmation = false;
     }
   }
 
@@ -225,6 +231,7 @@ class _MiniPlayerViewState extends State<MiniPlayerView> {
   }
 
   void _handleSwipeDragStart(DragStartDetails details) {
+    if (_awaitingSongConfirmation) return;
     setState(() {
       _horizontalDragDx = 0;
       _pendingVisualSong = null;
@@ -233,12 +240,14 @@ class _MiniPlayerViewState extends State<MiniPlayerView> {
   }
 
   void _handleSwipeDragUpdate(DragUpdateDetails details) {
+    if (_awaitingSongConfirmation) return;
     setState(() {
       _horizontalDragDx += details.primaryDelta ?? 0;
     });
   }
 
   void _handleSwipeDragEnd(DragEndDetails details) {
+    if (_awaitingSongConfirmation) return;
     final shouldGoNext =
         _horizontalDragDx <= -_swipeActionThreshold && _playerState.hasNext;
     final shouldGoPrevious =
@@ -253,10 +262,12 @@ class _MiniPlayerViewState extends State<MiniPlayerView> {
   }
 
   void _handleSwipeDragCancel() {
+    if (_awaitingSongConfirmation) return;
     setState(() => _horizontalDragDx = 0);
   }
 
   Future<void> _switchTrack({required bool next}) async {
+    if (_awaitingSongConfirmation) return;
     HapticFeedback.mediumImpact();
     final canPredictVisualTarget = !_playerState.shuffleEnabled;
     final targetSong = canPredictVisualTarget
@@ -269,6 +280,7 @@ class _MiniPlayerViewState extends State<MiniPlayerView> {
     );
 
     setState(() {
+      _awaitingSongConfirmation = true;
       _settlingSwipe = _swipeViewportWidth > 0;
       _horizontalDragDx = _settlingSwipe ? targetOffset : 0;
     });
@@ -278,37 +290,51 @@ class _MiniPlayerViewState extends State<MiniPlayerView> {
       if (!mounted) return;
     }
 
-    if (mounted && _settlingSwipe && canPredictVisualTarget) {
+    if (mounted && canPredictVisualTarget) {
       setState(() {
         _pendingVisualSong = targetSong;
         _horizontalDragDx = 0;
         _settlingSwipe = false;
       });
+    } else if (mounted) {
+      setState(() {
+        _horizontalDragDx = 0;
+        _settlingSwipe = false;
+      });
     }
 
-    if (next) {
-      await widget.onNext();
-    } else {
-      await widget.onPrevious();
+    try {
+      if (next) {
+        await widget.onNext();
+      } else {
+        await widget.onPrevious();
+      }
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _pendingVisualSong = null;
+        _horizontalDragDx = 0;
+        _settlingSwipe = false;
+        _awaitingSongConfirmation = false;
+      });
     }
-
-    if (!mounted) return;
-    setState(() {
-      _pendingVisualSong = null;
-      _horizontalDragDx = 0;
-      _settlingSwipe = false;
-    });
   }
 
   void _handleVerticalDragStart(DragStartDetails details) {
+    if (_awaitingSongConfirmation) return;
     _verticalDragDy = 0;
   }
 
   void _handleVerticalDragUpdate(DragUpdateDetails details) {
+    if (_awaitingSongConfirmation) return;
     _verticalDragDy += details.primaryDelta ?? 0;
   }
 
   void _handleVerticalDragEnd(DragEndDetails details) {
+    if (_awaitingSongConfirmation) {
+      _verticalDragDy = 0;
+      return;
+    }
     final velocity = details.primaryVelocity ?? 0;
     final shouldExpand =
         velocity < -600 || _verticalDragDy <= -_verticalExpandThreshold;
@@ -347,178 +373,202 @@ class _MiniPlayerViewState extends State<MiniPlayerView> {
     final nextSong = _playerState.shuffleEnabled
         ? null
         : _adjacentSong(_playerState, 1);
-    final surfaceColor = playerMiniSurfaceColor(context, widget.albumColor);
-    final textScale = MediaQuery.textScalerOf(context).scale(1);
-    final showSubtitle = textScale <= 1.4;
-    final semanticState = _playerState.isPlaying ? '正在播放' : '已暂停';
-    final semanticSubtitle = song.artist?.trim().isNotEmpty == true
-        ? '，${song.artist!.trim()}'
-        : '';
+    final visuals =
+        widget.mediaVisuals ??
+        EchoMediaVisuals.fallback(
+          seed: widget.albumColor ?? EchoColors.contentTintFallback,
+        );
 
-    return Semantics(
-      container: true,
-      explicitChildNodes: true,
-      label: '迷你播放器，${song.title}$semanticSubtitle',
-      value: semanticState,
-      onTap: widget.onOpenPlayer,
-      customSemanticsActions: <CustomSemanticsAction, VoidCallback>{
-        const CustomSemanticsAction(label: '上一首'): () {
-          if (_playerState.hasPrevious) unawaited(_switchTrack(next: false));
-        },
-        const CustomSemanticsAction(label: '下一首'): () {
-          if (_playerState.hasNext) unawaited(_switchTrack(next: true));
-        },
-      },
-      child: GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        excludeFromSemantics: true,
-        onVerticalDragStart: _handleVerticalDragStart,
-        onVerticalDragUpdate: _handleVerticalDragUpdate,
-        onVerticalDragEnd: _handleVerticalDragEnd,
-        child: SizedBox(
-          key: const Key('mini-player-surface'),
-          height: MiniPlayer.height,
-          child: Stack(
-            children: <Widget>[
-              Positioned.fill(
-                child: Hero(
-                  tag: playerBackgroundHeroTag,
-                  child: DecoratedBox(
-                    decoration: BoxDecoration(
-                      color: surfaceColor,
-                      borderRadius: context.echoRadii.surface,
-                      border: Border.all(color: context.echoColors.divider),
-                      boxShadow: <BoxShadow>[
-                        BoxShadow(
-                          color: const Color(
-                            0xFF04080C,
-                          ).withValues(alpha: 0.18),
-                          blurRadius: 24,
-                          offset: const Offset(0, 8),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-              Padding(
-                padding: EdgeInsetsDirectional.fromSTEB(
-                  context.echoSpacing.sm,
-                  context.echoSpacing.xs,
-                  context.echoSpacing.xs,
-                  context.echoSpacing.xs,
-                ),
-                child: Row(
+    return EchoMediaColorScope(
+      visuals: visuals,
+      role: EchoMediaSurfaceRole.mini,
+      child: Builder(
+        builder: (context) {
+          final textScale = MediaQuery.textScalerOf(context).scale(1);
+          final showSubtitle = textScale <= 1.4;
+          final semanticState = _awaitingSongConfirmation
+              ? '正在切换曲目'
+              : _playerState.isPlaying
+              ? '正在播放'
+              : '已暂停';
+          final semanticSubtitle = song.artist?.trim().isNotEmpty == true
+              ? '，${song.artist!.trim()}'
+              : '';
+
+          return Semantics(
+            container: true,
+            explicitChildNodes: true,
+            label: '迷你播放器，${song.title}$semanticSubtitle',
+            value: semanticState,
+            onTap: _awaitingSongConfirmation ? null : widget.onOpenPlayer,
+            customSemanticsActions: _awaitingSongConfirmation
+                ? const <CustomSemanticsAction, VoidCallback>{}
+                : <CustomSemanticsAction, VoidCallback>{
+                    const CustomSemanticsAction(label: '上一首'): () {
+                      if (_playerState.hasPrevious) {
+                        unawaited(_switchTrack(next: false));
+                      }
+                    },
+                    const CustomSemanticsAction(label: '下一首'): () {
+                      if (_playerState.hasNext) {
+                        unawaited(_switchTrack(next: true));
+                      }
+                    },
+                  },
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              excludeFromSemantics: true,
+              onVerticalDragStart: _awaitingSongConfirmation
+                  ? null
+                  : _handleVerticalDragStart,
+              onVerticalDragUpdate: _awaitingSongConfirmation
+                  ? null
+                  : _handleVerticalDragUpdate,
+              onVerticalDragEnd: _awaitingSongConfirmation
+                  ? null
+                  : _handleVerticalDragEnd,
+              child: SizedBox(
+                key: const Key('mini-player-surface'),
+                height: MiniPlayer.height,
+                child: Stack(
                   children: <Widget>[
-                    Expanded(
-                      child: GestureDetector(
-                        key: const Key('mini-player-track'),
-                        behavior: HitTestBehavior.opaque,
-                        onTap: widget.onOpenPlayer,
-                        onDoubleTap: _togglePlayPause,
-                        onHorizontalDragStart: _handleSwipeDragStart,
-                        onHorizontalDragUpdate: _handleSwipeDragUpdate,
-                        onHorizontalDragEnd: _handleSwipeDragEnd,
-                        onHorizontalDragCancel: _handleSwipeDragCancel,
-                        child: ClipRect(
-                          child: LayoutBuilder(
-                            builder: (context, constraints) {
-                              final width = constraints.maxWidth;
-                              _swipeViewportWidth = width;
-                              final dragOffset = _horizontalDragDx.clamp(
-                                -width,
-                                width,
-                              );
-                              final translateX = -width + dragOffset;
-
-                              return OverflowBox(
-                                alignment: Alignment.centerLeft,
-                                minWidth: width * 3,
-                                maxWidth: width * 3,
-                                child: AnimatedContainer(
-                                  width: width * 3,
-                                  duration: _settlingSwipe
-                                      ? context.echoMotion.resolve(
-                                          context,
-                                          context.echoMotion.feedback,
-                                        )
-                                      : Duration.zero,
-                                  curve: context.echoMotion.easeOut,
-                                  transform: Matrix4.translationValues(
-                                    translateX,
-                                    0,
-                                    0,
-                                  ),
-                                  child: Row(
-                                    children: <Widget>[
-                                      SizedBox(
-                                        width: width,
-                                        child: previousSong == null
-                                            ? const SizedBox.shrink()
-                                            : _MiniPlayerTrack(
-                                                song: previousSong,
-                                                useHero: false,
-                                                showSubtitle: showSubtitle,
-                                              ),
-                                      ),
-                                      SizedBox(
-                                        width: width,
-                                        child: _MiniPlayerTrack(
-                                          song: song,
-                                          useHero: true,
-                                          showSubtitle: showSubtitle,
-                                        ),
-                                      ),
-                                      SizedBox(
-                                        width: width,
-                                        child: nextSong == null
-                                            ? const SizedBox.shrink()
-                                            : _MiniPlayerTrack(
-                                                song: nextSong,
-                                                useHero: false,
-                                                showSubtitle: showSubtitle,
-                                              ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              );
-                            },
-                          ),
+                    Positioned.fill(
+                      child: Hero(
+                        tag: playerBackgroundHeroTag,
+                        flightShuttleBuilder:
+                            playerBackgroundFlightShuttleBuilder,
+                        child: EchoPlayerBackdrop(
+                          visuals: visuals,
+                          mode: EchoPlayerBackdropMode.mini,
                         ),
                       ),
                     ),
-                    EchoIconButton(
-                      icon: _playerState.isPlaying
-                          ? AppIcons.pause
-                          : AppIcons.play,
-                      label: _playerState.isPlaying ? '暂停' : '播放',
-                      foregroundColor: context.echoColors.ink,
-                      backgroundColor: Colors.transparent,
-                      onPressed: _togglePlayPause,
+                    Padding(
+                      padding: EdgeInsetsDirectional.fromSTEB(
+                        context.echoSpacing.sm,
+                        context.echoSpacing.xs,
+                        context.echoSpacing.xs,
+                        context.echoSpacing.xs,
+                      ),
+                      child: Row(
+                        children: <Widget>[
+                          Expanded(
+                            child: GestureDetector(
+                              key: const Key('mini-player-track'),
+                              behavior: HitTestBehavior.opaque,
+                              onTap: _awaitingSongConfirmation
+                                  ? null
+                                  : widget.onOpenPlayer,
+                              onDoubleTap: _togglePlayPause,
+                              onHorizontalDragStart: _handleSwipeDragStart,
+                              onHorizontalDragUpdate: _handleSwipeDragUpdate,
+                              onHorizontalDragEnd: _handleSwipeDragEnd,
+                              onHorizontalDragCancel: _handleSwipeDragCancel,
+                              child: ClipRect(
+                                child: LayoutBuilder(
+                                  builder: (context, constraints) {
+                                    final width = constraints.maxWidth;
+                                    _swipeViewportWidth = width;
+                                    final dragOffset = _horizontalDragDx.clamp(
+                                      -width,
+                                      width,
+                                    );
+                                    final translateX = -width + dragOffset;
+
+                                    return OverflowBox(
+                                      alignment: Alignment.centerLeft,
+                                      minWidth: width * 3,
+                                      maxWidth: width * 3,
+                                      child: AnimatedContainer(
+                                        width: width * 3,
+                                        duration: _settlingSwipe
+                                            ? context.echoMotion.resolve(
+                                                context,
+                                                context.echoMotion.feedback,
+                                              )
+                                            : Duration.zero,
+                                        curve: context.echoMotion.easeOut,
+                                        transform: Matrix4.translationValues(
+                                          translateX,
+                                          0,
+                                          0,
+                                        ),
+                                        child: Row(
+                                          children: <Widget>[
+                                            SizedBox(
+                                              width: width,
+                                              child: previousSong == null
+                                                  ? const SizedBox.shrink()
+                                                  : _MiniPlayerTrack(
+                                                      song: previousSong,
+                                                      useHero: false,
+                                                      showSubtitle:
+                                                          showSubtitle,
+                                                    ),
+                                            ),
+                                            SizedBox(
+                                              width: width,
+                                              child: _MiniPlayerTrack(
+                                                song: song,
+                                                useHero:
+                                                    !_awaitingSongConfirmation,
+                                                showSubtitle: showSubtitle,
+                                              ),
+                                            ),
+                                            SizedBox(
+                                              width: width,
+                                              child: nextSong == null
+                                                  ? const SizedBox.shrink()
+                                                  : _MiniPlayerTrack(
+                                                      song: nextSong,
+                                                      useHero: false,
+                                                      showSubtitle:
+                                                          showSubtitle,
+                                                    ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    );
+                                  },
+                                ),
+                              ),
+                            ),
+                          ),
+                          EchoIconButton(
+                            icon: _playerState.isPlaying
+                                ? AppIcons.pause
+                                : AppIcons.play,
+                            label: _playerState.isPlaying ? '暂停' : '播放',
+                            foregroundColor: context.echoColors.ink,
+                            backgroundColor: Colors.transparent,
+                            onPressed: _togglePlayPause,
+                          ),
+                          EchoIconButton(
+                            icon: AppIcons.more,
+                            label: '更多播放操作',
+                            foregroundColor: context.echoColors.ink,
+                            backgroundColor: Colors.transparent,
+                            onPressed: widget.onOpenActions,
+                          ),
+                        ],
+                      ),
                     ),
-                    EchoIconButton(
-                      icon: AppIcons.more,
-                      label: '更多播放操作',
-                      foregroundColor: context.echoColors.ink,
-                      backgroundColor: Colors.transparent,
-                      onPressed: widget.onOpenActions,
+                    Positioned.fill(
+                      child:
+                          widget.progressLayer ??
+                          _MiniPlayerProgressSurface(
+                            position: _playerState.position,
+                            duration: _playerState.duration,
+                            onSeek: widget.onSeek,
+                          ),
                     ),
                   ],
                 ),
               ),
-              Positioned.fill(
-                child:
-                    widget.progressLayer ??
-                    _MiniPlayerProgressSurface(
-                      position: _playerState.position,
-                      duration: _playerState.duration,
-                      onSeek: widget.onSeek,
-                    ),
-              ),
-            ],
-          ),
-        ),
+            ),
+          );
+        },
       ),
     );
   }

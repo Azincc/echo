@@ -7,7 +7,6 @@ import '../../../core/design/echo_design.dart';
 import '../../../data/models/song.dart';
 import '../../../providers/palette_provider.dart';
 import '../../../providers/player_provider.dart';
-import 'player_hero_helpers.dart';
 import 'song_options_sheet.dart';
 
 Future<void> showPlayQueueSheet({
@@ -37,7 +36,7 @@ class PlayQueueSheet extends ConsumerWidget {
         ),
       ),
     );
-    final palette = ref.watch(currentSongPaletteProvider).valueOrNull;
+    final visuals = ref.watch(resolvedCurrentSongMediaVisualsProvider);
     final playerState = PlayerState(
       currentSong: queueSnapshot.currentSong,
       queue: queueSnapshot.queue,
@@ -46,7 +45,7 @@ class PlayQueueSheet extends ConsumerWidget {
 
     return PlayQueueSheetView(
       playerState: playerState,
-      albumColor: palette?.dominantColor?.color,
+      mediaVisuals: visuals,
       onSelect: (index) async {
         final player = ref.read(playerProvider.notifier);
         Navigator.of(context).pop();
@@ -89,10 +88,14 @@ class PlayQueueSheetView extends StatelessWidget {
     required this.onSelect,
     required this.onClear,
     required this.onOpenSongActions,
+    this.mediaVisuals,
     this.albumColor,
   });
 
   final PlayerState playerState;
+  final EchoMediaVisuals? mediaVisuals;
+
+  /// Compatibility seed for provider-free tests and older call sites.
   final Color? albumColor;
   final Future<void> Function(int index) onSelect;
   final Future<void> Function() onClear;
@@ -106,136 +109,145 @@ class PlayQueueSheetView extends StatelessWidget {
       topLeft: context.echoRadii.scene.topLeft,
       topRight: context.echoRadii.scene.topRight,
     );
+    final visuals =
+        mediaVisuals ??
+        EchoMediaVisuals.fallback(
+          seed: albumColor ?? EchoColors.contentTintFallback,
+        );
 
-    return DraggableScrollableSheet(
-      initialChildSize: 0.72,
-      minChildSize: 0.5,
-      maxChildSize: 0.95,
-      expand: false,
-      builder: (context, scrollController) {
-        return Semantics(
-          container: true,
-          scopesRoute: true,
-          namesRoute: true,
-          explicitChildNodes: true,
-          label: '播放队列',
-          child: EchoSurface(
-            level: EchoSurfaceLevel.modal,
-            color: playerMiniSurfaceColor(context, albumColor),
-            borderRadius: topRadius,
-            clipBehavior: Clip.antiAlias,
-            child: SafeArea(
-              top: false,
-              child: Column(
-                children: <Widget>[
-                  SizedBox(height: context.echoSpacing.xs),
-                  Center(
-                    child: ExcludeSemantics(
-                      child: DecoratedBox(
-                        decoration: BoxDecoration(
-                          color: context.echoColors.divider,
-                          borderRadius: context.echoRadii.pill,
+    return EchoMediaColorScope(
+      visuals: visuals,
+      role: EchoMediaSurfaceRole.panel,
+      child: DraggableScrollableSheet(
+        initialChildSize: 0.72,
+        minChildSize: 0.5,
+        maxChildSize: 0.95,
+        expand: false,
+        builder: (context, scrollController) {
+          return Semantics(
+            container: true,
+            scopesRoute: true,
+            namesRoute: true,
+            explicitChildNodes: true,
+            label: '播放队列',
+            child: EchoSurface(
+              level: EchoSurfaceLevel.modal,
+              color: context.echoColors.surface,
+              borderRadius: topRadius,
+              clipBehavior: Clip.antiAlias,
+              child: SafeArea(
+                top: false,
+                child: Column(
+                  children: <Widget>[
+                    SizedBox(height: context.echoSpacing.xs),
+                    Center(
+                      child: ExcludeSemantics(
+                        child: DecoratedBox(
+                          decoration: BoxDecoration(
+                            color: context.echoColors.divider,
+                            borderRadius: context.echoRadii.pill,
+                          ),
+                          child: const SizedBox(width: 36, height: 4),
                         ),
-                        child: const SizedBox(width: 36, height: 4),
                       ),
                     ),
-                  ),
-                  Padding(
-                    padding: EdgeInsetsDirectional.fromSTEB(
-                      context.echoSpacing.md,
-                      context.echoSpacing.sm,
-                      context.echoSpacing.xs,
-                      context.echoSpacing.sm,
-                    ),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.center,
-                      children: <Widget>[
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            mainAxisSize: MainAxisSize.min,
-                            children: <Widget>[
-                              Semantics(
-                                header: true,
-                                child: Text(
-                                  '播放队列',
-                                  style: context.echoTypography.headline,
+                    Padding(
+                      padding: EdgeInsetsDirectional.fromSTEB(
+                        context.echoSpacing.md,
+                        context.echoSpacing.sm,
+                        context.echoSpacing.xs,
+                        context.echoSpacing.sm,
+                      ),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.center,
+                        children: <Widget>[
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              mainAxisSize: MainAxisSize.min,
+                              children: <Widget>[
+                                Semantics(
+                                  header: true,
+                                  child: Text(
+                                    '播放队列',
+                                    style: context.echoTypography.headline,
+                                  ),
                                 ),
-                              ),
-                              SizedBox(height: context.echoSpacing.xxs),
-                              Text(
-                                '${queue.length} 首曲目',
-                                style: context.echoTypography.metadata,
-                              ),
-                            ],
-                          ),
-                        ),
-                        SizedBox(width: context.echoSpacing.sm),
-                        EchoIconButton(
-                          icon: AppIcons.close,
-                          label: '关闭播放队列',
-                          onPressed: () => Navigator.of(context).maybePop(),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const EchoDivider(),
-                  Expanded(
-                    child: queue.isEmpty
-                        ? const EchoEmptyState(
-                            title: '队列为空',
-                            description: '开始播放一首歌曲后，接下来的曲目会出现在这里。',
-                            icon: AppIcons.queue,
-                          )
-                        : ListView.separated(
-                            controller: scrollController,
-                            itemCount: queue.length,
-                            separatorBuilder: (context, index) => EchoDivider(
-                              inset:
-                                  context.echoInteraction.minimumTouchTarget +
-                                  context.echoSpacing.lg,
-                              endInset: context.echoSpacing.md,
+                                SizedBox(height: context.echoSpacing.xxs),
+                                Text(
+                                  '${queue.length} 首曲目',
+                                  style: context.echoTypography.metadata,
+                                ),
+                              ],
                             ),
-                            itemBuilder: (context, index) {
-                              final song = queue[index];
-                              return _QueueSongRow(
-                                index: index,
-                                song: song,
-                                isPlaying: index == currentIndex,
-                                onPressed: () => unawaited(onSelect(index)),
-                                onOpenActions: () => unawaited(
-                                  onOpenSongActions(context, index, song),
-                                ),
-                              );
-                            },
                           ),
-                  ),
-                  const EchoDivider(),
-                  Padding(
-                    padding: EdgeInsets.fromLTRB(
-                      context.echoSpacing.md,
-                      context.echoSpacing.xs,
-                      context.echoSpacing.md,
-                      context.echoSpacing.sm,
-                    ),
-                    child: Align(
-                      alignment: AlignmentDirectional.centerStart,
-                      child: EchoButton.ghost(
-                        label: '清空后续队列',
-                        semanticLabel: '清空后续播放队列，保留当前曲目',
-                        leadingIcon: AppIcons.clearAll,
-                        onPressed: queue.isEmpty
-                            ? null
-                            : () => unawaited(onClear()),
+                          SizedBox(width: context.echoSpacing.sm),
+                          EchoIconButton(
+                            icon: AppIcons.close,
+                            label: '关闭播放队列',
+                            onPressed: () => Navigator.of(context).maybePop(),
+                          ),
+                        ],
                       ),
                     ),
-                  ),
-                ],
+                    const EchoDivider(),
+                    Expanded(
+                      child: queue.isEmpty
+                          ? const EchoEmptyState(
+                              title: '队列为空',
+                              description: '开始播放一首歌曲后，接下来的曲目会出现在这里。',
+                              icon: AppIcons.queue,
+                            )
+                          : ListView.separated(
+                              controller: scrollController,
+                              itemCount: queue.length,
+                              separatorBuilder: (context, index) => EchoDivider(
+                                inset:
+                                    context.echoInteraction.minimumTouchTarget +
+                                    context.echoSpacing.lg,
+                                endInset: context.echoSpacing.md,
+                              ),
+                              itemBuilder: (context, index) {
+                                final song = queue[index];
+                                return _QueueSongRow(
+                                  index: index,
+                                  song: song,
+                                  isPlaying: index == currentIndex,
+                                  onPressed: () => unawaited(onSelect(index)),
+                                  onOpenActions: () => unawaited(
+                                    onOpenSongActions(context, index, song),
+                                  ),
+                                );
+                              },
+                            ),
+                    ),
+                    const EchoDivider(),
+                    Padding(
+                      padding: EdgeInsets.fromLTRB(
+                        context.echoSpacing.md,
+                        context.echoSpacing.xs,
+                        context.echoSpacing.md,
+                        context.echoSpacing.sm,
+                      ),
+                      child: Align(
+                        alignment: AlignmentDirectional.centerStart,
+                        child: EchoButton.ghost(
+                          label: '清空后续队列',
+                          semanticLabel: '清空后续播放队列，保留当前曲目',
+                          leadingIcon: AppIcons.clearAll,
+                          onPressed: queue.isEmpty
+                              ? null
+                              : () => unawaited(onClear()),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
-          ),
-        );
-      },
+          );
+        },
+      ),
     );
   }
 }

@@ -1,7 +1,10 @@
+import 'dart:ui' show SemanticsAction;
+
 import 'package:echoes/core/design/echo_design.dart';
 import 'package:echoes/core/theme/app_theme.dart';
 import 'package:echoes/data/models/song.dart';
 import 'package:echoes/features/player/widgets/mini_player.dart';
+import 'package:echoes/features/player/widgets/player_hero_helpers.dart';
 import 'package:echoes/providers/palette_provider.dart';
 import 'package:echoes/providers/player_provider.dart';
 import 'package:flutter/material.dart';
@@ -63,6 +66,8 @@ void main() {
     Future<void> Function(Duration)? onSeek,
     VoidCallback? onOpen,
     VoidCallback? onActions,
+    EchoMediaVisuals? mediaVisuals,
+    Color? albumColor,
   }) {
     return MiniPlayerView(
       playerState: state,
@@ -72,6 +77,8 @@ void main() {
       onNext: onNext ?? () async {},
       onSeek: onSeek ?? (_) async {},
       onOpenActions: onActions ?? () {},
+      mediaVisuals: mediaVisuals,
+      albumColor: albumColor,
     );
   }
 
@@ -79,7 +86,7 @@ void main() {
     tester,
   ) async {
     tester.view.devicePixelRatio = 1;
-    tester.view.physicalSize = const Size(360, 800);
+    tester.view.physicalSize = const Size(320, 800);
     addTearDown(tester.view.resetDevicePixelRatio);
     addTearDown(tester.view.resetPhysicalSize);
 
@@ -121,6 +128,49 @@ void main() {
     expect(fraction.widthFactor, closeTo(0.25, 0.001));
   });
 
+  testWidgets('bright and dark visuals drive local player tokens', (
+    tester,
+  ) async {
+    for (final seed in const <Color>[Color(0xFFFFD54F), Color(0xFF14213D)]) {
+      final visuals = EchoMediaVisuals.fallback(seed: seed);
+      await tester.pumpWidget(
+        appFor(
+          view(
+            state: playerState(),
+            mediaVisuals: visuals,
+            albumColor: const Color(0xFF7B1E3A),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      final title = tester.widget<Text>(find.text(songs[1].title));
+      final playIcon = tester.widget<Icon>(find.byIcon(AppIcons.play));
+      final progress = tester.widget<EchoProgressBar>(
+        find.byKey(const Key('mini-player-progress')),
+      );
+      final backdrop = tester.widget<EchoPlayerBackdrop>(
+        find.byType(EchoPlayerBackdrop),
+      );
+      final backgroundHero = tester.widget<Hero>(
+        find.ancestor(
+          of: find.byType(EchoPlayerBackdrop),
+          matching: find.byType(Hero),
+        ),
+      );
+      expect(title.style?.color, visuals.foreground);
+      expect(playIcon.color, visuals.foreground);
+      expect(progress.color, visuals.controlAccent);
+      expect(backdrop.visuals, visuals);
+      expect(backdrop.mode, EchoPlayerBackdropMode.mini);
+      expect(
+        backgroundHero.flightShuttleBuilder,
+        playerBackgroundFlightShuttleBuilder,
+      );
+      expect(tester.takeException(), isNull);
+    }
+  });
+
   testWidgets('preserves tap, double tap, swipe, expand, and scrub gestures', (
     tester,
   ) async {
@@ -129,15 +179,28 @@ void main() {
     var previous = 0;
     var next = 0;
     final seeks = <Duration>[];
+    var state = playerState();
     await tester.pumpWidget(
       appFor(
-        view(
-          state: playerState(),
-          onOpen: () => opens += 1,
-          onToggle: () async => toggles += 1,
-          onPrevious: () async => previous += 1,
-          onNext: () async => next += 1,
-          onSeek: (target) async => seeks.add(target),
+        StatefulBuilder(
+          builder: (context, setState) => view(
+            state: state,
+            onOpen: () => opens += 1,
+            onToggle: () async => toggles += 1,
+            onPrevious: () async {
+              previous += 1;
+              setState(() {
+                state = state.copyWith(currentSong: songs[1], currentIndex: 1);
+              });
+            },
+            onNext: () async {
+              next += 1;
+              setState(() {
+                state = state.copyWith(currentSong: songs[2], currentIndex: 2);
+              });
+            },
+            onSeek: (target) async => seeks.add(target),
+          ),
         ),
       ),
     );
@@ -177,6 +240,75 @@ void main() {
     expect(seeks, hasLength(1));
     expect(seeks.single.inSeconds, closeTo(150, 2));
   });
+
+  testWidgets(
+    'pending swipe disables player Hero and expansion until confirm',
+    (tester) async {
+      var opens = 0;
+      var next = 0;
+      var state = playerState();
+      late StateSetter updateState;
+
+      await tester.pumpWidget(
+        appFor(
+          StatefulBuilder(
+            builder: (context, setState) {
+              updateState = setState;
+              return view(
+                state: state,
+                onOpen: () => opens += 1,
+                onNext: () async => next += 1,
+              );
+            },
+          ),
+        ),
+      );
+
+      final track = find.byKey(const Key('mini-player-track'));
+      await tester.drag(track, const Offset(-100, 0));
+      await tester.pump();
+      expect(next, 1);
+
+      final pendingHeroTags = tester
+          .widgetList<Hero>(find.byType(Hero))
+          .map((hero) => hero.tag)
+          .toSet();
+      expect(pendingHeroTags, isNot(contains(playerCoverHeroTag)));
+      expect(pendingHeroTags, isNot(contains(playerTitleHeroTag)));
+      expect(pendingHeroTags, isNot(contains(playerSubtitleHeroTag)));
+      final pendingSemantics = tester
+          .getSemantics(find.bySemanticsLabel(RegExp('迷你播放器')))
+          .getSemanticsData();
+      expect(pendingSemantics.value, '正在切换曲目');
+      expect(pendingSemantics.hasAction(SemanticsAction.tap), isFalse);
+
+      await tester.tap(track);
+      await tester.pump(const Duration(milliseconds: 350));
+      await tester.fling(
+        find.byKey(const Key('mini-player-surface')),
+        const Offset(0, -80),
+        900,
+      );
+      await tester.pump();
+      expect(opens, 0);
+
+      updateState(() {
+        state = state.copyWith(currentSong: songs[2], currentIndex: 2);
+      });
+      await tester.pump();
+
+      final confirmedHeroTags = tester
+          .widgetList<Hero>(find.byType(Hero))
+          .map((hero) => hero.tag)
+          .toSet();
+      expect(confirmedHeroTags, contains(playerCoverHeroTag));
+      expect(confirmedHeroTags, contains(playerTitleHeroTag));
+      expect(confirmedHeroTags, contains(playerSubtitleHeroTag));
+      await tester.tap(track);
+      await tester.pump(const Duration(milliseconds: 350));
+      expect(opens, 1);
+    },
+  );
 
   testWidgets('secondary action opens clickable alternatives for gestures', (
     tester,

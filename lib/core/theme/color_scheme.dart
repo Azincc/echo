@@ -1,46 +1,83 @@
+import 'package:echoes/core/design/tokens/echo_colors.dart';
 import 'package:flutter/material.dart';
 
-/// App color scheme definitions.
-class AppColorScheme {
-  static const Color defaultSeedColor = Color(0xFF4CAF50);
-  static const Color lightBackgroundColor = Color(0xFFFFFFFF);
-  static const Color darkBackgroundColor = Color(0xFF121212);
+/// One-way compatibility bridge from Echo semantics to Flutter roles.
+///
+/// Business UI consumes [EchoColors]. [ColorScheme] exists only for Flutter,
+/// third-party widgets, and code that has not yet migrated to Echo primitives.
+abstract final class AppColorScheme {
+  static const Color defaultSeedColor = EchoColors.defaultAccent;
 
-  // Light mode: keep neutral backgrounds fixed, while accent colors follow seed.
-  static ColorScheme lightScheme([Color seedColor = defaultSeedColor]) {
-    final scheme = ColorScheme.fromSeed(
-      seedColor: seedColor,
-      brightness: Brightness.light,
-    );
-    return scheme.copyWith(
-      surface: lightBackgroundColor,
-      surfaceTint: Colors.transparent,
-      surfaceDim: const Color(0xFFECEFF3),
-      surfaceBright: const Color(0xFFFFFFFF),
-      surfaceContainerLowest: const Color(0xFFFFFFFF),
-      surfaceContainerLow: const Color(0xFFF7F8FA),
-      surfaceContainer: const Color(0xFFF1F3F5),
-      surfaceContainerHigh: const Color(0xFFEBEDF0),
-      surfaceContainerHighest: const Color(0xFFE5E7EB),
-    );
+  static EchoColors lightColors([Color? accent]) {
+    return EchoColors.light(accent: accent ?? defaultSeedColor);
   }
 
-  // Dark mode: keep neutral backgrounds fixed, while accent colors follow seed.
-  static ColorScheme darkScheme([Color seedColor = defaultSeedColor]) {
-    final scheme = ColorScheme.fromSeed(
-      seedColor: seedColor,
-      brightness: Brightness.dark,
+  static EchoColors darkColors([Color? accent]) {
+    return EchoColors.dark(accent: accent ?? defaultSeedColor);
+  }
+
+  static EchoColors colorsFor(Brightness brightness, [Color? accent]) {
+    return brightness == Brightness.dark
+        ? darkColors(accent)
+        : lightColors(accent);
+  }
+
+  static ColorScheme materialBridge(EchoColors colors, Brightness brightness) {
+    final base = brightness == Brightness.dark
+        ? const ColorScheme.dark()
+        : const ColorScheme.light();
+    final inversePrimary = EchoColors.ensureColorContrast(
+      colors.accent,
+      background: colors.ink,
     );
-    return scheme.copyWith(
-      surface: darkBackgroundColor,
+
+    return base.copyWith(
+      primary: colors.accent,
+      onPrimary: colors.onAccent,
+      primaryContainer: colors.accent,
+      onPrimaryContainer: colors.onAccent,
+      primaryFixed: colors.accent,
+      primaryFixedDim: colors.accent,
+      onPrimaryFixed: colors.onAccent,
+      onPrimaryFixedVariant: colors.onAccent,
+      secondary: colors.contentTint,
+      onSecondary: colors.onContentTint,
+      secondaryContainer: colors.raised,
+      onSecondaryContainer: colors.ink,
+      secondaryFixed: colors.contentTint,
+      secondaryFixedDim: colors.contentTint,
+      onSecondaryFixed: colors.onContentTint,
+      onSecondaryFixedVariant: colors.onContentTint,
+      tertiary: colors.warning,
+      onTertiary: colors.onWarning,
+      tertiaryContainer: colors.warning,
+      onTertiaryContainer: colors.onWarning,
+      tertiaryFixed: colors.warning,
+      tertiaryFixedDim: colors.warning,
+      onTertiaryFixed: colors.onWarning,
+      onTertiaryFixedVariant: colors.onWarning,
+      error: colors.error,
+      onError: colors.onError,
+      errorContainer: colors.error,
+      onErrorContainer: colors.onError,
+      surface: colors.surface,
+      onSurface: colors.ink,
+      surfaceDim: colors.canvas,
+      surfaceBright: colors.surface,
+      surfaceContainerLowest: colors.canvas,
+      surfaceContainerLow: colors.surface,
+      surfaceContainer: colors.raised,
+      surfaceContainerHigh: colors.raised,
+      surfaceContainerHighest: colors.raised,
+      onSurfaceVariant: colors.muted,
+      outline: colors.controlBoundary,
+      outlineVariant: colors.divider,
+      shadow: Colors.transparent,
+      scrim: colors.scrim,
+      inverseSurface: colors.ink,
+      onInverseSurface: colors.canvas,
+      inversePrimary: inversePrimary,
       surfaceTint: Colors.transparent,
-      surfaceDim: const Color(0xFF0B0D10),
-      surfaceBright: const Color(0xFF2A2D31),
-      surfaceContainerLowest: const Color(0xFF0D0F12),
-      surfaceContainerLow: const Color(0xFF15181C),
-      surfaceContainer: const Color(0xFF1B1E22),
-      surfaceContainerHigh: const Color(0xFF22262A),
-      surfaceContainerHighest: const Color(0xFF2A2E33),
     );
   }
 }

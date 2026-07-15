@@ -4,6 +4,8 @@
 
 本文说明如何在 Echoes 中配置并登录第一条 Navidrome 线路。
 
+> 截图说明：本文引用的登录截图是仓库中现有的重构前功能基线，用于定位字段和说明流程，不代表 Echo Listening System 的最终视觉。字段含义与登录步骤仍然有效；新截图将在移动端最终验收后替换，在此之前不会使用伪造界面代替。
+
 如需先完成服务端部署，请参阅：
 
 - [Navidrome 推荐配置](navidrome-recommended-config.md)

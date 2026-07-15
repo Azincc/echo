@@ -1,6 +1,10 @@
 {
   "project": "Echoes",
   "generatedAt": "2026-03-30",
+  "kind": "pre-redesign-functional-baseline",
+  "currentUi": false,
+  "replacementStatus": "pending-final-acceptance",
+  "note": "Real pre-redesign screenshots retained for functional baseline review; not current Echo Listening System release imagery.",
   "sourceScreenshotDir": "docs/screenshots",
   "items": [
     {

@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Echoes UI Export</title>
+    <title>Echoes Pre-redesign UI Baseline</title>
     <style>
       :root {
         --bg: #f4efe7;
@@ -126,11 +126,26 @@
       }
 
       .card {
+        position: relative;
         overflow: hidden;
         border: 1px solid var(--line);
         border-radius: 24px;
         background: var(--panel);
         box-shadow: var(--shadow);
+      }
+
+      .card::before {
+        position: absolute;
+        top: 12px;
+        right: 12px;
+        z-index: 1;
+        padding: 6px 9px;
+        border-radius: 999px;
+        color: #fff;
+        background: rgba(29, 26, 22, 0.82);
+        content: "重构前基线";
+        font-size: 12px;
+        font-weight: 700;
       }
 
       .shot {
@@ -191,11 +206,11 @@
   <body>
     <main class="shell">
       <section class="hero">
-        <span class="eyebrow">UI Export</span>
-        <h1>Echoes 界面导出</h1>
+        <span class="eyebrow">Pre-redesign Baseline</span>
+        <h1>Echoes 重构前界面基线</h1>
         <p class="lead">
-          这份导出包整理了仓库里当前已有的 UI 截图，覆盖登录、主流程、音乐库、播放、下载与设置等核心界面，
-          可直接用于评审、演示、归档或发给设计与测试同学做快速浏览。
+          这份导出包归档了 Echo Listening System 重构前真实存在的功能截图，仅用于核对页面范围、业务流程和历史基线，
+          不代表当前 UI，也不能作为新版演示或发布素材。新版截图将在移动端最终验收后重新采集。
         </p>
         <div class="meta">
           <div class="meta-card">
@@ -203,7 +218,7 @@
             <span>Echoes</span>
           </div>
           <div class="meta-card">
-            <strong>导出时间</strong>
+            <strong>基线整理时间</strong>
             <span>2026-03-30</span>
           </div>
           <div class="meta-card">
@@ -211,8 +226,8 @@
             <span>14</span>
           </div>
           <div class="meta-card">
-            <strong>来源</strong>
-            <span>docs/screenshots</span>
+            <strong>替换状态</strong>
+            <span>待最终验收</span>
           </div>
         </div>
       </section>
@@ -384,7 +399,7 @@
       </section>
 
       <p class="footer">
-        本导出使用仓库内现有截图生成。若需要完整补齐所有页面截图，需要先修复 Web 构建或在目标平台跑起应用后重新采集。
+        本导出保留仓库内真实的重构前截图，不伪造缺失页面。新版画面必须在 Android/iOS、明暗模式、三档布局和关键无障碍状态完成最终验收后重新采集。
       </p>
     </main>
   </body>

@@ -57,66 +57,33 @@
 - 使用 Flutter 一套代码覆盖 Android、iOS、macOS、Windows、Linux、Web
 - 当前优先打磨 Android 与 iOS 体验，桌面端与 Web 仍在持续适配
 
+## 界面设计：Echo Listening System
+
+Echo 使用自有的 **Echo Listening System**，以“**Album Light, Quiet Chrome**”为设计方向：专辑封面只在播放器、MiniPlayer 和媒体详情等与当前音乐直接相连的场景提供局部光线；导航、资料库、下载、设置和表单保持安静、稳定的中性界面，让内容与任务始终处于主位。
+
+- **移动端三档布局**：Compact `< 600dp` 使用单列与底部导航；Medium `600-839dp` 扩展为更宽的内容分组和双列；Expanded `>= 840dp` 使用导航轨或侧栏、主从详情与双栏播放器，而不是简单放大手机页面。
+- **完整产品状态**：加载使用与最终内容同形的骨架；空内容、弱网、离线、失败、部分数据和禁用状态都提供清楚说明与恢复路径，不用通用进度圈或全屏错误覆盖仍可用的内容。
+- **无障碍优先**：主要触控目标至少 48dp，支持系统明暗模式、动态字体与减少动效；关键流程以 200% 字体缩放仍可完成为目标，并为读屏、焦点顺序和非颜色状态提示保留明确语义。
+- **熟悉行为，自有表达**：保留 Flutter 的路由、语义、焦点、键盘和手势基础设施，可见界面统一由 Echo 组件、语义 token 与 `AppIcons` 控制。
+
+完整设计合同见 [`PRODUCT.md`](PRODUCT.md)、[`DESIGN.md`](DESIGN.md) 与 [`docs/echo-ui-overhaul-plan.md`](docs/echo-ui-overhaul-plan.md)。
+
 ## 界面截图
 
-<table>
-  <tr>
-    <td align="center">
-      <img src="docs/screenshots/music-home.png" alt="音乐流首页" width="260" /><br />
-      音乐流首页
-    </td>
-    <td align="center">
-      <img src="docs/screenshots/explore-page.png" alt="探索" width="260" /><br />
-      探索
-    </td>
-    <td align="center">
-      <img src="docs/screenshots/profile-page.png" alt="我的页面" width="260" /><br />
-      我的页面
-    </td>
-  </tr>
-  <tr>
-    <td align="center">
-      <img src="docs/screenshots/multi-library-management.png" alt="多音乐库管理" width="260" /><br />
-      多音乐库管理
-    </td>
-    <td align="center">
-      <img src="docs/screenshots/edit-library-multi-endpoint.png" alt="编辑音乐库与多线路" width="260" /><br />
-      编辑音乐库与多线路
-    </td>
-    <td align="center">
-      <img src="docs/screenshots/stats-overview.png" alt="统计信息" width="260" /><br />
-      统计信息
-    </td>
-  </tr>
-  <tr>
-    <td align="center">
-      <img src="docs/screenshots/full-player.png" alt="全屏播放器" width="260" /><br />
-      全屏播放器
-    </td>
-    <td align="center">
-      <img src="docs/screenshots/lyrics-view.png" alt="歌词" width="260" /><br />
-      歌词
-    </td>
-    <td align="center">
-      <img src="docs/screenshots/download-manager.png" alt="下载管理" width="260" /><br />
-      下载管理
-    </td>
-  </tr>
-  <tr>
-    <td align="center">
-      <img src="docs/screenshots/offline-download-manager.png" alt="离线下载管理" width="260" /><br />
-      离线下载管理
-    </td>
-    <td align="center">
-      <img src="docs/screenshots/cache-management.png" alt="缓存管理" width="260" /><br />
-      缓存管理
-    </td>
-    <td align="center">
-      <img src="docs/screenshots/theme-settings.png" alt="主题设置" width="260" /><br />
-      主题设置
-    </td>
-  </tr>
-</table>
+> 截图状态（2026-07-15）：下列链接均指向仓库中真实存在的重构前功能基线截图，用于核对页面范围和功能，不代表当前 Echo Listening System 的最终视觉。新的 Android/iOS、明暗模式和多档布局截图将在最终验收后替换；当前没有的新截图不会用概念图或伪造图片代替。
+
+- [音乐流首页（待替换）](docs/screenshots/music-home.png)
+- [探索（待替换）](docs/screenshots/explore-page.png)
+- [应用设置入口（待替换）](docs/screenshots/profile-page.png)
+- [多音乐库管理（待替换）](docs/screenshots/multi-library-management.png)
+- [编辑音乐库与多线路（待替换）](docs/screenshots/edit-library-multi-endpoint.png)
+- [统计信息（待替换）](docs/screenshots/stats-overview.png)
+- [全屏播放器（待替换）](docs/screenshots/full-player.png)
+- [歌词（待替换）](docs/screenshots/lyrics-view.png)
+- [下载管理（待替换）](docs/screenshots/download-manager.png)
+- [离线下载管理（待替换）](docs/screenshots/offline-download-manager.png)
+- [缓存管理（待替换）](docs/screenshots/cache-management.png)
+- [主题设置（待替换）](docs/screenshots/theme-settings.png)
 
 ## 技术栈
 
@@ -129,15 +96,12 @@
 | 本地数据库  | Drift (SQLite)              |
 | 本地配置   | SharedPreferences           |
 | API 协议 | Subsonic / OpenSubsonic API |
-| 设计     | Material 3 + 自定义主题色         |
+| 设计     | Echo Listening System       |
 
-## 后续规划
+## 当前 UI 收尾
 
-> 本周目标完成时间：**2026-04-19（周日）**
-
-- 添加歌曲元数据修改功能，支持在客户端内补充或修正曲名、专辑、歌手等信息
-- 添加歌单获取功能，补全服务端歌单的拉取、展示与后续管理能力
-- 添加 mini 播放器手势操作功能，支持更便捷的滑动、点击或拖拽交互
+- 完成 Android 与 iOS 的明暗模式、动态字体、减少动效、读屏与关键设备尺寸验收
+- 最终验收后采集并替换 Echo Listening System 新截图与 UI 导出
 - 均衡器 / ReplayGain
 - 持续完善桌面端与 Web 适配体验
 
@@ -172,7 +136,7 @@ lib/
 ├── providers/                # Riverpod 状态管理
 ├── widgets/                  # 共享组件
 ├── main.dart                 # 入口
-└── app.dart                  # 路由配置、MaterialApp
+└── app.dart                  # MaterialApp.router 与路由装配
 
 gdstudio-embeded-service/     # 服务器侧离线导入服务
 gitbook/                      # 使用与部署文档

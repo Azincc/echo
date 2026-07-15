@@ -2,6 +2,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../core/design/echo_design.dart';
 import '../core/utils/cover_ref_security.dart';
 import '../providers/api_provider.dart';
 import 'shimmer_loading.dart';
@@ -11,6 +12,7 @@ class CoverArtImage extends ConsumerWidget {
   final double? size;
   final int? requestSize;
   final BoxFit fit;
+  final String? semanticLabel;
 
   const CoverArtImage({
     super.key,
@@ -18,6 +20,7 @@ class CoverArtImage extends ConsumerWidget {
     this.size,
     this.requestSize,
     this.fit = BoxFit.cover,
+    this.semanticLabel,
   });
 
   @override
@@ -73,35 +76,72 @@ class CoverArtImage extends ConsumerWidget {
     String imageUrl, {
     String? cacheKey,
   }) {
-    return CachedNetworkImage(
-      imageUrl: imageUrl,
-      cacheKey: cacheKey,
-      width: size,
-      height: size,
-      fit: fit,
-      placeholder: (context, url) =>
-          _buildPlaceholder(context, isLoading: true),
-      errorWidget: (context, url, error) => _buildPlaceholder(context),
+    final loadedLabel = semanticLabel ?? '专辑封面';
+    return RepaintBoundary(
+      child: CachedNetworkImage(
+        imageUrl: imageUrl,
+        cacheKey: cacheKey,
+        width: size,
+        height: size,
+        fit: fit,
+        imageBuilder: (context, imageProvider) => Semantics(
+          image: true,
+          label: loadedLabel,
+          child: ExcludeSemantics(
+            child: Image(
+              image: imageProvider,
+              width: size,
+              height: size,
+              fit: fit,
+            ),
+          ),
+        ),
+        placeholder: (context, url) => _buildPlaceholder(
+          context,
+          isLoading: true,
+          accessibilityLabel: loadedLabel,
+        ),
+        errorWidget: (context, url, error) => _buildPlaceholder(
+          context,
+          accessibilityLabel: semanticLabel == null
+              ? '暂无封面'
+              : '$semanticLabel，不可用',
+        ),
+      ),
     );
   }
 
-  Widget _buildPlaceholder(BuildContext context, {bool isLoading = false}) {
-    final bgColor = Theme.of(context).colorScheme.surfaceContainerHighest;
-    if (isLoading) {
-      return ShimmerEffect(
-        child: Container(width: size, height: size, color: bgColor),
-      );
-    }
-
-    return Container(
+  Widget _buildPlaceholder(
+    BuildContext context, {
+    bool isLoading = false,
+    bool semantic = true,
+    String? accessibilityLabel,
+  }) {
+    final bgColor = context.echoColors.raised;
+    final placeholder = SizedBox(
       width: size,
       height: size,
-      color: bgColor,
-      child: Icon(
-        Icons.music_note,
-        size: _getIconSize(),
-        color: Theme.of(context).colorScheme.onSurfaceVariant,
-      ),
+      child: isLoading
+          ? ShimmerEffect(child: ColoredBox(color: bgColor))
+          : ColoredBox(
+              color: bgColor,
+              child: Center(
+                child: Icon(
+                  AppIcons.music,
+                  size: _getIconSize(),
+                  color: context.echoColors.muted,
+                ),
+              ),
+            ),
+    );
+
+    if (!semantic) return placeholder;
+
+    return Semantics(
+      image: true,
+      label:
+          accessibilityLabel ?? (isLoading ? '封面加载中' : semanticLabel ?? '暂无封面'),
+      child: ExcludeSemantics(child: placeholder),
     );
   }
 

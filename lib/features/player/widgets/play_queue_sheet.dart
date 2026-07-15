@@ -7,6 +7,7 @@ import '../../../core/design/echo_design.dart';
 import '../../../data/models/song.dart';
 import '../../../providers/palette_provider.dart';
 import '../../../providers/player_provider.dart';
+import '../../../widgets/song_list_item.dart';
 import 'song_options_sheet.dart';
 
 Future<void> showPlayQueueSheet({
@@ -200,23 +201,35 @@ class PlayQueueSheetView extends StatelessWidget {
                             )
                           : ListView.separated(
                               controller: scrollController,
-                              itemCount: queue.length,
-                              separatorBuilder: (context, index) => EchoDivider(
-                                inset:
-                                    context.echoInteraction.minimumTouchTarget +
-                                    context.echoSpacing.lg,
-                                endInset: context.echoSpacing.md,
+                              padding: EdgeInsets.symmetric(
+                                vertical: context.echoSpacing.xs,
                               ),
+                              itemCount: queue.length,
+                              separatorBuilder: (context, index) =>
+                                  SizedBox(height: context.echoSpacing.xxs),
                               itemBuilder: (context, index) {
                                 final song = queue[index];
-                                return _QueueSongRow(
+                                return EchoSongRow(
                                   index: index,
                                   song: song,
-                                  isPlaying: index == currentIndex,
+                                  variant: EchoSongRowVariant.topRank,
+                                  rank: index + 1,
+                                  isCurrent: index == currentIndex,
+                                  contentPadding:
+                                      EdgeInsetsDirectional.fromSTEB(
+                                        context.echoSpacing.md,
+                                        context.echoSpacing.xs,
+                                        context.echoSpacing.xs,
+                                        context.echoSpacing.xs,
+                                      ),
                                   onPressed: () => unawaited(onSelect(index)),
-                                  onOpenActions: () => unawaited(
+                                  onLongPress: () => unawaited(
                                     onOpenSongActions(context, index, song),
                                   ),
+                                  onMorePressed: () => unawaited(
+                                    onOpenSongActions(context, index, song),
+                                  ),
+                                  moreSemanticLabel: '${song.title}，更多操作',
                                 );
                               },
                             ),
@@ -247,130 +260,6 @@ class PlayQueueSheetView extends StatelessWidget {
             ),
           );
         },
-      ),
-    );
-  }
-}
-
-class _QueueSongRow extends StatelessWidget {
-  const _QueueSongRow({
-    required this.index,
-    required this.song,
-    required this.isPlaying,
-    required this.onPressed,
-    required this.onOpenActions,
-  });
-
-  final int index;
-  final Song song;
-  final bool isPlaying;
-  final VoidCallback onPressed;
-  final VoidCallback onOpenActions;
-
-  @override
-  Widget build(BuildContext context) {
-    final artist = song.artist?.trim() ?? '';
-    final colors = context.echoColors;
-    final titleColor = isPlaying ? colors.accent : colors.ink;
-    final semanticLabel = <String>[
-      '第 ${index + 1} 首',
-      song.title,
-      if (artist.isNotEmpty) artist,
-      if (isPlaying) '当前播放',
-    ].join('，');
-
-    return ColoredBox(
-      color: isPlaying
-          ? colors.accent.withValues(alpha: 0.1)
-          : Colors.transparent,
-      child: Row(
-        children: <Widget>[
-          Expanded(
-            child: EchoPressable(
-              semanticLabel: semanticLabel,
-              selected: isPlaying,
-              onPressed: onPressed,
-              onLongPress: onOpenActions,
-              minimumSize: Size(
-                double.infinity,
-                context.echoInteraction.expandedSongRowHeight,
-              ),
-              borderRadius: BorderRadius.zero,
-              child: Padding(
-                padding: EdgeInsetsDirectional.fromSTEB(
-                  context.echoSpacing.md,
-                  context.echoSpacing.xs,
-                  0,
-                  context.echoSpacing.xs,
-                ),
-                child: Row(
-                  children: <Widget>[
-                    SizedBox.square(
-                      dimension: context.echoInteraction.minimumTouchTarget,
-                      child: Center(
-                        child: isPlaying
-                            ? Icon(
-                                AppIcons.equalizer,
-                                size: 22,
-                                color: colors.accent,
-                              )
-                            : DecoratedBox(
-                                decoration: BoxDecoration(
-                                  color: colors.raised,
-                                  borderRadius: context.echoRadii.pill,
-                                ),
-                                child: SizedBox.square(
-                                  dimension: 32,
-                                  child: Center(
-                                    child: Text(
-                                      '${index + 1}',
-                                      style: context.echoTypography.metadata,
-                                    ),
-                                  ),
-                                ),
-                              ),
-                      ),
-                    ),
-                    SizedBox(width: context.echoSpacing.sm),
-                    Expanded(
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: <Widget>[
-                          Text(
-                            song.title,
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                            style: context.echoTypography.title.copyWith(
-                              color: titleColor,
-                            ),
-                          ),
-                          if (artist.isNotEmpty) ...<Widget>[
-                            SizedBox(height: context.echoSpacing.xxs),
-                            Text(
-                              artist,
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                              style: context.echoTypography.metadata,
-                            ),
-                          ],
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-          Padding(
-            padding: EdgeInsetsDirectional.only(end: context.echoSpacing.xs),
-            child: EchoIconButton(
-              icon: AppIcons.more,
-              label: '${song.title} 操作',
-              onPressed: onOpenActions,
-            ),
-          ),
-        ],
       ),
     );
   }

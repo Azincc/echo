@@ -3,6 +3,7 @@ import 'package:echoes/core/theme/app_theme.dart';
 import 'package:echoes/data/models/song.dart';
 import 'package:echoes/features/player/widgets/play_queue_sheet.dart';
 import 'package:echoes/providers/player_provider.dart';
+import 'package:echoes/widgets/song_list_item.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -58,9 +59,9 @@ void main() {
     addTearDown(tester.view.resetDevicePixelRatio);
     addTearDown(tester.view.resetPhysicalSize);
 
-    var selected = -1;
+    final selected = <int>[];
     var cleared = 0;
-    var opened = -1;
+    final opened = <int>[];
     await tester.pumpWidget(
       buildSubject(
         state: PlayerState(
@@ -69,25 +70,46 @@ void main() {
           currentIndex: 0,
         ),
         textScale: 2,
-        onSelect: (index) async => selected = index,
+        onSelect: (index) async => selected.add(index),
         onClear: () async => cleared += 1,
-        onOpenSongActions: (context, index, song) async => opened = index,
+        onOpenSongActions: (context, index, song) async => opened.add(index),
       ),
     );
     await tester.pump();
 
     expect(find.bySemanticsLabel('关闭播放队列'), findsOneWidget);
-    expect(find.bySemanticsLabel(RegExp('当前播放')), findsOneWidget);
-    expect(find.bySemanticsLabel(RegExp('操作')), findsNWidgets(2));
+    expect(find.byType(EchoSongRow), findsNWidgets(2));
+    expect(find.bySemanticsLabel(RegExp('正在播放')), findsOneWidget);
+    expect(find.byIcon(AppIcons.equalizer), findsOneWidget);
+    expect(find.text('2'), findsOneWidget);
+    expect(find.bySemanticsLabel(RegExp('更多操作')), findsNWidgets(2));
+    expect(
+      find.descendant(
+        of: find.byType(ListView),
+        matching: find.byType(EchoDivider),
+      ),
+      findsNothing,
+    );
     expect(tester.takeException(), isNull);
 
     await tester.tap(find.text(songs[1].title));
     await tester.pump();
-    expect(selected, 1);
+    expect(selected, <int>[1]);
+    expect(opened, isEmpty);
+
+    final secondMore = find.bySemanticsLabel('${songs[1].title}，更多操作');
+    final moreSize = tester.getSize(secondMore);
+    expect(moreSize.width, greaterThanOrEqualTo(48));
+    expect(moreSize.height, greaterThanOrEqualTo(48));
+    await tester.tap(secondMore);
+    await tester.pump();
+    expect(selected, <int>[1]);
+    expect(opened, <int>[1]);
 
     await tester.longPress(find.text(songs.first.title));
     await tester.pump();
-    expect(opened, 0);
+    expect(selected, <int>[1]);
+    expect(opened, <int>[1, 0]);
 
     await tester.tap(find.bySemanticsLabel(RegExp('清空后续播放队列')));
     await tester.pump();

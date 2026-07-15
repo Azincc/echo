@@ -84,14 +84,12 @@ void main() {
 
     expect(find.byType(PlayQueueSheet), findsOneWidget);
     expect(find.text('2 首曲目'), findsOneWidget);
-    expect(
-      find.bySemanticsLabel(RegExp('第 2 首.*Queued track.*Second artist')),
-      findsOneWidget,
+    final queuedRow = find.bySemanticsLabel(
+      RegExp('Queued track.*Second artist'),
     );
+    expect(queuedRow, findsOneWidget);
 
-    await tester.tap(
-      find.bySemanticsLabel(RegExp('第 2 首.*Queued track.*Second artist')),
-    );
+    await tester.tap(queuedRow);
     await tester.pumpAndSettle();
 
     expect(find.byType(PlayQueueSheet), findsNothing);

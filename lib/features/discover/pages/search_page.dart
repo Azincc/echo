@@ -1,16 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import '../../../core/design/echo_design.dart';
+import '../../../data/repositories/music_repository.dart';
 import '../../../providers/music_provider.dart';
 import '../../../providers/navigation_provider.dart';
 import '../../../providers/player_provider.dart';
-import '../../../widgets/cover_art_image.dart';
 import '../../../widgets/visible_remote_retry_scope.dart';
 import '../../library/pages/album_detail_page.dart';
 import '../../library/pages/artist_detail_page.dart';
 import '../../player/widgets/song_options_sheet.dart';
-import '../../../widgets/error_placeholder.dart';
-import '../../../widgets/song_list_item.dart';
-import '../../../widgets/skeleton_templates.dart';
+import '../widgets/discover_media_widgets.dart';
 
 /// 搜索页面
 class SearchPage extends ConsumerStatefulWidget {
@@ -31,16 +31,12 @@ class _SearchPageState extends ConsumerState<SearchPage> {
   }
 
   void _performSearch(String query) {
-    if (query.trim().isEmpty) {
-      setState(() {
-        _query = '';
-      });
-      return;
-    }
+    setState(() => _query = query.trim());
+  }
 
-    setState(() {
-      _query = query.trim();
-    });
+  void _clearSearch() {
+    _searchController.clear();
+    setState(() => _query = '');
   }
 
   @override
@@ -59,211 +55,220 @@ class _SearchPageState extends ConsumerState<SearchPage> {
           _query.isNotEmpty &&
           (searchLoadFailed || ref.read(searchProvider(_query)).hasError),
       onRetry: (ref) {
-        if (_query.isEmpty) return;
-        ref.invalidate(searchProvider(_query));
+        if (_query.isNotEmpty) ref.invalidate(searchProvider(_query));
       },
       child: Scaffold(
-        appBar: AppBar(
-          title: TextField(
-            controller: _searchController,
-            autofocus: true,
-            decoration: const InputDecoration(
-              hintText: '搜索歌曲、专辑、歌手',
-              border: InputBorder.none,
-            ),
-            textInputAction: TextInputAction.search,
-            onSubmitted: _performSearch,
-          ),
-          actions: [
-            if (_searchController.text.isNotEmpty)
-              IconButton(
-                icon: const Icon(Icons.clear),
-                onPressed: () {
-                  _searchController.clear();
-                  setState(() {
-                    _query = '';
-                  });
-                },
-              ),
-          ],
-        ),
-        body: _query.isEmpty
-            ? Center(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(
-                      Icons.search,
-                      size: 64,
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
-                    ),
-                    const SizedBox(height: 16),
-                    Text(
-                      '搜索你喜欢的音乐',
-                      style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                        color: Theme.of(context).colorScheme.onSurfaceVariant,
-                      ),
-                    ),
-                  ],
+        backgroundColor: context.echoColors.canvas,
+        body: SafeArea(
+          bottom: false,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: <Widget>[
+              EchoPageHeader(
+                title: '搜索',
+                leading: EchoIconButton(
+                  icon: AppIcons.back,
+                  label: '返回音乐流',
+                  onPressed: () => Navigator.of(context).maybePop(),
                 ),
-              )
-            : searchResultAsync!.when(
-                data: (result) {
-                  if (result.isEmpty) {
-                    if (searchLoadFailed) {
-                      return ErrorPlaceholder(
-                        message: '搜索失败，请检查网络后重试',
-                        onRetry: () => ref.invalidate(searchProvider(_query)),
-                      );
-                    }
-                    return Center(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          const Icon(Icons.search_off, size: 64),
-                          const SizedBox(height: 16),
-                          Text('未找到 "$_query" 的相关结果'),
-                        ],
-                      ),
+              ),
+              Padding(
+                padding: EdgeInsets.fromLTRB(
+                  context.echoPageHorizontalPadding,
+                  0,
+                  context.echoPageHorizontalPadding,
+                  context.echoSpacing.sm,
+                ),
+                child: ValueListenableBuilder<TextEditingValue>(
+                  valueListenable: _searchController,
+                  builder: (context, value, child) {
+                    return EchoTextField(
+                      controller: _searchController,
+                      label: '搜索歌曲、专辑和歌手',
+                      hintText: '输入关键词',
+                      leadingIcon: AppIcons.search,
+                      autofocus: true,
+                      textInputAction: TextInputAction.search,
+                      onSubmitted: _performSearch,
+                      trailing: value.text.isEmpty
+                          ? null
+                          : EchoIconButton(
+                              icon: AppIcons.close,
+                              label: '清空搜索',
+                              onPressed: _clearSearch,
+                            ),
                     );
-                  }
-
-                  return ListView(
-                    children: [
-                      // 歌曲结果
-                      if (result.songs.isNotEmpty) ...[
-                        Padding(
-                          padding: const EdgeInsets.all(16),
-                          child: Row(
-                            children: [
-                              const Icon(Icons.music_note),
-                              const SizedBox(width: 8),
-                              Text(
-                                '歌曲 (${result.songs.length})',
-                                style: Theme.of(context).textTheme.titleMedium
-                                    ?.copyWith(fontWeight: FontWeight.bold),
-                              ),
-                            ],
-                          ),
-                        ),
-                        ...result.songs.asMap().entries.map((entry) {
-                          final index = entry.key;
-                          final song = entry.value;
-                          return SongListItem(
-                            song: song,
-                            index: index,
-                            variant: SongListItemVariant.standard,
-                            onTap: () {
-                              ref
-                                  .read(playerProvider.notifier)
-                                  .playQueue(result.songs, startIndex: index);
-                            },
-                            onLongPress: () {
-                              showSongOptionsSheet(
-                                context: context,
-                                song: song,
-                              );
-                            },
-                          );
-                        }),
-                        const Divider(height: 32),
-                      ],
-
-                      // 专辑结果
-                      if (result.albums.isNotEmpty) ...[
-                        Padding(
-                          padding: const EdgeInsets.all(16),
-                          child: Row(
-                            children: [
-                              const Icon(Icons.album),
-                              const SizedBox(width: 8),
-                              Text(
-                                '专辑 (${result.albums.length})',
-                                style: Theme.of(context).textTheme.titleMedium
-                                    ?.copyWith(fontWeight: FontWeight.bold),
-                              ),
-                            ],
-                          ),
-                        ),
-                        ...result.albums.map((album) {
-                          return ListTile(
-                            leading: ClipRRect(
-                              borderRadius: BorderRadius.circular(4),
-                              child: CoverArtImage(
-                                coverArtId: album.coverArt,
-                                size: 48,
-                              ),
-                            ),
-                            title: Text(album.name),
-                            subtitle: album.artist != null
-                                ? Text(album.artist!)
-                                : null,
-                            trailing: Text('${album.songCount} 首'),
-                            onTap: () {
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (context) =>
-                                      AlbumDetailPage(albumId: album.id),
-                                ),
-                              );
-                            },
-                          );
-                        }),
-                        const Divider(height: 32),
-                      ],
-
-                      // 歌手结果
-                      if (result.artists.isNotEmpty) ...[
-                        Padding(
-                          padding: const EdgeInsets.all(16),
-                          child: Row(
-                            children: [
-                              const Icon(Icons.person),
-                              const SizedBox(width: 8),
-                              Text(
-                                '歌手 (${result.artists.length})',
-                                style: Theme.of(context).textTheme.titleMedium
-                                    ?.copyWith(fontWeight: FontWeight.bold),
-                              ),
-                            ],
-                          ),
-                        ),
-                        ...result.artists.map((artist) {
-                          return ListTile(
-                            leading: CircleAvatar(
-                              child: artist.coverArt != null
-                                  ? ClipOval(
-                                      child: CoverArtImage(
-                                        coverArtId: artist.coverArt,
-                                        size: 40,
-                                      ),
-                                    )
-                                  : const Icon(Icons.person),
-                            ),
-                            title: Text(artist.name),
-                            subtitle: Text('${artist.albumCount} 张专辑'),
-                            onTap: () {
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (context) =>
-                                      ArtistDetailPage(artistId: artist.id),
-                                ),
-                              );
-                            },
-                          );
-                        }),
-                      ],
-                    ],
-                  );
-                },
-                loading: () => const ListTileSkeleton(count: 5),
-                error: (error, stack) => ErrorPlaceholder(
-                  message: '搜索失败，请检查网络后重试',
-                  onRetry: () => ref.invalidate(searchProvider(_query)),
+                  },
                 ),
               ),
+              Expanded(
+                child: _query.isEmpty
+                    ? const EchoEmptyState(
+                        title: '搜索你的音乐库',
+                        description: '输入歌曲、专辑或歌手名称，然后按搜索键。',
+                        icon: AppIcons.search,
+                      )
+                    : _buildSearchResults(
+                        searchResultAsync!,
+                        searchLoadFailed: searchLoadFailed,
+                      ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSearchResults(
+    AsyncValue<SearchResult> resultAsync, {
+    required bool searchLoadFailed,
+  }) {
+    return resultAsync.when(
+      skipLoadingOnRefresh: false,
+      skipLoadingOnReload: false,
+      data: (result) {
+        if (result.isEmpty) {
+          if (searchLoadFailed) {
+            return EchoErrorState(
+              title: '搜索失败',
+              description: '无法读取音乐库，请检查网络或当前线路后重试。',
+              actionLabel: '重试',
+              onAction: () => ref.invalidate(searchProvider(_query)),
+            );
+          }
+          return EchoEmptyState(
+            title: '没有找到相关结果',
+            description: '“$_query”没有匹配的歌曲、专辑或歌手。可以尝试更短的关键词。',
+            icon: AppIcons.fileSearch,
+          );
+        }
+
+        return Align(
+          alignment: Alignment.topCenter,
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 1000),
+            child: ListView(
+              keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+              padding: EdgeInsets.fromLTRB(
+                context.echoPageHorizontalPadding,
+                context.echoSpacing.xs,
+                context.echoPageHorizontalPadding,
+                context.echoSpacing.xxl,
+              ),
+              children: <Widget>[
+                if (result.songs.isNotEmpty) ...<Widget>[
+                  EchoSectionHeader(
+                    title: '歌曲',
+                    trailing: _ResultCount(count: result.songs.length),
+                  ),
+                  SizedBox(height: context.echoSpacing.xs),
+                  for (var index = 0; index < result.songs.length; index++)
+                    DiscoverSongTile(
+                      song: result.songs[index],
+                      onPressed: () {
+                        ref
+                            .read(playerProvider.notifier)
+                            .playQueue(result.songs, startIndex: index);
+                      },
+                      onOpenActions: () => showSongOptionsSheet(
+                        context: context,
+                        song: result.songs[index],
+                      ),
+                    ),
+                ],
+                if (result.songs.isNotEmpty &&
+                    (result.albums.isNotEmpty ||
+                        result.artists.isNotEmpty)) ...<Widget>[
+                  SizedBox(height: context.echoSpacing.lg),
+                  const EchoDivider(),
+                  SizedBox(height: context.echoSpacing.lg),
+                ],
+                if (result.albums.isNotEmpty) ...<Widget>[
+                  EchoSectionHeader(
+                    title: '专辑',
+                    trailing: _ResultCount(count: result.albums.length),
+                  ),
+                  SizedBox(height: context.echoSpacing.xs),
+                  for (final album in result.albums)
+                    SearchAlbumRow(
+                      album: album,
+                      onPressed: () {
+                        Navigator.of(context).push<void>(
+                          EchoPageRoute<void>(
+                            context: context,
+                            builder: (context) =>
+                                AlbumDetailPage(albumId: album.id),
+                          ),
+                        );
+                      },
+                    ),
+                ],
+                if (result.albums.isNotEmpty &&
+                    result.artists.isNotEmpty) ...<Widget>[
+                  SizedBox(height: context.echoSpacing.lg),
+                  const EchoDivider(),
+                  SizedBox(height: context.echoSpacing.lg),
+                ],
+                if (result.artists.isNotEmpty) ...<Widget>[
+                  EchoSectionHeader(
+                    title: '歌手',
+                    trailing: _ResultCount(count: result.artists.length),
+                  ),
+                  SizedBox(height: context.echoSpacing.xs),
+                  for (final artist in result.artists)
+                    SearchArtistRow(
+                      artist: artist,
+                      onPressed: () {
+                        Navigator.of(context).push<void>(
+                          EchoPageRoute<void>(
+                            context: context,
+                            builder: (context) =>
+                                ArtistDetailPage(artistId: artist.id),
+                          ),
+                        );
+                      },
+                    ),
+                ],
+              ],
+            ),
+          ),
+        );
+      },
+      loading: () => Align(
+        alignment: Alignment.topCenter,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 1000),
+          child: Padding(
+            padding: EdgeInsets.symmetric(
+              horizontal: context.echoPageHorizontalPadding,
+              vertical: context.echoSpacing.md,
+            ),
+            child: const DiscoverSongLoading(count: 5),
+          ),
+        ),
+      ),
+      error: (error, stackTrace) => EchoErrorState(
+        title: '搜索失败',
+        description: '无法读取音乐库，请检查网络或当前线路后重试。',
+        actionLabel: '重试',
+        onAction: () => ref.invalidate(searchProvider(_query)),
+      ),
+    );
+  }
+}
+
+class _ResultCount extends StatelessWidget {
+  const _ResultCount({required this.count});
+
+  final int count;
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      '$count 项',
+      style: context.echoTypography.metadata.copyWith(
+        color: context.echoColors.muted,
       ),
     );
   }

@@ -1,4 +1,4 @@
-import 'dart:ui' show SemanticsAction;
+import 'dart:ui' show SemanticsAction, Tristate;
 
 import 'package:echoes/core/design/echo_design.dart';
 import 'package:echoes/core/theme/app_theme.dart';
@@ -81,6 +81,59 @@ void main() {
     );
   }
 
+  void expectControlHierarchy(WidgetTester tester) {
+    final transport = find.byKey(
+      const ValueKey<String>('full_player_transport_controls'),
+    );
+    final utility = find.byKey(
+      const ValueKey<String>('full_player_utility_bar'),
+    );
+    final quality = find.byKey(
+      const ValueKey<String>('full_player_quality_metadata'),
+    );
+    expect(transport, findsOneWidget);
+    expect(utility, findsOneWidget);
+    expect(quality, findsOneWidget);
+    expect(
+      find.descendant(of: transport, matching: find.byType(EchoPressable)),
+      findsNWidgets(3),
+    );
+    expect(
+      find.descendant(of: utility, matching: find.byType(EchoPressable)),
+      findsNWidgets(4),
+    );
+
+    for (final label in <String>['上一首', '暂停', '下一首']) {
+      final target = find.descendant(
+        of: transport,
+        matching: find.bySemanticsLabel(label),
+      );
+      expect(target, findsOneWidget);
+      final rect = tester.getRect(target);
+      expect(rect.width, greaterThanOrEqualTo(47.99));
+      expect(rect.height, greaterThanOrEqualTo(47.99));
+    }
+    for (final label in <String>['列表循环，点击切换到单曲循环', '显示歌词', '播放队列', '红心']) {
+      final target = find.descendant(
+        of: utility,
+        matching: find.bySemanticsLabel(label),
+      );
+      expect(target, findsOneWidget);
+      final rect = tester.getRect(target);
+      expect(rect.width, greaterThanOrEqualTo(47.99));
+      expect(rect.height, greaterThanOrEqualTo(47.99));
+    }
+    expect(
+      find.descendant(of: transport, matching: find.bySemanticsLabel('红心')),
+      findsNothing,
+    );
+    expect(
+      find.descendant(of: utility, matching: find.bySemanticsLabel('暂停')),
+      findsNothing,
+    );
+    expect(find.descendant(of: utility, matching: quality), findsNothing);
+  }
+
   testWidgets('full player keeps Hero contract and works at 200% text', (
     tester,
   ) async {
@@ -129,6 +182,7 @@ void main() {
       tester.getSize(find.bySemanticsLabel('收起播放器')).height,
       greaterThanOrEqualTo(48),
     );
+    expectControlHierarchy(tester);
     expect(tester.takeException(), isNull);
   });
 
@@ -188,6 +242,7 @@ void main() {
       final detailsRect = tester.getRect(detailsPane);
       expect(artworkRect.right, lessThan(detailsRect.left));
       expect(artworkRect.height, closeTo(detailsRect.height, 0.1));
+      expectControlHierarchy(tester);
 
       for (final label in <String>['暂停', '显示歌词', '播放队列']) {
         final target = find.bySemanticsLabel(label);
@@ -251,6 +306,7 @@ void main() {
             .left,
       ),
     );
+    expectControlHierarchy(tester);
     expect(tester.takeException(), isNull);
   });
 
@@ -310,6 +366,28 @@ void main() {
     await tester.tap(find.bySemanticsLabel('随机播放，点击切换到列表循环'));
     await tester.pump();
     expect(find.bySemanticsLabel('列表循环，点击切换到单曲循环'), findsOneWidget);
+
+    final unstarred = find.bySemanticsLabel('红心');
+    expect(
+      tester
+          .getSemantics(unstarred)
+          .getSemanticsData()
+          .flagsCollection
+          .isSelected,
+      Tristate.isFalse,
+    );
+    await tester.tap(unstarred);
+    await tester.pump();
+    final starred = find.bySemanticsLabel('取消红心');
+    expect(starred, findsOneWidget);
+    expect(
+      tester
+          .getSemantics(starred)
+          .getSemanticsData()
+          .flagsCollection
+          .isSelected,
+      Tristate.isTrue,
+    );
   });
 
   testWidgets('progress remains seekable with buffered state', (tester) async {

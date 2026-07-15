@@ -773,37 +773,30 @@ class _FullPlayerPageState extends ConsumerState<FullPlayerPage>
 
   Widget _buildControlPanel(Song song, {bool compact = false}) {
     final spacing = context.echoSpacing;
-    if (compact) {
-      return Column(
-        key: const ValueKey<String>('full_player_control_panel'),
-        mainAxisSize: MainAxisSize.min,
-        children: <Widget>[
-          const ProgressBar(),
-          SizedBox(height: spacing.xxs),
-          PlaybackControls(currentSong: song, compact: true),
-          SizedBox(height: spacing.xxs),
-          Row(
-            children: <Widget>[
-              _PlayerIconButton(
-                icon: _showLyrics ? AppIcons.lyricsFilled : AppIcons.lyrics,
-                label: _showLyrics ? '显示封面' : '显示歌词',
-                selected: _showLyrics,
-                onPressed: _toggleLyrics,
-              ),
-              SizedBox(width: spacing.xxs),
-              _PlayerIconButton(
-                icon: AppIcons.queue,
-                label: '播放队列',
-                onPressed: () =>
-                    unawaited(showPlayQueueSheet(context: context)),
-              ),
-              SizedBox(width: spacing.xs),
-              Expanded(child: _buildQualityIndicator()),
-            ],
-          ),
-        ],
-      );
-    }
+    final content = Column(
+      key: const ValueKey<String>('full_player_control_panel'),
+      mainAxisSize: MainAxisSize.min,
+      children: <Widget>[
+        const ProgressBar(),
+        SizedBox(height: compact ? spacing.xxs : spacing.sm),
+        PlaybackControls(
+          key: const ValueKey<String>('full_player_transport_controls'),
+          compact: compact,
+        ),
+        SizedBox(height: compact ? spacing.xxs : spacing.xs),
+        _PlayerUtilityBar(
+          key: const ValueKey<String>('full_player_utility_bar'),
+          currentSong: song,
+          showLyrics: _showLyrics,
+          onToggleLyrics: _toggleLyrics,
+          onOpenQueue: () => unawaited(showPlayQueueSheet(context: context)),
+        ),
+        SizedBox(height: spacing.xxs),
+        _buildQualityIndicator(),
+      ],
+    );
+
+    if (compact) return content;
 
     final horizontalPadding = context.echoWindowClass == EchoWindowClass.compact
         ? spacing.md
@@ -816,34 +809,7 @@ class _FullPlayerPageState extends ConsumerState<FullPlayerPage>
         horizontalPadding,
         spacing.sm,
       ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: <Widget>[
-          const ProgressBar(),
-          SizedBox(height: spacing.sm),
-          PlaybackControls(currentSong: song),
-          SizedBox(height: spacing.xs),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: <Widget>[
-              _PlayerIconButton(
-                icon: _showLyrics ? AppIcons.lyricsFilled : AppIcons.lyrics,
-                label: _showLyrics ? '显示封面' : '显示歌词',
-                selected: _showLyrics,
-                onPressed: _toggleLyrics,
-              ),
-              SizedBox(width: spacing.lg),
-              _PlayerIconButton(
-                icon: AppIcons.queue,
-                label: '播放队列',
-                onPressed: () =>
-                    unawaited(showPlayQueueSheet(context: context)),
-              ),
-            ],
-          ),
-          _buildQualityIndicator(),
-        ],
-      ),
+      child: content,
     );
   }
 
@@ -964,6 +930,7 @@ class _FullPlayerPageState extends ConsumerState<FullPlayerPage>
         final text = parts.join(' · ');
 
         return EchoPressable(
+          key: const ValueKey<String>('full_player_quality_metadata'),
           semanticLabel: '$text，${_showBitRate ? '点击收起码率' : '点击显示码率'}',
           onPressed: () => setState(() => _showBitRate = !_showBitRate),
           minimumSize: Size(
@@ -1395,16 +1362,11 @@ class _ProgressBarState extends ConsumerState<ProgressBar>
   }
 }
 
-/// Playback controls keep business actions in the provider while using a
-/// provider-selected record so position ticks do not rebuild the row.
+/// The primary transport zone contains only previous, play/pause, and next.
+/// Position ticks and secondary utility state stay outside its dependency set.
 class PlaybackControls extends ConsumerWidget {
-  const PlaybackControls({
-    super.key,
-    required this.currentSong,
-    this.compact = false,
-  });
+  const PlaybackControls({super.key, this.compact = false});
 
-  final Song currentSong;
   final bool compact;
 
   @override
@@ -1415,38 +1377,12 @@ class PlaybackControls extends ConsumerWidget {
           isPlaying: state.isPlaying,
           hasPrevious: state.hasPrevious,
           hasNext: state.hasNext,
-          shuffleEnabled: state.shuffleEnabled,
-          loopMode: state.loopMode,
-          starred: state.currentSong?.starred ?? currentSong.starred,
         ),
       ),
     );
-    final mode = state.shuffleEnabled
-        ? PlaybackMode.shuffle
-        : state.loopMode == LoopMode.one
-        ? PlaybackMode.repeatOne
-        : PlaybackMode.repeatAll;
-    final modeIcon = switch (mode) {
-      PlaybackMode.shuffle => AppIcons.shuffle,
-      PlaybackMode.repeatAll => AppIcons.repeat,
-      PlaybackMode.repeatOne => AppIcons.repeatOne,
-    };
-    final modeLabel = switch (mode) {
-      PlaybackMode.shuffle => '随机播放，点击切换到列表循环',
-      PlaybackMode.repeatAll => '列表循环，点击切换到单曲循环',
-      PlaybackMode.repeatOne => '单曲循环，点击切换到随机播放',
-    };
 
     final playDimension = compact ? 56.0 : 64.0;
     final buttons = <Widget>[
-      _PlayerIconButton(
-        icon: modeIcon,
-        label: modeLabel,
-        selected: mode != PlaybackMode.repeatAll,
-        onPressed: () {
-          ref.read(playerProvider.notifier).cyclePlaybackMode();
-        },
-      ),
       _PlayerIconButton(
         icon: AppIcons.previous,
         label: '上一首',
@@ -1472,36 +1408,95 @@ class PlaybackControls extends ConsumerWidget {
             ? null
             : () => unawaited(ref.read(playerProvider.notifier).next()),
       ),
-      _PlayerIconButton(
-        icon: state.starred ? AppIcons.heart : AppIcons.heartOutline,
-        label: state.starred ? '取消红心' : '红心',
-        selected: state.starred,
-        onPressed: () {
-          ref.read(playerProvider.notifier).toggleFavorite();
-        },
-      ),
     ];
-    final minimumRowWidth = 48 * 4 + playDimension;
 
     return Center(
       child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 390),
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            if (constraints.maxWidth < minimumRowWidth) {
-              return Wrap(
-                alignment: WrapAlignment.center,
-                runAlignment: WrapAlignment.center,
-                spacing: context.echoSpacing.xxs,
-                runSpacing: context.echoSpacing.xxs,
-                children: buttons,
-              );
-            }
-            return Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: buttons,
-            );
-          },
+        constraints: const BoxConstraints(maxWidth: 280),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+          children: buttons,
+        ),
+      ),
+    );
+  }
+}
+
+class _PlayerUtilityBar extends ConsumerWidget {
+  const _PlayerUtilityBar({
+    super.key,
+    required this.currentSong,
+    required this.showLyrics,
+    required this.onToggleLyrics,
+    required this.onOpenQueue,
+  });
+
+  final Song currentSong;
+  final bool showLyrics;
+  final VoidCallback onToggleLyrics;
+  final VoidCallback onOpenQueue;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final state = ref.watch(
+      playerProvider.select(
+        (state) => (
+          shuffleEnabled: state.shuffleEnabled,
+          loopMode: state.loopMode,
+          starred: state.currentSong?.starred ?? currentSong.starred,
+        ),
+      ),
+    );
+    final mode = state.shuffleEnabled
+        ? PlaybackMode.shuffle
+        : state.loopMode == LoopMode.one
+        ? PlaybackMode.repeatOne
+        : PlaybackMode.repeatAll;
+    final modeIcon = switch (mode) {
+      PlaybackMode.shuffle => AppIcons.shuffle,
+      PlaybackMode.repeatAll => AppIcons.repeat,
+      PlaybackMode.repeatOne => AppIcons.repeatOne,
+    };
+    final modeLabel = switch (mode) {
+      PlaybackMode.shuffle => '随机播放，点击切换到列表循环',
+      PlaybackMode.repeatAll => '列表循环，点击切换到单曲循环',
+      PlaybackMode.repeatOne => '单曲循环，点击切换到随机播放',
+    };
+
+    return Center(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 280),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+          children: <Widget>[
+            _PlayerIconButton(
+              icon: modeIcon,
+              label: modeLabel,
+              selected: mode != PlaybackMode.repeatAll,
+              onPressed: () {
+                ref.read(playerProvider.notifier).cyclePlaybackMode();
+              },
+            ),
+            _PlayerIconButton(
+              icon: showLyrics ? AppIcons.lyricsFilled : AppIcons.lyrics,
+              label: showLyrics ? '显示封面' : '显示歌词',
+              selected: showLyrics,
+              onPressed: onToggleLyrics,
+            ),
+            _PlayerIconButton(
+              icon: AppIcons.queue,
+              label: '播放队列',
+              onPressed: onOpenQueue,
+            ),
+            _PlayerIconButton(
+              icon: state.starred ? AppIcons.heart : AppIcons.heartOutline,
+              label: state.starred ? '取消红心' : '红心',
+              selected: state.starred,
+              onPressed: () {
+                ref.read(playerProvider.notifier).toggleFavorite();
+              },
+            ),
+          ],
         ),
       ),
     );

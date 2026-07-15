@@ -7,19 +7,27 @@ import 'package:go_router/go_router.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../../core/design/echo_design.dart';
 import '../../../core/services/update_checker.dart';
 import '../../../core/utils/logger.dart';
 import '../../../data/models/music_library.dart';
+import '../../../data/models/server_address.dart';
 import '../../../data/sources/local_storage.dart';
 import '../../../providers/api_provider.dart';
 import '../../../providers/auth_provider.dart';
+import '../../../providers/crossfade_provider.dart';
+import '../../../providers/library_provider.dart';
+import '../../../providers/music_provider.dart';
+import '../../../providers/player_provider.dart';
+import '../../../providers/playlist_provider.dart';
 import '../../../providers/theme_provider.dart';
+import '../widgets/echo_settings_components.dart';
 import 'audio_quality_page.dart';
 import 'cache_management_page.dart';
 import 'cover_providers_page.dart';
 import 'lyrics_providers_page.dart';
+import 'playback_stats_page.dart';
 import 'theme_settings_page.dart';
-import '../../../providers/crossfade_provider.dart';
 
 /// 全屏设置页
 class AppSettingsPage extends ConsumerStatefulWidget {
@@ -33,17 +41,13 @@ class _AppSettingsPageState extends ConsumerState<AppSettingsPage> {
   bool _isExportingLogs = false;
   bool _isCheckingUpdate = false;
 
-  // ---------------------------------------------------------------------------
-  // Log export
-  // ---------------------------------------------------------------------------
-
   Future<void> _exportLogs() async {
     setState(() => _isExportingLogs = true);
 
     try {
       final logContent = Logger.exportLogs();
       if (logContent.isEmpty) {
-        _showSnackBar('暂无日志可导出');
+        _showMessage('暂无日志可导出');
         return;
       }
 
@@ -65,17 +69,13 @@ class _AppSettingsPageState extends ConsumerState<AppSettingsPage> {
         'exported ${Logger.bufferedLineCount} lines to share payload'
             '${kIsWeb ? " (web)" : ""}',
       );
-    } catch (e) {
-      Logger.errorWithTag('LOG_EXPORT', 'export failed', e);
-      _showSnackBar('日志导出失败: $e');
+    } catch (error) {
+      Logger.errorWithTag('LOG_EXPORT', 'export failed', error);
+      _showMessage('日志导出失败: $error', kind: EchoMessageKind.error);
     } finally {
       if (mounted) setState(() => _isExportingLogs = false);
     }
   }
-
-  // ---------------------------------------------------------------------------
-  // Update check
-  // ---------------------------------------------------------------------------
 
   Future<void> _checkForUpdates() async {
     setState(() => _isCheckingUpdate = true);
@@ -85,117 +85,101 @@ class _AppSettingsPageState extends ConsumerState<AppSettingsPage> {
       if (!mounted) return;
 
       if (result.hasUpdate) {
-        _showUpdateDialog(result);
+        _showUpdateSheet(result);
       } else {
-        _showSnackBar('当前已是最新版本 (${result.currentVersion})');
+        _showMessage(
+          '当前已是最新版本 (${result.currentVersion})',
+          kind: EchoMessageKind.success,
+        );
       }
-    } catch (e) {
-      _showSnackBar('检查更新失败: $e');
+    } catch (error) {
+      _showMessage('检查更新失败: $error', kind: EchoMessageKind.error);
     } finally {
       if (mounted) setState(() => _isCheckingUpdate = false);
     }
   }
 
-  void _showUpdateDialog(UpdateCheckResult result) {
-    showDialog(
+  void _showUpdateSheet(UpdateCheckResult result) {
+    showEchoBottomSheet<void>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: Row(
-          children: [
-            Icon(
-              Icons.system_update,
-              color: Theme.of(context).colorScheme.primary,
-            ),
-            const SizedBox(width: 8),
-            const Expanded(child: Text('发现新版本')),
-          ],
-        ),
-        content: SingleChildScrollView(
+      useRootNavigator: true,
+      isScrollControlled: true,
+      builder: (sheetContext) => EchoBottomSheet(
+        title: '发现新版本',
+        subtitle: '${result.currentVersion} → ${result.latestVersion}',
+        constrainToAvailableHeight: true,
+        child: SingleChildScrollView(
           child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              _updateInfoRow('当前版本', result.currentVersion),
-              _updateInfoRow('最新版本', result.latestVersion),
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: <Widget>[
+              _SettingsInfoLine(label: '当前版本', value: result.currentVersion),
+              _SettingsInfoLine(label: '最新版本', value: result.latestVersion),
               if (result.releaseNotes != null &&
-                  result.releaseNotes!.isNotEmpty) ...[
-                const Divider(height: 16),
-                Text(
-                  '更新说明',
-                  style: Theme.of(
-                    context,
-                  ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold),
-                ),
-                const SizedBox(height: 4),
+                  result.releaseNotes!.isNotEmpty) ...<Widget>[
+                SizedBox(height: sheetContext.echoSpacing.sm),
+                const EchoDivider(),
+                SizedBox(height: sheetContext.echoSpacing.md),
+                const EchoSectionHeader(title: '更新说明'),
+                SizedBox(height: sheetContext.echoSpacing.xs),
                 Text(
                   result.releaseNotes!,
-                  style: Theme.of(context).textTheme.bodySmall,
+                  style: sheetContext.echoTypography.body.copyWith(
+                    color: sheetContext.echoColors.muted,
+                  ),
                 ),
               ],
-              if (result.assets.isNotEmpty) ...[
-                const Divider(height: 16),
-                Text(
-                  '下载文件',
-                  style: Theme.of(
-                    context,
-                  ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold),
+              if (result.assets.isNotEmpty) ...<Widget>[
+                SizedBox(height: sheetContext.echoSpacing.sm),
+                const EchoDivider(),
+                SizedBox(height: sheetContext.echoSpacing.md),
+                const EchoSectionHeader(
+                  title: '下载文件',
+                  description: '选择适合当前设备的安装文件。',
                 ),
-                const SizedBox(height: 4),
-                ...result.assets.map((asset) {
-                  final sizeMb = (asset.size / (1024 * 1024)).toStringAsFixed(
-                    1,
-                  );
-                  return ListTile(
-                    contentPadding: EdgeInsets.zero,
-                    dense: true,
-                    leading: const Icon(Icons.download, size: 20),
-                    title: Text(
-                      asset.name,
-                      style: const TextStyle(fontSize: 13),
+                SizedBox(height: sheetContext.echoSpacing.xs),
+                for (final asset in result.assets)
+                  Padding(
+                    padding: EdgeInsets.only(
+                      bottom: sheetContext.echoSpacing.xs,
                     ),
-                    subtitle: Text('$sizeMb MB'),
-                    onTap: () => _openUrl(asset.downloadUrl),
-                  );
-                }),
+                    child: EchoActionRow(
+                      icon: AppIcons.download,
+                      title: asset.name,
+                      subtitle:
+                          '${(asset.size / (1024 * 1024)).toStringAsFixed(1)} MB',
+                      trailing: Icon(
+                        AppIcons.chevronRight,
+                        size: 20,
+                        color: sheetContext.echoColors.muted,
+                      ),
+                      onPressed: () => _openUrl(asset.downloadUrl),
+                    ),
+                  ),
               ],
+              SizedBox(height: sheetContext.echoSpacing.lg),
+              Wrap(
+                alignment: WrapAlignment.end,
+                spacing: sheetContext.echoSpacing.xs,
+                runSpacing: sheetContext.echoSpacing.xs,
+                children: <Widget>[
+                  EchoButton.ghost(
+                    label: '稍后再说',
+                    onPressed: () => Navigator.of(sheetContext).pop(),
+                  ),
+                  if (result.releaseUrl != null)
+                    EchoButton.primary(
+                      label: '前往下载',
+                      leadingIcon: AppIcons.download,
+                      onPressed: () {
+                        Navigator.of(sheetContext).pop();
+                        _openUrl(result.releaseUrl!);
+                      },
+                    ),
+                ],
+              ),
             ],
           ),
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('稍后再说'),
-          ),
-          if (result.releaseUrl != null)
-            FilledButton(
-              onPressed: () {
-                Navigator.pop(context);
-                _openUrl(result.releaseUrl!);
-              },
-              child: const Text('前往下载'),
-            ),
-        ],
-      ),
-    );
-  }
-
-  Widget _updateInfoRow(String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 2),
-      child: Row(
-        children: [
-          SizedBox(
-            width: 72,
-            child: Text(
-              label,
-              style: const TextStyle(color: Colors.grey, fontSize: 13),
-            ),
-          ),
-          Text(
-            value,
-            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
-          ),
-        ],
       ),
     );
   }
@@ -207,285 +191,373 @@ class _AppSettingsPageState extends ConsumerState<AppSettingsPage> {
     }
   }
 
-  void _showSnackBar(String message) {
+  void _showMessage(
+    String message, {
+    EchoMessageKind kind = EchoMessageKind.info,
+  }) {
     if (!mounted) return;
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text(message)));
+    showEchoMessage(context, message, kind: kind);
   }
-
-  // ---------------------------------------------------------------------------
-  // Build
-  // ---------------------------------------------------------------------------
 
   @override
   Widget build(BuildContext context) {
     final authState = ref.watch(authStateProvider);
     final library = authState.currentLibrary;
+    final librariesAsync = ref.watch(librariesProvider);
     final activeAddress = ref.watch(activeAddressProvider);
     final autoFallback = ref.watch(autoFallbackProvider);
     final themeSettings = ref.watch(themeSettingsProvider);
+    final crossfadeMs = ref.watch(crossfadeDurationMsProvider);
+    final availableLibraries = librariesAsync.valueOrNull;
+    final switchDescription = librariesAsync.when(
+      data: (libraries) => libraries.length > 1
+          ? '已保存 ${libraries.length} 个音乐库'
+          : libraries.isEmpty
+          ? '当前没有可切换的音乐库'
+          : '当前仅有一个音乐库',
+      loading: () => '正在读取音乐库列表',
+      error: (error, stackTrace) => '音乐库列表读取失败，点击重试',
+    );
 
-    return Scaffold(
-      appBar: AppBar(title: const Text('设置')),
-      body: ListView(
-        padding: EdgeInsets.fromLTRB(
-          16,
-          16,
-          16,
-          16 + MediaQuery.of(context).padding.bottom,
-        ),
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  '服务器信息',
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.bold,
+    final VoidCallback? switchLibraryAction;
+    if (availableLibraries != null && availableLibraries.isNotEmpty) {
+      switchLibraryAction = () =>
+          _showLibrarySheet(availableLibraries, library);
+    } else if (librariesAsync.hasError) {
+      switchLibraryAction = () => ref.invalidate(librariesProvider);
+    } else {
+      switchLibraryAction = null;
+    }
+
+    final Widget switchLibraryTrailing;
+    if (librariesAsync.isLoading) {
+      switchLibraryTrailing = const EchoSkeleton.circle(size: 20);
+    } else if (librariesAsync.hasError) {
+      switchLibraryTrailing = Icon(
+        AppIcons.refresh,
+        size: 20,
+        color: context.echoColors.error,
+      );
+    } else {
+      switchLibraryTrailing = Icon(
+        AppIcons.chevronDown,
+        size: 20,
+        color: context.echoColors.muted,
+      );
+    }
+
+    return EchoScaffold(
+      topBar: EchoTopBar.back(context: context, title: '设置'),
+      body: Align(
+        alignment: Alignment.topCenter,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 920),
+          child: ListView(
+            keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+            padding: EdgeInsets.fromLTRB(
+              context.echoSpacing.md,
+              context.echoSpacing.sm,
+              context.echoSpacing.md,
+              context.echoSpacing.xxl,
+            ),
+            children: <Widget>[
+              EchoSettingsSection(
+                title: '音乐库与服务器',
+                description: '查看当前连接，也可以切换或编辑已经保存的音乐库。',
+                children: <Widget>[
+                  _ServerSummary(
+                    library: library,
+                    activeAddress: activeAddress,
                   ),
-                ),
+                  SizedBox(height: context.echoSpacing.sm),
+                  EchoSettingRow(
+                    icon: AppIcons.library,
+                    title: '切换音乐库',
+                    value: library?.name ?? '未选择',
+                    description: switchDescription,
+                    trailing: switchLibraryTrailing,
+                    onPressed: switchLibraryAction,
+                  ),
+                  EchoSettingRow(
+                    icon: AppIcons.edit,
+                    title: '编辑当前音乐库',
+                    value: library?.name ?? '未选择',
+                    description: library == null
+                        ? '选择音乐库后可编辑服务器与认证信息。'
+                        : '管理服务器地址、认证方式与音乐库能力。',
+                    onPressed: library == null
+                        ? null
+                        : () => context.push('/library/edit/${library.id}'),
+                  ),
+                ],
               ),
-              IconButton(
-                tooltip: '编辑服务器设置',
-                icon: const Icon(Icons.edit_outlined),
-                onPressed: library == null
-                    ? null
-                    : () {
-                        context.push('/library/edit/${library.id}');
-                      },
+              SizedBox(height: context.echoSpacing.xl),
+              EchoSettingsSection(
+                title: '播放与外观',
+                description: '这些选择会立即应用到当前设备。',
+                children: <Widget>[
+                  EchoToggleSettingRow(
+                    icon: AppIcons.route,
+                    title: '线路自动回退',
+                    description: '手动线路不可用时，自动切换到其他可用线路。',
+                    value: autoFallback,
+                    onChanged: (value) async {
+                      ref.read(autoFallbackProvider.notifier).state = value;
+                      ref.read(addressPoolProvider).autoFallback = value;
+                      await LocalStorage.setAutoFallback(value);
+                    },
+                  ),
+                  EchoSettingRow(
+                    icon: AppIcons.palette,
+                    title: '主题设置',
+                    value:
+                        '${_themeModeText(themeSettings.mode)} · ${_colorHex(themeSettings.seedColor)}',
+                    description: '明暗模式与 Echo 强调色',
+                    onPressed: () => _pushPage(const ThemeSettingsPage()),
+                  ),
+                  EchoSettingRow(
+                    icon: AppIcons.quality,
+                    title: '音质设置',
+                    description: '按网络选择播放码率',
+                    onPressed: () => _pushPage(const AudioQualityPage()),
+                  ),
+                  EchoSettingRow(
+                    icon: AppIcons.timer,
+                    title: '切歌淡入淡出',
+                    value: _crossfadeLabel(crossfadeMs),
+                    description: '设置相邻曲目之间的交叉衰减时长。',
+                    onPressed: () => _showCrossfadeSheet(crossfadeMs),
+                  ),
+                  EchoSettingRow(
+                    icon: AppIcons.lyrics,
+                    title: '歌词提供商',
+                    description: '调整获取顺序与启用状态',
+                    onPressed: () => _pushPage(const LyricsProvidersPage()),
+                  ),
+                  EchoSettingRow(
+                    icon: AppIcons.image,
+                    title: '封面提供商',
+                    description: '调整获取顺序并配置 Fanart.tv',
+                    onPressed: () => _pushPage(const CoverProvidersPage()),
+                  ),
+                ],
+              ),
+              SizedBox(height: context.echoSpacing.xl),
+              EchoSettingsSection(
+                title: '存储与数据',
+                description: '管理本机缓存，并查看音乐库与播放统计。',
+                children: <Widget>[
+                  EchoSettingRow(
+                    icon: AppIcons.storage,
+                    title: '缓存管理',
+                    description: '音频、图片与歌词缓存',
+                    onPressed: () => _pushPage(const CacheManagementPage()),
+                  ),
+                  EchoSettingRow(
+                    icon: AppIcons.analytics,
+                    title: '统计信息',
+                    description: '音乐库、播放、收藏与缓存统计',
+                    onPressed: () => _pushPage(const PlaybackStatsPage()),
+                  ),
+                ],
+              ),
+              SizedBox(height: context.echoSpacing.xl),
+              EchoSettingsSection(
+                title: '诊断与更新',
+                description: '导出本机诊断日志，或检查 GitHub Releases。',
+                children: <Widget>[
+                  EchoSettingRow(
+                    icon: AppIcons.fileText,
+                    title: '导出日志',
+                    description: '共缓存 ${Logger.bufferedLineCount} 条日志',
+                    semanticLabel: _isExportingLogs ? '导出日志，正在准备分享文件' : null,
+                    trailing: _isExportingLogs
+                        ? const EchoSkeleton.circle(size: 20)
+                        : null,
+                    onPressed: _isExportingLogs ? null : _exportLogs,
+                  ),
+                  EchoSettingRow(
+                    icon: AppIcons.refresh,
+                    title: '检查更新',
+                    description: '从 GitHub Releases 检查最新版本',
+                    semanticLabel: _isCheckingUpdate
+                        ? '检查更新，正在连接 GitHub Releases'
+                        : null,
+                    trailing: _isCheckingUpdate
+                        ? const EchoSkeleton.circle(size: 20)
+                        : null,
+                    onPressed: _isCheckingUpdate ? null : _checkForUpdates,
+                  ),
+                  EchoSettingRow(
+                    icon: AppIcons.info,
+                    title: '关于',
+                    description: 'echoes · 基于 Subsonic API',
+                    onPressed: _showAboutSheet,
+                  ),
+                ],
               ),
             ],
           ),
-          const SizedBox(height: 8),
-          _buildInfoRow('当前连接', activeAddress?.label ?? '未连接'),
-          _buildInfoRow('服务器地址', activeAddress?.url ?? '未设置'),
-          _buildInfoRow('用户名', library?.username ?? '未设置'),
-          _buildInfoRow(
-            '认证方式',
-            library?.authType == MusicLibraryAuthType.apiKey ? 'API Key' : '密码',
-          ),
-          const Divider(height: 24),
-          Text(
-            '应用设置',
-            style: Theme.of(
-              context,
-            ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(height: 8),
-          SwitchListTile(
-            contentPadding: EdgeInsets.zero,
-            title: const Text('线路自动回退'),
-            subtitle: const Text(
-              '手动选择线路后，若该线路不可用，自动切换到其他可用线路',
-              style: TextStyle(fontSize: 12),
-            ),
-            value: autoFallback,
-            onChanged: (value) async {
-              ref.read(autoFallbackProvider.notifier).state = value;
-              ref.read(addressPoolProvider).autoFallback = value;
-              await LocalStorage.setAutoFallback(value);
-            },
-          ),
-          ListTile(
-            contentPadding: EdgeInsets.zero,
-            leading: const Icon(Icons.palette_outlined),
-            title: const Text('主题设置'),
-            subtitle: Text(
-              '${_themeModeText(themeSettings.mode)} · ${_colorHex(themeSettings.seedColor)}',
-              style: const TextStyle(fontSize: 12),
-            ),
-            trailing: const Icon(Icons.chevron_right),
-            onTap: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => const ThemeSettingsPage(),
-                ),
-              );
-            },
-          ),
-          ListTile(
-            contentPadding: EdgeInsets.zero,
-            leading: const Icon(Icons.high_quality_outlined),
-            title: const Text('音质设置'),
-            trailing: const Icon(Icons.chevron_right),
-            onTap: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => const AudioQualityPage(),
-                ),
-              );
-            },
-          ),
-          Consumer(
-            builder: (context, ref, _) {
-              final crossfadeMs = ref.watch(crossfadeDurationMsProvider);
-              final label = crossfadeMs <= 0
-                  ? '关闭'
-                  : '${(crossfadeMs / 1000).toStringAsFixed(1)} 秒';
-              return Column(
-                children: [
-                  ListTile(
-                    contentPadding: EdgeInsets.zero,
-                    leading: const Icon(Icons.swap_horiz_outlined),
-                    title: const Text('切歌淡入淡出'),
-                    subtitle: Text(label, style: const TextStyle(fontSize: 12)),
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    child: Row(
-                      children: [
-                        const Text('关闭', style: TextStyle(fontSize: 12)),
-                        Expanded(
-                          child: Slider(
-                            value: crossfadeMs.toDouble(),
-                            min: 0,
-                            max: 3000,
-                            divisions: 6,
-                            label: label,
-                            onChanged: (value) {
-                              ref
-                                  .read(crossfadeDurationMsProvider.notifier)
-                                  .setDuration(value.round());
-                            },
-                          ),
-                        ),
-                        const Text('3 秒', style: TextStyle(fontSize: 12)),
-                      ],
-                    ),
-                  ),
-                ],
-              );
-            },
-          ),
-          ListTile(
-            contentPadding: EdgeInsets.zero,
-            leading: const Icon(Icons.lyrics_outlined),
-            title: const Text('歌词提供商'),
-            trailing: const Icon(Icons.chevron_right),
-            onTap: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => const LyricsProvidersPage(),
-                ),
-              );
-            },
-          ),
-          ListTile(
-            contentPadding: EdgeInsets.zero,
-            leading: const Icon(Icons.image_outlined),
-            title: const Text('封面提供商'),
-            trailing: const Icon(Icons.chevron_right),
-            onTap: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => const CoverProvidersPage(),
-                ),
-              );
-            },
-          ),
-          const Divider(height: 24),
-          _buildCacheManager(context, ref),
-          const Divider(height: 24),
-          Text(
-            '诊断与更新',
-            style: Theme.of(
-              context,
-            ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(height: 8),
-          ListTile(
-            contentPadding: EdgeInsets.zero,
-            leading: const Icon(Icons.description_outlined),
-            title: const Text('导出日志'),
-            subtitle: Text(
-              '共缓存 ${Logger.bufferedLineCount} 条日志',
-              style: const TextStyle(fontSize: 12),
-            ),
-            trailing: _isExportingLogs
-                ? const SizedBox(
-                    width: 20,
-                    height: 20,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : const Icon(Icons.chevron_right),
-            onTap: _isExportingLogs ? null : _exportLogs,
-          ),
-          ListTile(
-            contentPadding: EdgeInsets.zero,
-            leading: const Icon(Icons.system_update_outlined),
-            title: const Text('检查更新'),
-            subtitle: const Text(
-              '从 GitHub Releases 检查最新版本',
-              style: TextStyle(fontSize: 12),
-            ),
-            trailing: _isCheckingUpdate
-                ? const SizedBox(
-                    width: 20,
-                    height: 20,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : const Icon(Icons.chevron_right),
-            onTap: _isCheckingUpdate ? null : _checkForUpdates,
-          ),
-          ListTile(
-            contentPadding: EdgeInsets.zero,
-            leading: const Icon(Icons.info_outline),
-            title: const Text('关于'),
-            trailing: const Icon(Icons.chevron_right),
-            onTap: () => _showAppAboutDialog(context),
-          ),
-        ],
+        ),
       ),
     );
   }
 
-  Widget _buildCacheManager(BuildContext context, WidgetRef ref) {
-    return ListTile(
-      contentPadding: EdgeInsets.zero,
-      leading: const Icon(Icons.storage_outlined),
-      title: const Text('缓存管理'),
-      subtitle: const Text('音频、图片、歌词缓存'),
-      trailing: const Icon(Icons.chevron_right),
-      onTap: () {
-        Navigator.push(
-          context,
-          MaterialPageRoute(builder: (context) => const CacheManagementPage()),
-        );
-      },
-    );
+  void _pushPage(Widget page) {
+    Navigator.of(
+      context,
+    ).push(EchoPageRoute<void>(context: context, builder: (context) => page));
   }
 
-  Widget _buildInfoRow(String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(
-            width: 80,
-            child: Text(
-              label,
-              style: const TextStyle(color: Colors.grey, fontSize: 12),
-            ),
-          ),
-          Expanded(child: Text(value, style: const TextStyle(fontSize: 12))),
-        ],
-      ),
-    );
-  }
-
-  void _showAppAboutDialog(BuildContext context) {
-    showAboutDialog(
+  Future<void> _showLibrarySheet(
+    List<MusicLibrary> libraries,
+    MusicLibrary? currentLibrary,
+  ) async {
+    await showEchoBottomSheet<void>(
       context: context,
-      applicationName: 'echoes',
-      applicationIcon: const FlutterLogo(size: 40),
-      applicationLegalese: '© 2026 echoes',
-      children: const [SizedBox(height: 12), Text('基于 Subsonic API 的音乐客户端。')],
+      useRootNavigator: true,
+      isScrollControlled: true,
+      builder: (sheetContext) => EchoBottomSheet(
+        title: '切换音乐库',
+        subtitle: '选择后会刷新当前音乐库的内容与播放状态。',
+        constrainToAvailableHeight: true,
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              for (final library in libraries)
+                EchoChoiceRow(
+                  title: library.name,
+                  description: library.addresses.firstOrNull?.url ?? '未配置服务器地址',
+                  selected: library.id == currentLibrary?.id,
+                  icon: AppIcons.library,
+                  onPressed: () {
+                    final alreadySelected = library.id == currentLibrary?.id;
+                    Navigator.of(sheetContext).pop();
+                    if (!alreadySelected) _switchLibrary(library);
+                  },
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _switchLibrary(MusicLibrary library) async {
+    try {
+      final repository = ref.read(libraryRepositoryProvider);
+      await repository.setActiveLibrary(library.id);
+      ref.read(authStateProvider.notifier).switchLibrary(library);
+      ref.invalidate(playerProvider);
+      ref.invalidate(randomSongsProvider);
+      ref.invalidate(recentAlbumsProvider);
+      ref.invalidate(frequentAlbumsProvider);
+      ref.invalidate(playlistsProvider);
+      ref.invalidate(starredProvider);
+      _showMessage('已切换到“${library.name}”', kind: EchoMessageKind.success);
+    } catch (error) {
+      _showMessage('切换音乐库失败: $error', kind: EchoMessageKind.error);
+    }
+  }
+
+  Future<void> _showCrossfadeSheet(int currentValue) async {
+    const values = <int>[0, 500, 1000, 1500, 2000, 2500, 3000];
+    final selected = await showEchoBottomSheet<int>(
+      context: context,
+      useRootNavigator: true,
+      isScrollControlled: true,
+      builder: (sheetContext) => EchoBottomSheet(
+        title: '切歌淡入淡出',
+        subtitle: '选择相邻曲目同时播放的交叉衰减时长。',
+        constrainToAvailableHeight: true,
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              for (final value in values)
+                EchoChoiceRow(
+                  title: _crossfadeLabel(value),
+                  description: value == 0
+                      ? '关闭交叉衰减'
+                      : '用 ${_crossfadeLabel(value)} 平滑衔接相邻曲目',
+                  selected: value == currentValue,
+                  icon: AppIcons.timer,
+                  onPressed: () => Navigator.of(sheetContext).pop(value),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+    if (selected == null) return;
+    ref.read(crossfadeDurationMsProvider.notifier).setDuration(selected);
+  }
+
+  void _showAboutSheet() {
+    showEchoBottomSheet<void>(
+      context: context,
+      useRootNavigator: true,
+      isScrollControlled: true,
+      builder: (sheetContext) => EchoBottomSheet(
+        title: '关于 echoes',
+        constrainToAvailableHeight: true,
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: <Widget>[
+              EchoSurface(
+                level: EchoSurfaceLevel.raised,
+                borderColor: sheetContext.echoColors.controlBoundary,
+                padding: EdgeInsets.all(sheetContext.echoSpacing.md),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    SizedBox.square(
+                      dimension:
+                          sheetContext.echoInteraction.minimumTouchTarget,
+                      child: Center(
+                        child: Icon(
+                          AppIcons.musicFilled,
+                          size: 28,
+                          color: sheetContext.echoColors.accent,
+                        ),
+                      ),
+                    ),
+                    SizedBox(width: sheetContext.echoSpacing.sm),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: <Widget>[
+                          Text(
+                            'echoes',
+                            style: sheetContext.echoTypography.headline,
+                          ),
+                          SizedBox(height: sheetContext.echoSpacing.xxs),
+                          Text(
+                            '基于 Subsonic API 的音乐客户端。',
+                            style: sheetContext.echoTypography.body.copyWith(
+                              color: sheetContext.echoColors.muted,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              SizedBox(height: sheetContext.echoSpacing.md),
+              Text(
+                '© 2026 echoes',
+                style: sheetContext.echoTypography.metadata.copyWith(
+                  color: sheetContext.echoColors.muted,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 
@@ -508,4 +580,84 @@ class _AppSettingsPageState extends ConsumerState<AppSettingsPage> {
         .toUpperCase();
     return '#${value.substring(2)}';
   }
+}
+
+class _ServerSummary extends StatelessWidget {
+  const _ServerSummary({required this.library, required this.activeAddress});
+
+  final MusicLibrary? library;
+  final ServerAddress? activeAddress;
+
+  @override
+  Widget build(BuildContext context) {
+    return EchoSurface(
+      level: EchoSurfaceLevel.raised,
+      borderColor: context.echoColors.controlBoundary,
+      padding: EdgeInsets.all(context.echoSpacing.md),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: <Widget>[
+          _SettingsInfoLine(label: '音乐库', value: library?.name ?? '未选择'),
+          _SettingsInfoLine(
+            label: '当前连接',
+            value: activeAddress?.label ?? '未连接',
+          ),
+          _SettingsInfoLine(label: '服务器地址', value: activeAddress?.url ?? '未设置'),
+          _SettingsInfoLine(label: '用户名', value: library?.username ?? '未设置'),
+          _SettingsInfoLine(
+            label: '认证方式',
+            value: library?.authType == MusicLibraryAuthType.apiKey
+                ? 'API Key'
+                : '密码',
+            showBottomSpacing: false,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SettingsInfoLine extends StatelessWidget {
+  const _SettingsInfoLine({
+    required this.label,
+    required this.value,
+    this.showBottomSpacing = true,
+  });
+
+  final String label;
+  final String value;
+  final bool showBottomSpacing;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      container: true,
+      label: '$label，$value',
+      child: ExcludeSemantics(
+        child: Padding(
+          padding: EdgeInsets.only(
+            bottom: showBottomSpacing ? context.echoSpacing.sm : 0,
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              Text(
+                label,
+                style: context.echoTypography.metadata.copyWith(
+                  color: context.echoColors.muted,
+                ),
+              ),
+              SizedBox(height: context.echoSpacing.xxs),
+              SelectableText(value, style: context.echoTypography.body),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+String _crossfadeLabel(int milliseconds) {
+  if (milliseconds <= 0) return '关闭';
+  return '${(milliseconds / 1000).toStringAsFixed(1)} 秒';
 }

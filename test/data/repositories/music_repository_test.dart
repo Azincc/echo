@@ -234,9 +234,9 @@ void main() {
   // -------------------------------------------------------------------------
 
   group('getArtist', () {
-    test('returns ArtistDetail with albums and top songs', () async {
+    test('returns ArtistDetail with albums and aggregated album songs', () async {
       // First call: getArtist
-      // Second call: getTopSongs
+      // Second call: getAlbum for the artist's album
       var callCount = 0;
       when(
         () => mockApiClient.get(any(), queryParameters: any(named: 'queryParameters')),
@@ -251,7 +251,8 @@ void main() {
           };
         } else {
           return {
-            'topSongs': {
+            'album': {
+              ...albumJson(id: 'al1'),
               'song': [songJson(id: 'ts1')],
             },
           };
@@ -273,7 +274,7 @@ void main() {
       expect(await repository.getArtist('missing'), isNull);
     });
 
-    test('still returns ArtistDetail when topSongs fails', () async {
+    test('still returns ArtistDetail when an album song request fails', () async {
       var callCount = 0;
       when(
         () => mockApiClient.get(any(), queryParameters: any(named: 'queryParameters')),
@@ -287,7 +288,7 @@ void main() {
             },
           };
         } else {
-          throw Exception('topSongs failed');
+          throw Exception('album songs failed');
         }
       });
 

@@ -23,11 +23,12 @@ class DiscoverPage extends ConsumerStatefulWidget {
 
 class _DiscoverPageState extends ConsumerState<DiscoverPage> {
   Future<void> _refresh() async {
-    ref.invalidate(randomSongsProvider);
-    ref.invalidate(newestAlbumsProvider);
-    ref.invalidate(recentAlbumsProvider);
-    ref.invalidate(frequentAlbumsProvider);
-    await Future<void>.delayed(Duration.zero);
+    await Future.wait<Object?>(<Future<Object?>>[
+      ref.refresh(randomSongsProvider.future),
+      ref.refresh(newestAlbumsProvider.future),
+      ref.refresh(recentAlbumsProvider.future),
+      ref.refresh(frequentAlbumsProvider.future),
+    ]);
   }
 
   @override
@@ -102,19 +103,26 @@ class _DiscoverPageState extends ConsumerState<DiscoverPage> {
                           context.echoSpacing.xxl,
                         ),
                         children: <Widget>[
-                          const EchoSectionHeader(title: '随机推荐'),
-                          SizedBox(height: context.echoSpacing.sm),
-                          const RandomSongsSection(),
-                          SizedBox(height: context.echoSpacing.xl),
-                          const EchoSectionHeader(title: '最近入库'),
-                          SizedBox(height: context.echoSpacing.sm),
-                          const NewestAlbumsSection(),
-                          SizedBox(height: context.echoSpacing.xl),
-                          const EchoSectionHeader(title: '最近播放'),
+                          const EchoSectionHeader(
+                            title: '最近播放',
+                            description: '重新打开最近听过的专辑。',
+                          ),
                           SizedBox(height: context.echoSpacing.sm),
                           const RecentAlbumsSection(),
                           SizedBox(height: context.echoSpacing.xl),
-                          const EchoSectionHeader(title: '经常听的专辑'),
+                          const RandomSongsSection(),
+                          SizedBox(height: context.echoSpacing.xl),
+                          const EchoSectionHeader(
+                            title: '最近入库',
+                            description: '刚加入音乐库的专辑。',
+                          ),
+                          SizedBox(height: context.echoSpacing.sm),
+                          const NewestAlbumsSection(),
+                          SizedBox(height: context.echoSpacing.xl),
+                          const EchoSectionHeader(
+                            title: '常听专辑',
+                            description: '你最近反复回到的声音。',
+                          ),
                           SizedBox(height: context.echoSpacing.sm),
                           const FrequentAlbumsSection(),
                         ],
@@ -145,17 +153,17 @@ class _RandomSongsSectionState extends ConsumerState<RandomSongsSection> {
   Widget build(BuildContext context) {
     final randomSongsAsync = ref.watch(randomSongsProvider);
     final loadFailed = ref.watch(randomSongsLoadFailedProvider);
-
-    return randomSongsAsync.when(
+    final loadedSongs = randomSongsAsync.valueOrNull;
+    final content = randomSongsAsync.when(
       skipLoadingOnRefresh: false,
       skipLoadingOnReload: false,
       data: (songs) {
         if (songs.isEmpty) {
           return DiscoverSectionMessage(
-            title: loadFailed ? '随机歌曲暂时不可用' : '还没有可推荐的歌曲',
+            title: loadFailed ? '随心听暂时不可用' : '还没有可播放的歌曲',
             description: loadFailed
                 ? '请检查网络或当前线路，然后重试。'
-                : '音乐库中有歌曲后，这里会提供一组随机选择。',
+                : '音乐库中有歌曲后，这里会准备一组随心选择。',
             icon: loadFailed ? AppIcons.cloudOff : AppIcons.music,
             onRetry: loadFailed
                 ? () => ref.invalidate(randomSongsProvider)
@@ -171,11 +179,9 @@ class _RandomSongsSectionState extends ConsumerState<RandomSongsSection> {
         return LayoutBuilder(
           builder: (context, constraints) {
             final textScale = MediaQuery.textScalerOf(context).scale(1);
-            final columns = textScale > 1.3 || constraints.maxWidth < 600
+            final columns = textScale > 1.3 || constraints.maxWidth < 720
                 ? 1
-                : constraints.maxWidth < 1000
-                ? 2
-                : 3;
+                : 2;
             final gap = context.echoSpacing.md;
             final itemWidth =
                 (constraints.maxWidth - gap * (columns - 1)) / columns;
@@ -185,7 +191,7 @@ class _RandomSongsSectionState extends ConsumerState<RandomSongsSection> {
               children: <Widget>[
                 Wrap(
                   spacing: gap,
-                  runSpacing: context.echoSpacing.xs,
+                  runSpacing: context.echoSpacing.xxs,
                   children: <Widget>[
                     for (var index = 0; index < visibleSongs.length; index++)
                       SizedBox(
@@ -222,10 +228,43 @@ class _RandomSongsSectionState extends ConsumerState<RandomSongsSection> {
       },
       loading: () => const DiscoverSongLoading(),
       error: (error, stackTrace) => DiscoverSectionMessage(
-        title: '随机歌曲加载失败',
+        title: '随心听加载失败',
         description: '请检查网络或切换线路后重试。',
         icon: AppIcons.cloudOff,
         onRetry: () => ref.invalidate(randomSongsProvider),
+      ),
+    );
+
+    return DecoratedBox(
+      key: const Key('discover-random-mix'),
+      decoration: BoxDecoration(
+        color: context.echoColors.surface,
+        borderRadius: context.echoRadii.surface,
+        border: Border.all(color: context.echoColors.divider),
+      ),
+      child: Padding(
+        padding: EdgeInsets.all(context.echoSpacing.md),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            EchoSectionHeader(
+              title: '随心听',
+              description: '从音乐库随机挑选，点一首即可开始。',
+              trailing: EchoButton.primary(
+                label: '立即播放',
+                semanticLabel: '播放随心听',
+                leadingIcon: AppIcons.shuffle,
+                onPressed: loadedSongs == null || loadedSongs.isEmpty
+                    ? null
+                    : () => ref
+                          .read(playerProvider.notifier)
+                          .playQueue(loadedSongs),
+              ),
+            ),
+            SizedBox(height: context.echoSpacing.md),
+            content,
+          ],
+        ),
       ),
     );
   }
@@ -242,9 +281,10 @@ class RecentAlbumsSection extends ConsumerWidget {
       albumsAsync: albumsAsync,
       loadFailed: loadFailed,
       emptyTitle: '暂无最近播放',
-      emptyDescription: '播放过的专辑会出现在这里，方便继续聆听。',
+      emptyDescription: '播放过的专辑会出现在这里，方便再次打开。',
       errorTitle: '最近播放加载失败',
       onRetry: () => ref.invalidate(recentAlbumsProvider),
+      layout: _AlbumSectionLayout.recentSpotlight,
     );
   }
 }
@@ -263,7 +303,7 @@ class FrequentAlbumsSection extends ConsumerWidget {
       emptyDescription: '持续聆听后，这里会整理经常播放的专辑。',
       errorTitle: '常听专辑加载失败',
       onRetry: () => ref.invalidate(frequentAlbumsProvider),
-      expandOnWide: true,
+      layout: _AlbumSectionLayout.frequentShelf,
     );
   }
 }
@@ -282,9 +322,12 @@ class NewestAlbumsSection extends ConsumerWidget {
       emptyDescription: '新加入音乐库的专辑会按时间显示在这里。',
       errorTitle: '最近入库加载失败',
       onRetry: () => ref.invalidate(newestAlbumsProvider),
+      layout: _AlbumSectionLayout.standardRail,
     );
   }
 }
+
+enum _AlbumSectionLayout { recentSpotlight, standardRail, frequentShelf }
 
 class _AlbumAsyncSection extends StatelessWidget {
   const _AlbumAsyncSection({
@@ -294,7 +337,7 @@ class _AlbumAsyncSection extends StatelessWidget {
     required this.emptyDescription,
     required this.errorTitle,
     required this.onRetry,
-    this.expandOnWide = false,
+    required this.layout,
   });
 
   final AsyncValue<List<Album>> albumsAsync;
@@ -303,7 +346,7 @@ class _AlbumAsyncSection extends StatelessWidget {
   final String emptyDescription;
   final String errorTitle;
   final VoidCallback onRetry;
-  final bool expandOnWide;
+  final _AlbumSectionLayout layout;
 
   @override
   Widget build(BuildContext context) {
@@ -319,76 +362,34 @@ class _AlbumAsyncSection extends StatelessWidget {
             onRetry: loadFailed ? onRetry : null,
           );
         }
-        return _AlbumCollection(albums: albums, expandOnWide: expandOnWide);
+        return switch (layout) {
+          _AlbumSectionLayout.recentSpotlight => DiscoverRecentAlbumRail(
+            albums: albums,
+            onAlbumPressed: (album) => _openAlbum(context, album.id),
+          ),
+          _AlbumSectionLayout.standardRail => DiscoverAlbumRail(
+            albums: albums,
+            onAlbumPressed: (album) => _openAlbum(context, album.id),
+          ),
+          _AlbumSectionLayout.frequentShelf => DiscoverFrequentAlbumShelf(
+            albums: albums,
+            onAlbumPressed: (album) => _openAlbum(context, album.id),
+          ),
+        };
       },
-      loading: () => const DiscoverAlbumLoading(),
+      loading: () => switch (layout) {
+        _AlbumSectionLayout.recentSpotlight =>
+          const DiscoverRecentAlbumLoading(),
+        _AlbumSectionLayout.standardRail => const DiscoverAlbumLoading(),
+        _AlbumSectionLayout.frequentShelf =>
+          const DiscoverFrequentAlbumLoading(),
+      },
       error: (error, stackTrace) => DiscoverSectionMessage(
         title: errorTitle,
         description: '请检查网络或切换线路后重试。',
         icon: AppIcons.cloudOff,
         onRetry: onRetry,
       ),
-    );
-  }
-}
-
-class _AlbumCollection extends StatelessWidget {
-  const _AlbumCollection({required this.albums, required this.expandOnWide});
-
-  final List<Album> albums;
-  final bool expandOnWide;
-
-  @override
-  Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final scale = MediaQuery.textScalerOf(
-          context,
-        ).scale(1).clamp(1.0, 2.0).toDouble();
-        final tileWidth = constraints.maxWidth < 400 ? 132.0 : 148.0;
-        final tileHeight = tileWidth + 76 + (scale - 1) * 96;
-        final useGrid =
-            expandOnWide &&
-            constraints.maxWidth >= 600 &&
-            MediaQuery.textScalerOf(context).scale(1) <= 1.3;
-
-        if (useGrid) {
-          final visibleAlbums = albums.take(6).toList(growable: false);
-          final columns = constraints.maxWidth >= 1000 ? 4 : 3;
-          final gap = context.echoSpacing.md;
-          final width = (constraints.maxWidth - gap * (columns - 1)) / columns;
-          return Wrap(
-            spacing: gap,
-            runSpacing: context.echoSpacing.lg,
-            children: <Widget>[
-              for (final album in visibleAlbums)
-                DiscoverAlbumTile(
-                  album: album,
-                  width: width,
-                  onPressed: () => _openAlbum(context, album.id),
-                ),
-            ],
-          );
-        }
-
-        return SizedBox(
-          height: tileHeight,
-          child: ListView.separated(
-            scrollDirection: Axis.horizontal,
-            itemCount: albums.length,
-            separatorBuilder: (context, index) =>
-                SizedBox(width: context.echoSpacing.sm),
-            itemBuilder: (context, index) {
-              final album = albums[index];
-              return DiscoverAlbumTile(
-                album: album,
-                width: tileWidth,
-                onPressed: () => _openAlbum(context, album.id),
-              );
-            },
-          ),
-        );
-      },
     );
   }
 

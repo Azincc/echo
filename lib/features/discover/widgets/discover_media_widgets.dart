@@ -2,9 +2,10 @@ import 'package:flutter/material.dart';
 
 import '../../../core/design/echo_design.dart';
 import '../../../data/models/album.dart';
-import '../../../data/models/artist.dart';
 import '../../../data/models/song.dart';
 import '../../../widgets/cover_art_image.dart';
+import '../../../widgets/song_list_item.dart';
+import '../../library/widgets/library_collection_components.dart';
 
 class DiscoverSongTile extends StatelessWidget {
   const DiscoverSongTile({
@@ -22,59 +23,15 @@ class DiscoverSongTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final artist = song.artist?.trim();
-    final artistLabel = artist == null || artist.isEmpty ? '未知歌手' : artist;
-
-    return EchoPressable(
-      semanticLabel: '${song.title}，$artistLabel',
-      semanticsMode: EchoPressableSemanticsMode.explicitChildren,
-      onPressed: onPressed,
-      onLongPress: onLongPress ?? onOpenActions,
-      minimumSize: const Size(double.infinity, 72),
-      borderRadius: context.echoRadii.control,
-      child: Padding(
-        padding: EdgeInsets.symmetric(vertical: context.echoSpacing.xs),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: <Widget>[
-            ExcludeSemantics(
-              child: ClipRRect(
-                borderRadius: context.echoRadii.detail,
-                child: CoverArtImage(
-                  coverArtId: song.coverArt,
-                  size: 48,
-                  requestSize: 192,
-                  semanticLabel: '${song.title} 封面',
-                ),
-              ),
-            ),
-            SizedBox(width: context.echoSpacing.sm),
-            Expanded(
-              child: ExcludeSemantics(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: <Widget>[
-                    Text(song.title, style: context.echoTypography.title),
-                    SizedBox(height: context.echoSpacing.xxs),
-                    Text(
-                      artistLabel,
-                      style: context.echoTypography.body.copyWith(
-                        color: context.echoColors.muted,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            SizedBox(width: context.echoSpacing.xs),
-            EchoIconButton(
-              icon: AppIcons.more,
-              label: '${song.title} 操作',
-              onPressed: onOpenActions,
-            ),
-          ],
-        ),
+    return ConstrainedBox(
+      constraints: const BoxConstraints(minHeight: 72),
+      child: EchoSongRow(
+        song: song,
+        contentPadding: EdgeInsets.symmetric(vertical: context.echoSpacing.xxs),
+        onPressed: onPressed,
+        onLongPress: onLongPress ?? onOpenActions,
+        onMorePressed: onOpenActions,
+        moreSemanticLabel: '${song.title} 操作',
       ),
     );
   }
@@ -86,189 +43,367 @@ class DiscoverAlbumTile extends StatelessWidget {
     required this.album,
     required this.onPressed,
     required this.width,
+    this.onLongPress,
   });
 
   final Album album;
   final VoidCallback onPressed;
   final double width;
+  final VoidCallback? onLongPress;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: width,
+      child: EchoAlbumTile(
+        album: album,
+        onPressed: onPressed,
+        onLongPress: onLongPress,
+      ),
+    );
+  }
+}
+
+class DiscoverRecentAlbumRail extends StatelessWidget {
+  const DiscoverRecentAlbumRail({
+    super.key,
+    required this.albums,
+    required this.onAlbumPressed,
+    this.onAlbumLongPress,
+  });
+
+  final List<Album> albums;
+  final ValueChanged<Album> onAlbumPressed;
+  final ValueChanged<Album>? onAlbumLongPress;
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final scale = MediaQuery.textScalerOf(
+          context,
+        ).scale(1).clamp(1.0, 2.0).toDouble();
+        if (scale > 1.3) {
+          return Column(
+            key: const Key('discover-recent-spotlight'),
+            children: <Widget>[
+              for (final album in albums)
+                EchoAlbumRow(
+                  album: album,
+                  contentPadding: EdgeInsets.symmetric(
+                    vertical: context.echoSpacing.xs,
+                  ),
+                  onPressed: () => onAlbumPressed(album),
+                  onLongPress: onAlbumLongPress == null
+                      ? null
+                      : () => onAlbumLongPress!(album),
+                ),
+            ],
+          );
+        }
+
+        final maximumWidth = constraints.maxWidth < 360
+            ? constraints.maxWidth
+            : 360.0;
+        final minimumWidth = constraints.maxWidth < 260
+            ? constraints.maxWidth
+            : constraints.maxWidth < 330
+            ? 240.0
+            : 280.0;
+        final targetWidth = constraints.maxWidth * 0.88;
+        final cardWidth = targetWidth
+            .clamp(minimumWidth, maximumWidth)
+            .toDouble();
+        final cardHeight = 152 + (scale - 1) * 72;
+
+        return SizedBox(
+          key: const Key('discover-recent-spotlight'),
+          height: cardHeight,
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            itemCount: albums.length,
+            separatorBuilder: (context, index) =>
+                SizedBox(width: context.echoSpacing.sm),
+            itemBuilder: (context, index) {
+              final album = albums[index];
+              return DiscoverRecentAlbumCard(
+                album: album,
+                width: cardWidth,
+                height: cardHeight,
+                onPressed: () => onAlbumPressed(album),
+                onLongPress: onAlbumLongPress == null
+                    ? null
+                    : () => onAlbumLongPress!(album),
+              );
+            },
+          ),
+        );
+      },
+    );
+  }
+}
+
+class DiscoverRecentAlbumCard extends StatelessWidget {
+  const DiscoverRecentAlbumCard({
+    super.key,
+    required this.album,
+    required this.width,
+    required this.height,
+    required this.onPressed,
+    this.onLongPress,
+  });
+
+  final Album album;
+  final double width;
+  final double height;
+  final VoidCallback onPressed;
+  final VoidCallback? onLongPress;
 
   @override
   Widget build(BuildContext context) {
     final artist = album.artist?.trim();
     final scale = MediaQuery.textScalerOf(context).scale(1);
-
-    return SizedBox(
-      width: width,
-      child: EchoPressable(
-        semanticLabel: <String>[
-          album.name,
-          if (artist != null && artist.isNotEmpty) artist,
-          '${album.songCount} 首歌曲',
-        ].join('，'),
-        onPressed: onPressed,
-        minimumSize: const Size(48, 48),
-        borderRadius: context.echoRadii.surface,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: <Widget>[
-            ClipRRect(
-              borderRadius: context.echoRadii.surface,
-              child: CoverArtImage(
-                coverArtId: album.coverArt,
-                size: width,
-                requestSize: (width * 2).round(),
-                fit: BoxFit.cover,
-                semanticLabel: '${album.name} 封面',
-              ),
-            ),
-            SizedBox(height: context.echoSpacing.xs),
-            Text(
-              album.name,
-              maxLines: scale > 1.3 ? 3 : 2,
-              overflow: TextOverflow.ellipsis,
-              style: context.echoTypography.title,
-            ),
-            if (artist != null && artist.isNotEmpty) ...<Widget>[
-              SizedBox(height: context.echoSpacing.xxs),
-              Text(
-                artist,
-                maxLines: scale > 1.3 ? 2 : 1,
-                overflow: TextOverflow.ellipsis,
-                style: context.echoTypography.body.copyWith(
-                  color: context.echoColors.muted,
-                ),
-              ),
-            ],
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class SearchAlbumRow extends StatelessWidget {
-  const SearchAlbumRow({
-    super.key,
-    required this.album,
-    required this.onPressed,
-  });
-
-  final Album album;
-  final VoidCallback onPressed;
-
-  @override
-  Widget build(BuildContext context) {
-    final artist = album.artist?.trim();
+    final artworkSize = scale > 1.3 ? 88.0 : 112.0;
+    final semanticLabel = <String>[
+      '最近播放专辑 ${album.name}',
+      if (artist != null && artist.isNotEmpty) artist,
+      '${album.songCount} 首歌曲',
+    ].join('，');
     final metadata = <String>[
       if (artist != null && artist.isNotEmpty) artist,
       '${album.songCount} 首歌曲',
-    ].join(' · ');
+    ].join('，');
 
-    return _SearchMediaRow(
-      semanticLabel: '${album.name}，$metadata',
-      onPressed: onPressed,
-      leading: ClipRRect(
-        borderRadius: context.echoRadii.detail,
-        child: CoverArtImage(
-          coverArtId: album.coverArt,
-          size: 56,
-          requestSize: 224,
-          semanticLabel: '${album.name} 封面',
-        ),
-      ),
-      title: album.name,
-      subtitle: metadata,
-    );
-  }
-}
-
-class SearchArtistRow extends StatelessWidget {
-  const SearchArtistRow({
-    super.key,
-    required this.artist,
-    required this.onPressed,
-  });
-
-  final Artist artist;
-  final VoidCallback onPressed;
-
-  @override
-  Widget build(BuildContext context) {
-    final albumCount = artist.albumCount ?? 0;
-    return _SearchMediaRow(
-      semanticLabel: '${artist.name}，$albumCount 张专辑',
-      onPressed: onPressed,
-      leading: ClipRRect(
+    return SizedBox(
+      width: width,
+      height: height,
+      child: EchoPressable(
+        semanticLabel: semanticLabel,
+        onPressed: onPressed,
+        onLongPress: onLongPress,
+        minimumSize: Size(width, height),
         borderRadius: context.echoRadii.surface,
-        child: CoverArtImage(
-          coverArtId: artist.coverArt,
-          size: 56,
-          requestSize: 224,
-          semanticLabel: '${artist.name} 图片',
+        child: Ink(
+          decoration: BoxDecoration(
+            color: context.echoColors.surface,
+            borderRadius: context.echoRadii.surface,
+            border: Border.all(color: context.echoColors.divider),
+          ),
+          child: Padding(
+            padding: EdgeInsets.all(context.echoSpacing.sm),
+            child: Row(
+              children: <Widget>[
+                ClipRRect(
+                  borderRadius: context.echoRadii.surface,
+                  child: CoverArtImage(
+                    coverArtId: album.coverArt,
+                    size: artworkSize,
+                    requestSize: 320,
+                    fit: BoxFit.cover,
+                    semanticLabel: '${album.name} 封面',
+                  ),
+                ),
+                SizedBox(width: context.echoSpacing.sm),
+                Expanded(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: <Widget>[
+                      Row(
+                        children: <Widget>[
+                          Icon(
+                            AppIcons.history,
+                            size: 16,
+                            color: context.echoColors.accent,
+                          ),
+                          SizedBox(width: context.echoSpacing.xxs),
+                          Expanded(
+                            child: Text(
+                              '最近听过',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: context.echoTypography.label.copyWith(
+                                color: context.echoColors.accent,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      SizedBox(height: context.echoSpacing.xs),
+                      Text(
+                        album.name,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: context.echoTypography.title,
+                      ),
+                      SizedBox(height: context.echoSpacing.xxs),
+                      Text(
+                        metadata,
+                        maxLines: scale > 1.3 ? 2 : 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: context.echoTypography.metadata.copyWith(
+                          color: context.echoColors.muted,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
         ),
       ),
-      title: artist.name,
-      subtitle: '$albumCount 张专辑',
     );
   }
 }
 
-class _SearchMediaRow extends StatelessWidget {
-  const _SearchMediaRow({
-    required this.semanticLabel,
-    required this.onPressed,
-    required this.leading,
-    required this.title,
-    required this.subtitle,
+class DiscoverAlbumRail extends StatelessWidget {
+  const DiscoverAlbumRail({
+    super.key,
+    required this.albums,
+    required this.onAlbumPressed,
+    this.onAlbumLongPress,
   });
 
-  final String semanticLabel;
-  final VoidCallback onPressed;
-  final Widget leading;
-  final String title;
-  final String subtitle;
+  final List<Album> albums;
+  final ValueChanged<Album> onAlbumPressed;
+  final ValueChanged<Album>? onAlbumLongPress;
 
   @override
   Widget build(BuildContext context) {
-    return EchoPressable(
-      semanticLabel: semanticLabel,
-      onPressed: onPressed,
-      minimumSize: const Size(double.infinity, 72),
-      borderRadius: context.echoRadii.control,
-      child: Padding(
-        padding: EdgeInsets.symmetric(vertical: context.echoSpacing.xs),
-        child: Row(
-          children: <Widget>[
-            leading,
-            SizedBox(width: context.echoSpacing.sm),
-            Expanded(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: <Widget>[
-                  Text(title, style: context.echoTypography.title),
-                  SizedBox(height: context.echoSpacing.xxs),
-                  Text(
-                    subtitle,
-                    style: context.echoTypography.body.copyWith(
-                      color: context.echoColors.muted,
-                    ),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final scale = MediaQuery.textScalerOf(
+          context,
+        ).scale(1).clamp(1.0, 2.0).toDouble();
+        if (scale > 1.3) {
+          return Column(
+            key: const Key('discover-newest-rail'),
+            children: <Widget>[
+              for (final album in albums)
+                EchoAlbumRow(
+                  album: album,
+                  contentPadding: EdgeInsets.symmetric(
+                    vertical: context.echoSpacing.xs,
                   ),
-                ],
-              ),
+                  onPressed: () => onAlbumPressed(album),
+                  onLongPress: onAlbumLongPress == null
+                      ? null
+                      : () => onAlbumLongPress!(album),
+                ),
+            ],
+          );
+        }
+
+        final tileWidth = constraints.maxWidth < 400 ? 132.0 : 148.0;
+        final tileHeight = tileWidth + 104 + (scale - 1) * 112;
+
+        return SizedBox(
+          key: const Key('discover-newest-rail'),
+          height: tileHeight,
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            itemCount: albums.length,
+            separatorBuilder: (context, index) =>
+                SizedBox(width: context.echoSpacing.sm),
+            itemBuilder: (context, index) {
+              final album = albums[index];
+              return DiscoverAlbumTile(
+                album: album,
+                width: tileWidth,
+                onPressed: () => onAlbumPressed(album),
+                onLongPress: onAlbumLongPress == null
+                    ? null
+                    : () => onAlbumLongPress!(album),
+              );
+            },
+          ),
+        );
+      },
+    );
+  }
+}
+
+class DiscoverFrequentAlbumShelf extends StatelessWidget {
+  const DiscoverFrequentAlbumShelf({
+    super.key,
+    required this.albums,
+    required this.onAlbumPressed,
+    this.onAlbumLongPress,
+  });
+
+  final List<Album> albums;
+  final ValueChanged<Album> onAlbumPressed;
+  final ValueChanged<Album>? onAlbumLongPress;
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final scale = MediaQuery.textScalerOf(
+          context,
+        ).scale(1).clamp(1.0, 2.0).toDouble();
+        final useAccessibleList = scale >= 1.3 || constraints.maxWidth < 280;
+
+        if (useAccessibleList) {
+          return Column(
+            key: const Key('discover-frequent-shelf'),
+            children: <Widget>[
+              for (final album in albums)
+                EchoAlbumRow(
+                  album: album,
+                  contentPadding: EdgeInsets.symmetric(
+                    vertical: context.echoSpacing.xs,
+                  ),
+                  onPressed: () => onAlbumPressed(album),
+                  onLongPress: onAlbumLongPress == null
+                      ? null
+                      : () => onAlbumLongPress!(album),
+                ),
+            ],
+          );
+        }
+
+        final maximumWidth = constraints.maxWidth < 340
+            ? constraints.maxWidth
+            : 340.0;
+        final minimumWidth = constraints.maxWidth < 280
+            ? constraints.maxWidth
+            : 280.0;
+        final tileWidth = (constraints.maxWidth * 0.86)
+            .clamp(minimumWidth, maximumWidth)
+            .toDouble();
+        final itemHeight = 104 + (scale - 1) * 80;
+
+        return SizedBox(
+          key: const Key('discover-frequent-shelf'),
+          height: itemHeight * 2 + context.echoSpacing.sm,
+          child: GridView.builder(
+            scrollDirection: Axis.horizontal,
+            itemCount: albums.length,
+            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: 2,
+              mainAxisExtent: tileWidth,
+              mainAxisSpacing: context.echoSpacing.md,
+              crossAxisSpacing: context.echoSpacing.sm,
             ),
-            SizedBox(width: context.echoSpacing.xs),
-            ExcludeSemantics(
-              child: Icon(
-                AppIcons.chevronRight,
-                size: context.echoInteraction.smallIconSize,
-                color: context.echoColors.muted,
-              ),
-            ),
-          ],
-        ),
-      ),
+            itemBuilder: (context, index) {
+              final album = albums[index];
+              return EchoAlbumRow(
+                album: album,
+                allowFullText: false,
+                contentPadding: EdgeInsets.symmetric(
+                  vertical: context.echoSpacing.xs,
+                ),
+                onPressed: () => onAlbumPressed(album),
+                onLongPress: onAlbumLongPress == null
+                    ? null
+                    : () => onAlbumLongPress!(album),
+              );
+            },
+          ),
+        );
+      },
     );
   }
 }
@@ -291,16 +426,19 @@ class DiscoverSectionMessage extends StatelessWidget {
   Widget build(BuildContext context) {
     return Semantics(
       container: true,
+      explicitChildNodes: true,
       label: '$title，$description',
       child: Padding(
         padding: EdgeInsets.symmetric(vertical: context.echoSpacing.md),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
-            SizedBox.square(
-              dimension: context.echoInteraction.minimumTouchTarget,
-              child: Center(
-                child: Icon(icon, size: 24, color: context.echoColors.muted),
+            ExcludeSemantics(
+              child: SizedBox.square(
+                dimension: context.echoInteraction.minimumTouchTarget,
+                child: Center(
+                  child: Icon(icon, size: 24, color: context.echoColors.muted),
+                ),
               ),
             ),
             SizedBox(width: context.echoSpacing.sm),
@@ -309,12 +447,20 @@ class DiscoverSectionMessage extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisSize: MainAxisSize.min,
                 children: <Widget>[
-                  Text(title, style: context.echoTypography.title),
-                  SizedBox(height: context.echoSpacing.xxs),
-                  Text(
-                    description,
-                    style: context.echoTypography.body.copyWith(
-                      color: context.echoColors.muted,
+                  ExcludeSemantics(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: <Widget>[
+                        Text(title, style: context.echoTypography.title),
+                        SizedBox(height: context.echoSpacing.xxs),
+                        Text(
+                          description,
+                          style: context.echoTypography.body.copyWith(
+                            color: context.echoColors.muted,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                   if (onRetry != null) ...<Widget>[
@@ -342,31 +488,140 @@ class DiscoverSongLoading extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      children: List<Widget>.generate(
-        count,
-        (index) => Padding(
-          padding: EdgeInsets.only(bottom: context.echoSpacing.xs),
-          child: Row(
-            children: <Widget>[
-              const EchoSkeleton(width: 48, height: 48),
-              SizedBox(width: context.echoSpacing.sm),
-              const Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: <Widget>[
-                    EchoSkeleton.line(width: 180, height: 16),
-                    SizedBox(height: 8),
-                    EchoSkeleton.line(width: 112, height: 12),
-                  ],
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final textScale = MediaQuery.textScalerOf(context).scale(1);
+        final columns = textScale > 1.3 || constraints.maxWidth < 720 ? 1 : 2;
+        final gap = context.echoSpacing.md;
+        final itemWidth =
+            (constraints.maxWidth - gap * (columns - 1)) / columns;
+
+        return Wrap(
+          spacing: gap,
+          runSpacing: context.echoSpacing.xxs,
+          children: <Widget>[
+            for (var index = 0; index < count; index++)
+              SizedBox(
+                width: itemWidth,
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(minHeight: 72),
+                  child: Padding(
+                    padding: EdgeInsets.symmetric(
+                      vertical: context.echoSpacing.xxs,
+                    ),
+                    child: Row(
+                      children: <Widget>[
+                        const EchoSkeleton(width: 48, height: 48),
+                        SizedBox(width: context.echoSpacing.sm),
+                        const Expanded(
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: <Widget>[
+                              EchoSkeleton.line(height: 16),
+                              SizedBox(height: 8),
+                              EchoSkeleton.line(width: 112, height: 12),
+                            ],
+                          ),
+                        ),
+                        SizedBox(width: context.echoSpacing.sm),
+                        const EchoSkeleton(width: 48, height: 48),
+                      ],
+                    ),
+                  ),
                 ),
               ),
-              SizedBox(width: context.echoSpacing.sm),
-              const EchoSkeleton(width: 48, height: 48),
+          ],
+        );
+      },
+    );
+  }
+}
+
+class DiscoverRecentAlbumLoading extends StatelessWidget {
+  const DiscoverRecentAlbumLoading({super.key, this.count = 3});
+
+  final int count;
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final scale = MediaQuery.textScalerOf(
+          context,
+        ).scale(1).clamp(1.0, 2.0).toDouble();
+        if (scale > 1.3) {
+          return Column(
+            children: <Widget>[
+              for (var index = 0; index < count; index++)
+                const _DiscoverAlbumRowSkeleton(),
             ],
+          );
+        }
+
+        final maximumWidth = constraints.maxWidth < 360
+            ? constraints.maxWidth
+            : 360.0;
+        final minimumWidth = constraints.maxWidth < 260
+            ? constraints.maxWidth
+            : constraints.maxWidth < 330
+            ? 240.0
+            : 280.0;
+        final targetWidth = constraints.maxWidth * 0.88;
+        final cardWidth = targetWidth
+            .clamp(minimumWidth, maximumWidth)
+            .toDouble();
+        final cardHeight = 152 + (scale - 1) * 72;
+        final artworkSize = scale > 1.3 ? 88.0 : 112.0;
+
+        return SizedBox(
+          height: cardHeight,
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            physics: const NeverScrollableScrollPhysics(),
+            itemCount: count,
+            separatorBuilder: (context, index) =>
+                SizedBox(width: context.echoSpacing.sm),
+            itemBuilder: (context, index) => SizedBox(
+              width: cardWidth,
+              height: cardHeight,
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  color: context.echoColors.surface,
+                  borderRadius: context.echoRadii.surface,
+                  border: Border.all(color: context.echoColors.divider),
+                ),
+                child: Padding(
+                  padding: EdgeInsets.all(context.echoSpacing.sm),
+                  child: Row(
+                    children: <Widget>[
+                      EchoSkeleton(
+                        width: artworkSize,
+                        height: artworkSize,
+                        borderRadius: context.echoRadii.surface,
+                      ),
+                      SizedBox(width: context.echoSpacing.sm),
+                      Expanded(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: <Widget>[
+                            EchoSkeleton.line(width: 92, height: 12 * scale),
+                            SizedBox(height: context.echoSpacing.sm),
+                            EchoSkeleton.line(height: 16 * scale),
+                            SizedBox(height: context.echoSpacing.xs),
+                            EchoSkeleton.line(width: 112, height: 12 * scale),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 }
@@ -378,28 +633,137 @@ class DiscoverAlbumLoading extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final width = MediaQuery.sizeOf(context).width < 400 ? 128.0 : 144.0;
-    return SizedBox(
-      height: width + 72,
-      child: ListView.separated(
-        scrollDirection: Axis.horizontal,
-        physics: const NeverScrollableScrollPhysics(),
-        itemCount: count,
-        separatorBuilder: (context, index) =>
-            SizedBox(width: context.echoSpacing.sm),
-        itemBuilder: (context, index) => SizedBox(
-          width: width,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final scale = MediaQuery.textScalerOf(
+          context,
+        ).scale(1).clamp(1.0, 2.0).toDouble();
+        if (scale > 1.3) {
+          return Column(
             children: <Widget>[
-              EchoSkeleton(width: width, height: width),
-              SizedBox(height: context.echoSpacing.xs),
-              const EchoSkeleton.line(height: 16),
-              SizedBox(height: context.echoSpacing.xs),
-              const EchoSkeleton.line(width: 88, height: 12),
+              for (var index = 0; index < count; index++)
+                const _DiscoverAlbumRowSkeleton(),
             ],
+          );
+        }
+
+        final width = constraints.maxWidth < 400 ? 132.0 : 148.0;
+        final height = width + 104 + (scale - 1) * 112;
+
+        return SizedBox(
+          height: height,
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            physics: const NeverScrollableScrollPhysics(),
+            itemCount: count,
+            separatorBuilder: (context, index) =>
+                SizedBox(width: context.echoSpacing.sm),
+            itemBuilder: (context, index) => SizedBox(
+              width: width,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  EchoSkeleton(
+                    width: width,
+                    height: width,
+                    borderRadius: context.echoRadii.control,
+                  ),
+                  SizedBox(height: context.echoSpacing.xs),
+                  EchoSkeleton.line(height: 16 * scale),
+                  SizedBox(height: context.echoSpacing.xs),
+                  EchoSkeleton.line(width: 88, height: 12 * scale),
+                ],
+              ),
+            ),
           ),
-        ),
+        );
+      },
+    );
+  }
+}
+
+class DiscoverFrequentAlbumLoading extends StatelessWidget {
+  const DiscoverFrequentAlbumLoading({super.key, this.count = 4});
+
+  final int count;
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final scale = MediaQuery.textScalerOf(
+          context,
+        ).scale(1).clamp(1.0, 2.0).toDouble();
+        final useAccessibleList = scale >= 1.3 || constraints.maxWidth < 280;
+
+        if (useAccessibleList) {
+          return Column(
+            children: <Widget>[
+              for (var index = 0; index < count; index++)
+                const _DiscoverAlbumRowSkeleton(),
+            ],
+          );
+        }
+
+        final itemHeight = 104 + (scale - 1) * 80;
+
+        final maximumWidth = constraints.maxWidth < 340
+            ? constraints.maxWidth
+            : 340.0;
+        final minimumWidth = constraints.maxWidth < 280
+            ? constraints.maxWidth
+            : 280.0;
+        final tileWidth = (constraints.maxWidth * 0.86)
+            .clamp(minimumWidth, maximumWidth)
+            .toDouble();
+
+        return SizedBox(
+          height: itemHeight * 2 + context.echoSpacing.sm,
+          child: GridView.builder(
+            scrollDirection: Axis.horizontal,
+            physics: const NeverScrollableScrollPhysics(),
+            itemCount: count,
+            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: 2,
+              mainAxisExtent: tileWidth,
+              mainAxisSpacing: context.echoSpacing.md,
+              crossAxisSpacing: context.echoSpacing.sm,
+            ),
+            itemBuilder: (context, index) => const _DiscoverAlbumRowSkeleton(),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _DiscoverAlbumRowSkeleton extends StatelessWidget {
+  const _DiscoverAlbumRowSkeleton();
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.symmetric(vertical: context.echoSpacing.xs),
+      child: Row(
+        children: <Widget>[
+          EchoSkeleton(
+            width: 72,
+            height: 72,
+            borderRadius: context.echoRadii.detail,
+          ),
+          SizedBox(width: context.echoSpacing.sm),
+          const Expanded(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                EchoSkeleton.line(height: 16),
+                SizedBox(height: 8),
+                EchoSkeleton.line(width: 104, height: 12),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }

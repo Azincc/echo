@@ -42,7 +42,7 @@ void main() {
       ),
     );
 
-    expect(find.bySemanticsLabel('晨光，示例歌手'), findsOneWidget);
+    expect(find.bySemanticsLabel('晨光，示例歌手，03:24'), findsOneWidget);
     expect(find.bySemanticsLabel('晨光 操作'), findsOneWidget);
     expect(find.bySemanticsLabel('晨光 封面'), findsNothing);
     expect(find.bySemanticsLabel('晨光'), findsNothing);

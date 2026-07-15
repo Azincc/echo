@@ -11,13 +11,13 @@ class EchoAlbumTile extends StatelessWidget {
     super.key,
     required this.album,
     required this.onPressed,
-    required this.onLongPress,
+    this.onLongPress,
     this.allowFullText = false,
   });
 
   final Album album;
   final VoidCallback onPressed;
-  final VoidCallback onLongPress;
+  final VoidCallback? onLongPress;
   final bool allowFullText;
 
   @override
@@ -110,14 +110,16 @@ class EchoAlbumRow extends StatelessWidget {
     super.key,
     required this.album,
     required this.onPressed,
-    required this.onLongPress,
+    this.onLongPress,
     this.contentPadding,
+    this.allowFullText = true,
   });
 
   final Album album;
   final VoidCallback onPressed;
-  final VoidCallback onLongPress;
+  final VoidCallback? onLongPress;
   final EdgeInsetsGeometry? contentPadding;
+  final bool allowFullText;
 
   @override
   Widget build(BuildContext context) {
@@ -160,11 +162,22 @@ class EchoAlbumRow extends StatelessWidget {
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: <Widget>[
-                  Text(album.name, style: context.echoTypography.title),
+                  Text(
+                    album.name,
+                    maxLines: allowFullText ? null : 2,
+                    overflow: allowFullText
+                        ? TextOverflow.visible
+                        : TextOverflow.ellipsis,
+                    style: context.echoTypography.title,
+                  ),
                   if (artist.isNotEmpty) ...<Widget>[
                     SizedBox(height: context.echoSpacing.xxs),
                     Text(
                       artist,
+                      maxLines: allowFullText ? null : 1,
+                      overflow: allowFullText
+                          ? TextOverflow.visible
+                          : TextOverflow.ellipsis,
                       style: context.echoTypography.body.copyWith(
                         color: context.echoColors.muted,
                       ),

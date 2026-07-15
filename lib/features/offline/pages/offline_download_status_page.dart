@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/design/echo_design.dart';
+import '../../../core/utils/toast_notifier.dart';
 import '../../../data/sources/remote/embed_service_client.dart';
 import '../../../providers/offline_download_provider.dart';
 
@@ -15,7 +17,7 @@ class OfflineDownloadStatusPage extends ConsumerStatefulWidget {
 class _OfflineDownloadStatusPageState
     extends ConsumerState<OfflineDownloadStatusPage> {
   bool _selectMode = false;
-  final Set<String> _selected = {};
+  final Set<String> _selected = <String>{};
 
   @override
   void initState() {
@@ -35,159 +37,140 @@ class _OfflineDownloadStatusPageState
 
   void _toggleSelection(String jobId) {
     setState(() {
-      if (_selected.contains(jobId)) {
-        _selected.remove(jobId);
+      if (!_selected.add(jobId)) _selected.remove(jobId);
+    });
+  }
+
+  void _toggleSelectAll() {
+    final jobs =
+        ref.read(offlineDownloadJobsProvider).valueOrNull ??
+        const <EmbedJobStatus>[];
+    setState(() {
+      if (_selected.length == jobs.length) {
+        _selected.clear();
       } else {
-        _selected.add(jobId);
+        _selected
+          ..clear()
+          ..addAll(jobs.map((job) => job.jobId));
       }
     });
   }
 
+  void _refresh() {
+    final config = ref.read(activeEmbedServiceConfigProvider);
+    ref.read(offlineDownloadServiceProvider).refreshNow(config: config);
+  }
+
   Future<void> _batchDelete() async {
     if (_selected.isEmpty) return;
-
-    final confirmed = await showDialog<bool>(
+    final count = _selected.length;
+    final confirmed = await _confirmDelete(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('批量删除'),
-        content: Text('确定要删除选中的 ${_selected.length} 个任务吗？'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(false),
-            child: const Text('取消'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(ctx).pop(true),
-            style: FilledButton.styleFrom(backgroundColor: Colors.red),
-            child: const Text('删除'),
-          ),
-        ],
-      ),
+      title: '删除离线任务',
+      message: '确定要删除选中的 $count 个任务吗？',
     );
-
-    if (confirmed != true || !mounted) return;
+    if (!confirmed || !mounted) return;
 
     try {
       await ref
           .read(offlineDownloadServiceProvider)
           .batchDeleteTasks(_selected.toList());
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('已删除 ${_selected.length} 个任务')));
-        setState(() {
-          _selected.clear();
-          _selectMode = false;
-        });
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('删除失败: $e')));
-      }
+      ToastNotifier.show('已删除 $count 个任务');
+      if (!mounted) return;
+      setState(() {
+        _selected.clear();
+        _selectMode = false;
+      });
+    } catch (_) {
+      ToastNotifier.show('批量删除失败', kind: EchoMessageKind.error);
     }
   }
 
   @override
   Widget build(BuildContext context) {
     final jobsAsync = ref.watch(offlineDownloadJobsProvider);
-    final summary = ref.watch(offlineDownloadSummaryProvider);
 
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(_selectMode ? '已选 ${_selected.length} 项' : '离线下载状态'),
-        leading: _selectMode
-            ? IconButton(
-                icon: const Icon(Icons.close),
-                onPressed: _toggleSelectMode,
-              )
-            : null,
+    return EchoScaffold(
+      topBar: EchoTopBar(
+        title: _selectMode ? '已选 ${_selected.length} 项' : '离线下载状态',
+        leading: EchoIconButton(
+          icon: _selectMode ? AppIcons.close : AppIcons.back,
+          label: _selectMode ? '退出批量管理' : '返回',
+          onPressed: _selectMode
+              ? _toggleSelectMode
+              : () => Navigator.maybePop(context),
+        ),
         actions: _selectMode
-            ? [
-                IconButton(
-                  tooltip: '全选',
-                  icon: const Icon(Icons.select_all),
-                  onPressed: () {
-                    final jobs =
-                        ref.read(offlineDownloadJobsProvider).valueOrNull ?? [];
-                    setState(() {
-                      if (_selected.length == jobs.length) {
-                        _selected.clear();
-                      } else {
-                        _selected.addAll(jobs.map((j) => j.jobId));
-                      }
-                    });
-                  },
+            ? <Widget>[
+                EchoIconButton(
+                  icon: AppIcons.selectAll,
+                  label: '全选或取消全选',
+                  onPressed: _toggleSelectAll,
                 ),
-                IconButton(
-                  tooltip: '删除选中',
-                  icon: const Icon(Icons.delete, color: Colors.red),
+                EchoIconButton(
+                  icon: AppIcons.delete,
+                  label: '删除选中任务',
+                  foregroundColor: context.echoColors.error,
                   onPressed: _selected.isEmpty ? null : _batchDelete,
                 ),
               ]
-            : [
-                IconButton(
-                  tooltip: '刷新',
-                  icon: const Icon(Icons.refresh),
-                  onPressed: () {
-                    final config = ref.read(activeEmbedServiceConfigProvider);
-                    ref
-                        .read(offlineDownloadServiceProvider)
-                        .refreshNow(config: config);
-                  },
+            : <Widget>[
+                EchoIconButton(
+                  icon: AppIcons.refresh,
+                  label: '刷新离线任务',
+                  onPressed: _refresh,
                 ),
-                IconButton(
-                  tooltip: '批量管理',
-                  icon: const Icon(Icons.checklist),
+                EchoIconButton(
+                  icon: AppIcons.selectAll,
+                  label: '批量管理',
                   onPressed: _toggleSelectMode,
                 ),
               ],
       ),
       body: Column(
-        children: [
-          _SummaryBar(summary: summary),
+        children: <Widget>[
+          const _OfflineSummaryBar(),
           Expanded(
             child: jobsAsync.when(
               data: (jobs) {
                 if (jobs.isEmpty) {
-                  return const Center(child: Text('暂无离线任务'));
+                  return const EchoEmptyState(
+                    title: '暂无离线任务',
+                    description: '开始离线下载后，这里会显示匹配、转码和写入状态。',
+                    icon: AppIcons.offline,
+                  );
                 }
-
-                return ListView.separated(
-                  itemCount: jobs.length,
-                  separatorBuilder: (_, _) => const Divider(height: 1),
-                  itemBuilder: (context, index) {
-                    final job = jobs[index];
-                    return _JobTile(
-                      job: job,
-                      selectMode: _selectMode,
-                      selected: _selected.contains(job.jobId),
-                      onSelect: () => _toggleSelection(job.jobId),
-                    );
-                  },
+                return Align(
+                  alignment: Alignment.topCenter,
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 840),
+                    child: ListView.builder(
+                      padding: EdgeInsets.fromLTRB(
+                        context.echoSpacing.md,
+                        context.echoSpacing.sm,
+                        context.echoSpacing.md,
+                        context.echoSpacing.xxl,
+                      ),
+                      itemCount: jobs.length,
+                      itemBuilder: (context, index) {
+                        final job = jobs[index];
+                        return _OfflineJobRow(
+                          job: job,
+                          selectMode: _selectMode,
+                          selected: _selected.contains(job.jobId),
+                          onSelect: () => _toggleSelection(job.jobId),
+                        );
+                      },
+                    ),
+                  ),
                 );
               },
-              loading: () => const Center(child: CircularProgressIndicator()),
-              error: (error, _) => Center(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Text('加载失败'),
-                    const SizedBox(height: 8),
-                    FilledButton.tonal(
-                      onPressed: () {
-                        final config = ref.read(
-                          activeEmbedServiceConfigProvider,
-                        );
-                        ref
-                            .read(offlineDownloadServiceProvider)
-                            .refreshNow(config: config);
-                      },
-                      child: const Text('重试'),
-                    ),
-                  ],
-                ),
+              loading: () => const _OfflineJobsSkeleton(),
+              error: (error, stackTrace) => EchoErrorState(
+                title: '离线任务加载失败',
+                description: '无法读取嵌入服务的任务状态，请重试。',
+                actionLabel: '重试',
+                onAction: _refresh,
               ),
             ),
           ),
@@ -197,324 +180,426 @@ class _OfflineDownloadStatusPageState
   }
 }
 
-class _SummaryBar extends StatelessWidget {
-  final OfflineDownloadSummary summary;
-
-  const _SummaryBar({required this.summary});
+class _OfflineSummaryBar extends ConsumerWidget {
+  const _OfflineSummaryBar();
 
   @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      color: Theme.of(context).colorScheme.surfaceContainerHighest,
+  Widget build(BuildContext context, WidgetRef ref) {
+    final summary = ref.watch(offlineDownloadSummaryProvider);
+    return EchoSurface(
+      level: EchoSurfaceLevel.raised,
+      borderRadius: BorderRadius.zero,
+      padding: EdgeInsets.symmetric(
+        horizontal: context.echoSpacing.md,
+        vertical: context.echoSpacing.xs,
+      ),
       child: Wrap(
-        spacing: 12,
-        runSpacing: 8,
-        children: [
-          _pill(context, '进行中', summary.active),
-          _pill(context, '完成', summary.completed),
-          _pill(context, '失败', summary.failed),
+        spacing: context.echoSpacing.lg,
+        runSpacing: context.echoSpacing.xs,
+        children: <Widget>[
+          _SummaryMetric(
+            label: '进行中',
+            value: summary.active,
+            color: context.echoColors.accent,
+          ),
+          _SummaryMetric(
+            label: '完成',
+            value: summary.completed,
+            color: context.echoColors.ink,
+          ),
+          _SummaryMetric(
+            label: '失败',
+            value: summary.failed,
+            color: context.echoColors.error,
+          ),
         ],
       ),
     );
   }
+}
 
-  Widget _pill(BuildContext context, String label, int value) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surface,
-        borderRadius: BorderRadius.circular(999),
+class _SummaryMetric extends StatelessWidget {
+  const _SummaryMetric({
+    required this.label,
+    required this.value,
+    required this.color,
+  });
+
+  final String label;
+  final int value;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      label: '$label，$value',
+      child: ExcludeSemantics(
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            DecoratedBox(
+              decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+              child: const SizedBox.square(dimension: 8),
+            ),
+            SizedBox(width: context.echoSpacing.xs),
+            Text(
+              '$label $value',
+              style: context.echoTypography.label.copyWith(
+                fontFeatures: const <FontFeature>[FontFeature.tabularFigures()],
+              ),
+            ),
+          ],
+        ),
       ),
-      child: Text('$label: $value'),
     );
   }
 }
 
-class _JobTile extends ConsumerWidget {
-  final EmbedJobStatus job;
-  final bool selectMode;
-  final bool selected;
-  final VoidCallback onSelect;
-
-  const _JobTile({
+class _OfflineJobRow extends ConsumerWidget {
+  const _OfflineJobRow({
     required this.job,
     required this.selectMode,
     required this.selected,
     required this.onSelect,
   });
 
-  /// 过滤掉包含 URL 的消息
+  final EmbedJobStatus job;
+  final bool selectMode;
+  final bool selected;
+  final VoidCallback onSelect;
+
   static bool _isUrl(String text) {
-    final t = text.trim().toLowerCase();
-    return t.startsWith('http://') ||
-        t.startsWith('https://') ||
-        t.startsWith('www.') ||
-        t.contains('://');
+    final normalized = text.trim().toLowerCase();
+    return normalized.startsWith('http://') ||
+        normalized.startsWith('https://') ||
+        normalized.startsWith('www.') ||
+        normalized.contains('://');
   }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final title = (job.title ?? '').isNotEmpty ? job.title! : job.jobId;
+    final title = job.title?.trim().isNotEmpty == true
+        ? job.title!.trim()
+        : job.jobId;
+    final metadata = <String>[
+      if (job.artist?.trim().isNotEmpty == true) job.artist!.trim(),
+      if (job.album?.trim().isNotEmpty == true) job.album!.trim(),
+    ].join(' · ');
+    final progress = job.progressRatio.clamp(0.0, 1.0).toDouble();
+    final percentage = (progress * 100).round();
+    final status = job.isActive
+        ? '${job.statusDisplayName} · $percentage%'
+        : job.statusDisplayName;
+    final showMessage =
+        job.message?.trim().isNotEmpty == true && !_isUrl(job.message!);
+    final presentation = _jobPresentation(context, job);
 
-    // 构建 artist · album 行
-    final metaParts = <String>[
-      if ((job.artist ?? '').isNotEmpty) job.artist!,
-      if ((job.album ?? '').isNotEmpty) job.album!,
-    ];
-    final metaLine = metaParts.join(' · ');
-
-    // 状态行：活动状态显示百分比，完成/失败状态只显示状态名
-    final String statusLine;
-    if (job.isActive) {
-      final percent =
-          (job.progressRatio * 100).clamp(0, 100).toStringAsFixed(0);
-      statusLine = '${job.statusDisplayName} · $percent%';
-    } else {
-      statusLine = job.statusDisplayName;
-    }
-
-    // 过滤掉包含 URL 的 message
-    final showMessage = job.message != null &&
-        job.message!.trim().isNotEmpty &&
-        !_isUrl(job.message!);
-
-    return InkWell(
-      onTap: selectMode ? onSelect : null,
-      onLongPress: selectMode ? null : () => _showActionsSheet(context, ref),
-      child: ListTile(
-        leading: selectMode
-            ? Checkbox(value: selected, onChanged: (_) => onSelect())
-            : Icon(
-                job.isDone
-                    ? Icons.check_circle
-                    : job.isFailed
-                        ? Icons.error
-                        : job.isCancelled
-                            ? Icons.cancel
-                            : Icons.downloading,
-                color: job.isDone
-                    ? Colors.green
-                    : job.isFailed
-                        ? Colors.red
-                        : job.isCancelled
-                            ? Colors.grey
-                            : Theme.of(context).colorScheme.primary,
-              ),
-        title: Text(title, maxLines: 1, overflow: TextOverflow.ellipsis),
-        subtitle: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            if (metaLine.isNotEmpty)
-              Text(
-                metaLine,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: Theme.of(context).textTheme.bodySmall,
-              ),
-            Text(
-              statusLine,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: job.isFailed
-                        ? Colors.red
-                        : Theme.of(context).colorScheme.onSurfaceVariant,
-                  ),
-            ),
-            if (showMessage)
-              Text(
-                job.message!,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: Theme.of(context).textTheme.bodySmall,
-              ),
-            if (job.isFailed &&
-                job.error != null &&
-                job.error!.trim().isNotEmpty)
-              Text(
-                '❌ ${job.error}',
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: Theme.of(context)
-                    .textTheme
-                    .bodySmall
-                    ?.copyWith(color: Colors.red),
-              ),
-            if (job.isActive)
-              Padding(
-                padding: const EdgeInsets.only(top: 4),
-                child: LinearProgressIndicator(value: job.progressRatio),
-              ),
-          ],
-        ),
-        trailing: selectMode ? null : const SizedBox.shrink(),
-      ),
-    );
-  }
-
-  void _showActionsSheet(BuildContext context, WidgetRef ref) {
-    final actions = <Widget>[];
-
-    if (job.isFailed) {
-      actions.add(
-        ListTile(
-          leading: const Icon(Icons.refresh),
-          title: const Text('重试'),
-          onTap: () async {
-            Navigator.of(context).pop();
-            try {
-              await ref
-                  .read(offlineDownloadServiceProvider)
-                  .retryTask(job.jobId);
-              if (context.mounted) {
-                ScaffoldMessenger.of(
-                  context,
-                ).showSnackBar(const SnackBar(content: Text('已重新提交任务')));
-              }
-            } catch (e) {
-              if (context.mounted) {
-                ScaffoldMessenger.of(
-                  context,
-                ).showSnackBar(SnackBar(content: Text('重试失败: $e')));
-              }
-            }
-          },
-        ),
-      );
-    }
-
-    if (job.isActive) {
-      actions.add(
-        ListTile(
-          leading: Icon(
-            Icons.cancel,
-            color: Theme.of(context).colorScheme.error,
+    return Padding(
+      padding: EdgeInsets.only(bottom: context.echoSpacing.xs),
+      child: EchoPressable(
+        semanticLabel: <String>[
+          title,
+          if (metadata.isNotEmpty) metadata,
+          status,
+          if (showMessage) job.message!.trim(),
+          if (job.error?.trim().isNotEmpty == true) job.error!.trim(),
+          if (selectMode) selected ? '已选择' : '未选择',
+        ].join('，'),
+        selected: selected,
+        onPressed: selectMode ? onSelect : null,
+        onLongPress: selectMode
+            ? null
+            : () => _showActionsSheet(context, ref, title),
+        minimumSize: const Size(double.infinity, 72),
+        child: AnimatedContainer(
+          duration: context.echoMotion.resolve(
+            context,
+            context.echoMotion.state,
           ),
-          title: Text(
-            '取消',
-            style: TextStyle(color: Theme.of(context).colorScheme.error),
+          curve: context.echoMotion.easeOut,
+          padding: EdgeInsets.symmetric(
+            horizontal: context.echoSpacing.xs,
+            vertical: context.echoSpacing.xs,
           ),
-          onTap: () async {
-            Navigator.of(context).pop();
-            try {
-              await ref
-                  .read(offlineDownloadServiceProvider)
-                  .cancelTask(job.jobId);
-              if (context.mounted) {
-                ScaffoldMessenger.of(
-                  context,
-                ).showSnackBar(const SnackBar(content: Text('任务已取消')));
-              }
-            } catch (e) {
-              if (context.mounted) {
-                ScaffoldMessenger.of(
-                  context,
-                ).showSnackBar(SnackBar(content: Text('取消失败: $e')));
-              }
-            }
-          },
-        ),
-      );
-    }
-
-    // 删除（任何状态都可以删除）
-    actions.add(
-      ListTile(
-        leading: const Icon(Icons.delete_outline, color: Colors.red),
-        title: const Text('删除', style: TextStyle(color: Colors.red)),
-        onTap: () async {
-          Navigator.of(context).pop();
-          final confirmed = await showDialog<bool>(
-            context: context,
-            builder: (ctx) => AlertDialog(
-              title: const Text('删除任务'),
-              content: Text(
-                '确定要删除「${(job.title ?? '').isNotEmpty ? job.title! : job.jobId}」吗？',
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.of(ctx).pop(false),
-                  child: const Text('取消'),
-                ),
-                FilledButton(
-                  onPressed: () => Navigator.of(ctx).pop(true),
-                  style: FilledButton.styleFrom(backgroundColor: Colors.red),
-                  child: const Text('删除'),
-                ),
-              ],
-            ),
-          );
-          if (confirmed == true && context.mounted) {
-            try {
-              await ref
-                  .read(offlineDownloadServiceProvider)
-                  .deleteTask(job.jobId);
-              if (context.mounted) {
-                ScaffoldMessenger.of(
-                  context,
-                ).showSnackBar(const SnackBar(content: Text('任务已删除')));
-              }
-            } catch (e) {
-              if (context.mounted) {
-                ScaffoldMessenger.of(
-                  context,
-                ).showSnackBar(SnackBar(content: Text('删除失败: $e')));
-              }
-            }
-          }
-        },
-      ),
-    );
-
-    showModalBottomSheet(
-      context: context,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (ctx) => SafeArea(
-        child: Padding(
-          padding: EdgeInsets.only(
-            bottom: MediaQuery.of(ctx).padding.bottom + 8,
+          decoration: BoxDecoration(
+            color: selected
+                ? context.echoColors.accent.withValues(alpha: 0.1)
+                : Colors.transparent,
+            borderRadius: context.echoRadii.control,
           ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const SizedBox(height: 12),
-              Container(
-                width: 40,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: Theme.of(
-                    ctx,
-                  ).colorScheme.onSurfaceVariant.withValues(alpha: 0.4),
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-              const SizedBox(height: 8),
-              ListTile(
-                dense: true,
-                title: Text(
-                  (job.title ?? '').isNotEmpty ? job.title! : job.jobId,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: Theme.of(ctx).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w600,
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              SizedBox.square(
+                dimension: context.echoInteraction.minimumTouchTarget,
+                child: Center(
+                  child: Icon(
+                    selectMode
+                        ? selected
+                              ? AppIcons.checkCircle
+                              : AppIcons.radio
+                        : presentation.icon,
+                    size: 24,
+                    color: selectMode && selected
+                        ? context.echoColors.accent
+                        : presentation.color,
                   ),
                 ),
-                subtitle: Text(
-                  '${job.artist ?? "未知歌手"} · ${job.statusDisplayName}',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
+              ),
+              SizedBox(width: context.echoSpacing.sm),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Text(title, style: context.echoTypography.title),
+                    if (metadata.isNotEmpty) ...<Widget>[
+                      SizedBox(height: context.echoSpacing.xxs),
+                      Text(
+                        metadata,
+                        style: context.echoTypography.body.copyWith(
+                          color: context.echoColors.muted,
+                        ),
+                      ),
+                    ],
+                    SizedBox(height: context.echoSpacing.xxs),
+                    Text(
+                      status,
+                      style: context.echoTypography.metadata.copyWith(
+                        color: job.isFailed
+                            ? context.echoColors.error
+                            : context.echoColors.muted,
+                        fontFeatures: const <FontFeature>[
+                          FontFeature.tabularFigures(),
+                        ],
+                      ),
+                    ),
+                    if (showMessage) ...<Widget>[
+                      SizedBox(height: context.echoSpacing.xxs),
+                      Text(
+                        job.message!.trim(),
+                        style: context.echoTypography.metadata.copyWith(
+                          color: context.echoColors.muted,
+                        ),
+                      ),
+                    ],
+                    if (job.error?.trim().isNotEmpty == true) ...<Widget>[
+                      SizedBox(height: context.echoSpacing.xxs),
+                      Text(
+                        job.error!.trim(),
+                        style: context.echoTypography.metadata.copyWith(
+                          color: context.echoColors.error,
+                        ),
+                      ),
+                    ],
+                    if (job.isActive) ...<Widget>[
+                      SizedBox(height: context.echoSpacing.xs),
+                      EchoProgressBar(
+                        value: progress,
+                        height: 4,
+                        color: presentation.color,
+                      ),
+                    ],
+                  ],
                 ),
               ),
-              const Divider(height: 1),
-              ...actions,
             ],
           ),
         ),
       ),
     );
   }
+
+  Future<void> _showActionsSheet(
+    BuildContext context,
+    WidgetRef ref,
+    String title,
+  ) async {
+    final service = ref.read(offlineDownloadServiceProvider);
+    await showEchoBottomSheet<void>(
+      context: context,
+      useRootNavigator: true,
+      builder: (sheetContext) => EchoBottomSheet(
+        title: title,
+        subtitle: job.statusDisplayName,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            if (job.isFailed)
+              EchoActionRow(
+                icon: AppIcons.refresh,
+                title: '重试',
+                onPressed: () {
+                  Navigator.of(sheetContext).pop();
+                  _runAction(
+                    action: () => service.retryTask(job.jobId),
+                    successMessage: '已重新提交任务',
+                    failureMessage: '重试失败',
+                  );
+                },
+              ),
+            if (job.isActive)
+              EchoActionRow(
+                icon: AppIcons.close,
+                title: '取消任务',
+                destructive: true,
+                onPressed: () {
+                  Navigator.of(sheetContext).pop();
+                  _runAction(
+                    action: () => service.cancelTask(job.jobId),
+                    successMessage: '任务已取消',
+                    failureMessage: '取消失败',
+                  );
+                },
+              ),
+            EchoActionRow(
+              icon: AppIcons.delete,
+              title: '删除任务',
+              destructive: true,
+              onPressed: () {
+                Navigator.of(sheetContext).pop();
+                Future<void>.microtask(() async {
+                  if (!context.mounted) return;
+                  final confirmed = await _confirmDelete(
+                    context: context,
+                    title: '删除任务',
+                    message: '确定要删除「$title」吗？',
+                  );
+                  if (!confirmed) return;
+                  await _runAction(
+                    action: () => service.deleteTask(job.jobId),
+                    successMessage: '任务已删除',
+                    failureMessage: '删除失败',
+                  );
+                });
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _runAction({
+    required Future<void> Function() action,
+    required String successMessage,
+    required String failureMessage,
+  }) async {
+    try {
+      await action();
+      ToastNotifier.show(successMessage);
+    } catch (_) {
+      ToastNotifier.show(failureMessage, kind: EchoMessageKind.error);
+    }
+  }
+}
+
+class _OfflineJobsSkeleton extends StatelessWidget {
+  const _OfflineJobsSkeleton();
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView.separated(
+      padding: EdgeInsets.all(context.echoSpacing.md),
+      itemCount: 5,
+      separatorBuilder: (context, index) =>
+          SizedBox(height: context.echoSpacing.md),
+      itemBuilder: (context, index) => Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          const EchoSkeleton.circle(size: 48),
+          SizedBox(width: context.echoSpacing.sm),
+          const Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                EchoSkeleton.line(width: 190),
+                SizedBox(height: 8),
+                EchoSkeleton.line(width: 130, height: 10),
+                SizedBox(height: 8),
+                EchoSkeleton.line(height: 4),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _JobPresentation {
+  const _JobPresentation({required this.icon, required this.color});
+
+  final IconData icon;
+  final Color color;
+}
+
+_JobPresentation _jobPresentation(BuildContext context, EmbedJobStatus job) {
+  if (job.isDone) {
+    return _JobPresentation(
+      icon: AppIcons.checkCircle,
+      color: context.echoColors.accent,
+    );
+  }
+  if (job.isFailed) {
+    return _JobPresentation(
+      icon: AppIcons.error,
+      color: context.echoColors.error,
+    );
+  }
+  if (job.isCancelled) {
+    return _JobPresentation(
+      icon: AppIcons.close,
+      color: context.echoColors.muted,
+    );
+  }
+  return _JobPresentation(
+    icon: AppIcons.downloadCloud,
+    color: context.echoColors.accent,
+  );
+}
+
+Future<bool> _confirmDelete({
+  required BuildContext context,
+  required String title,
+  required String message,
+}) async {
+  final confirmed = await showEchoBottomSheet<bool>(
+    context: context,
+    useRootNavigator: true,
+    builder: (sheetContext) => EchoBottomSheet(
+      title: title,
+      subtitle: '此操作不可恢复。',
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: <Widget>[
+          Text(
+            message,
+            style: sheetContext.echoTypography.body.copyWith(
+              color: sheetContext.echoColors.muted,
+            ),
+          ),
+          SizedBox(height: sheetContext.echoSpacing.lg),
+          Row(
+            children: <Widget>[
+              Expanded(
+                child: EchoButton.secondary(
+                  label: '取消',
+                  onPressed: () => Navigator.of(sheetContext).pop(false),
+                ),
+              ),
+              SizedBox(width: sheetContext.echoSpacing.sm),
+              Expanded(
+                child: EchoButton.destructive(
+                  label: '删除',
+                  onPressed: () => Navigator.of(sheetContext).pop(true),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    ),
+  );
+  return confirmed ?? false;
 }

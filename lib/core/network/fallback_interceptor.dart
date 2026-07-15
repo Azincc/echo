@@ -62,7 +62,7 @@ class FallbackInterceptor extends Interceptor {
             final success = await _addressPool.switchTo(next, manual: false);
             if (success) {
               _consecutiveFailures = 0;
-              ToastNotifier.show("Switching to connection: ${next.label}");
+              ToastNotifier.show('已切换线路：${next.label}');
 
               // Retry with new address
               final opts = err.requestOptions;

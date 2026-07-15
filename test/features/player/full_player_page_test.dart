@@ -1,5 +1,6 @@
 import 'dart:ui' show SemanticsAction;
 
+import 'package:echoes/core/design/echo_design.dart';
 import 'package:echoes/core/theme/app_theme.dart';
 import 'package:echoes/data/models/audio_quality.dart';
 import 'package:echoes/data/models/song.dart';
@@ -11,6 +12,7 @@ import 'package:echoes/providers/palette_provider.dart';
 import 'package:echoes/providers/player_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:just_audio/just_audio.dart' hide PlayerState;
 
@@ -50,11 +52,16 @@ void main() {
     required Widget home,
     double textScale = 1,
     bool disableAnimations = true,
+    EchoMediaVisuals? visuals,
   }) {
+    final resolvedVisuals = visuals ?? EchoMediaVisuals.fallback();
     return ProviderScope(
       overrides: [
         playerProvider.overrideWith((ref) => notifier),
         currentSongPaletteProvider.overrideWith((ref) async => null),
+        resolvedCurrentSongMediaVisualsProvider.overrideWithValue(
+          resolvedVisuals,
+        ),
         currentLyricsProvider.overrideWith((ref) async => null),
       ],
       child: MaterialApp(
@@ -364,5 +371,50 @@ void main() {
           .value,
       '0:05 / 3:00',
     );
+  });
+
+  testWidgets('bright artwork installs dark player ink and system chrome', (
+    tester,
+  ) async {
+    final visuals = EchoMediaVisuals.fallback(seed: const Color(0xFFFFE36B));
+    expect(visuals.foreground.computeLuminance(), lessThan(0.1));
+
+    await tester.pumpWidget(
+      providerApp(
+        notifier: TestPlayerNotifier(initialState()),
+        home: const FullPlayerPage(),
+        visuals: visuals,
+      ),
+    );
+    await tester.pump();
+
+    final titleContext = tester.element(find.text('正在播放'));
+    expect(titleContext.echoColors.ink, visuals.foreground);
+    expect(titleContext.echoColors.muted, visuals.mutedForeground);
+    expect(titleContext.echoColors.canvas, visuals.stageBase);
+
+    final backdrop = tester.widget<EchoPlayerBackdrop>(
+      find.byType(EchoPlayerBackdrop),
+    );
+    expect(backdrop.mode, EchoPlayerBackdropMode.stage);
+    expect(backdrop.visuals, visuals);
+
+    final scrubber = tester.widget<EchoPlayerScrubber>(
+      find.byType(EchoPlayerScrubber),
+    );
+    expect(scrubber.activeColor, visuals.controlAccent);
+    expect(scrubber.thumbColor, visuals.foreground);
+
+    final overlay = tester
+        .widgetList<AnnotatedRegion<SystemUiOverlayStyle>>(
+          find.byType(AnnotatedRegion<SystemUiOverlayStyle>),
+        )
+        .firstWhere(
+          (region) =>
+              region.value.systemNavigationBarColor == visuals.stageBottom,
+        )
+        .value;
+    expect(overlay.statusBarIconBrightness, Brightness.dark);
+    expect(overlay.systemNavigationBarIconBrightness, Brightness.dark);
   });
 }

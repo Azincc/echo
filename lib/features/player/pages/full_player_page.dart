@@ -36,21 +36,13 @@ class _FullPlayerPageState extends ConsumerState<FullPlayerPage>
   bool _showLyrics = false;
   bool _showBitRate = false;
   bool _isClosingRoute = false;
-  bool _routeAnimComplete = false;
-  bool _sceneStarted = false;
 
-  Animation<double>? _routeAnimation;
-  late final AnimationController _sceneController;
   late final AnimationController _lyricsController;
   late final Animation<double> _lyricsProgress;
 
   @override
   void initState() {
     super.initState();
-    _sceneController = AnimationController(
-      vsync: this,
-      duration: EchoMotion.standard.scene,
-    );
     _lyricsController = AnimationController(
       vsync: this,
       duration: EchoMotion.standard.state,
@@ -61,58 +53,23 @@ class _FullPlayerPageState extends ConsumerState<FullPlayerPage>
       curve: EchoMotion.standard.sceneCurve,
       reverseCurve: EchoMotion.standard.easeOut,
     );
-
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      _routeAnimation = ModalRoute.of(context)?.animation;
-      if (_routeAnimation != null &&
-          _routeAnimation!.status != AnimationStatus.completed) {
-        _routeAnimation!.addStatusListener(_onRouteAnimationStatus);
-      } else {
-        _deferRouteAnimComplete();
-      }
-    });
   }
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
     final motion = context.echoMotion;
-    final sceneDuration = motion.resolve(context, motion.scene);
     final stateDuration = motion.resolve(context, motion.state);
-    _sceneController.duration = sceneDuration;
     _lyricsController.duration = stateDuration;
 
-    if (!_sceneStarted) {
-      _sceneStarted = true;
-      if (sceneDuration == Duration.zero) {
-        _sceneController.value = 1;
-      } else {
-        _sceneController.forward();
-      }
-    } else if (context.echoReduceMotion) {
-      _sceneController.value = 1;
+    if (context.echoReduceMotion) {
       _lyricsController.value = _showLyrics ? 1 : 0;
     }
   }
 
-  void _onRouteAnimationStatus(AnimationStatus status) {
-    if (status != AnimationStatus.completed) return;
-    _routeAnimation?.removeStatusListener(_onRouteAnimationStatus);
-    _deferRouteAnimComplete();
-  }
-
-  void _deferRouteAnimComplete() {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) setState(() => _routeAnimComplete = true);
-    });
-  }
-
   @override
   void dispose() {
-    _routeAnimation?.removeStatusListener(_onRouteAnimationStatus);
     _lyricsController.dispose();
-    _sceneController.dispose();
     super.dispose();
   }
 
@@ -124,7 +81,6 @@ class _FullPlayerPageState extends ConsumerState<FullPlayerPage>
     try {
       final motion = context.echoMotion;
       final settleDuration = motion.resolve(context, motion.feedback);
-      final backgroundSettleDuration = motion.resolve(context, motion.scene);
       if (_showLyrics || _lyricsController.value > 0) {
         setState(() => _showLyrics = false);
         if (settleDuration == Duration.zero) {
@@ -138,16 +94,6 @@ class _FullPlayerPageState extends ConsumerState<FullPlayerPage>
         }
         if (!mounted) return;
         await WidgetsBinding.instance.endOfFrame;
-      }
-
-      if (_routeAnimComplete) {
-        setState(() => _routeAnimComplete = false);
-        if (backgroundSettleDuration > Duration.zero) {
-          await Future<void>.delayed(backgroundSettleDuration);
-        } else {
-          await WidgetsBinding.instance.endOfFrame;
-        }
-        if (!mounted) return;
       }
 
       if (!mounted) return;
@@ -314,7 +260,6 @@ class _FullPlayerPageState extends ConsumerState<FullPlayerPage>
     final currentSong = ref.watch(
       playerProvider.select((state) => state.currentSong),
     );
-    final palette = ref.watch(currentSongPaletteProvider).valueOrNull;
 
     if (currentSong == null) {
       return AnnotatedRegion<SystemUiOverlayStyle>(
@@ -351,85 +296,74 @@ class _FullPlayerPageState extends ConsumerState<FullPlayerPage>
       );
     }
 
-    final albumColor = palette?.dominantColor?.color;
-    final miniSurface = playerMiniSurfaceColor(context, albumColor);
-    final stageColor = playerStageColor(context, albumColor);
-    final resolvedTopColor = _routeAnimComplete ? stageColor : miniSurface;
-    final resolvedBottomColor = _routeAnimComplete
-        ? Color.lerp(stageColor, Colors.black, 0.62)!
-        : miniSurface;
+    final visuals = ref.watch(resolvedCurrentSongMediaVisualsProvider);
     final subtitle = _buildSubtitle(currentSong);
-    final sceneDuration = context.echoMotion.resolve(
-      context,
-      context.echoMotion.scene,
+    final foregroundBrightness = visuals.foreground.computeLuminance() > 0.5
+        ? Brightness.light
+        : Brightness.dark;
+    final overlayStyle = SystemUiOverlayStyle(
+      statusBarColor: Colors.transparent,
+      statusBarIconBrightness: foregroundBrightness,
+      statusBarBrightness: foregroundBrightness == Brightness.light
+          ? Brightness.dark
+          : Brightness.light,
+      systemNavigationBarColor: visuals.stageBottom,
+      systemNavigationBarDividerColor: Colors.transparent,
+      systemNavigationBarIconBrightness: foregroundBrightness,
     );
 
-    return AnnotatedRegion<SystemUiOverlayStyle>(
-      value: SystemUiOverlayStyle.light,
-      child: PopScope<void>(
-        canPop: false,
-        onPopInvokedWithResult: (didPop, result) async {
-          if (!didPop) await _closeToMini();
-        },
-        child: Scaffold(
-          backgroundColor: Colors.transparent,
-          body: Stack(
-            children: <Widget>[
-              Positioned.fill(
-                child: Hero(
-                  tag: playerBackgroundHeroTag,
-                  flightShuttleBuilder:
-                      (
-                        flightContext,
-                        animation,
-                        flightDirection,
-                        fromHeroContext,
-                        toHeroContext,
-                      ) {
-                        final hero = flightDirection == HeroFlightDirection.push
-                            ? fromHeroContext.widget as Hero
-                            : toHeroContext.widget as Hero;
-                        return hero.child;
-                      },
-                  child: AnimatedContainer(
-                    duration: sceneDuration,
-                    curve: context.echoMotion.sceneCurve,
-                    decoration: BoxDecoration(
-                      color: resolvedBottomColor,
-                      gradient: LinearGradient(
-                        begin: Alignment.topCenter,
-                        end: Alignment.bottomCenter,
-                        colors: <Color>[resolvedTopColor, resolvedBottomColor],
+    return EchoMediaColorScope(
+      visuals: visuals,
+      role: EchoMediaSurfaceRole.stage,
+      child: Builder(
+        builder: (context) {
+          return AnnotatedRegion<SystemUiOverlayStyle>(
+            value: overlayStyle,
+            child: PopScope<void>(
+              canPop: false,
+              onPopInvokedWithResult: (didPop, result) async {
+                if (!didPop) await _closeToMini();
+              },
+              child: Scaffold(
+                backgroundColor: Colors.transparent,
+                body: Stack(
+                  children: <Widget>[
+                    Positioned.fill(
+                      child: Hero(
+                        tag: playerBackgroundHeroTag,
+                        flightShuttleBuilder:
+                            playerBackgroundFlightShuttleBuilder,
+                        child: EchoPlayerBackdrop(
+                          visuals: visuals,
+                          mode: EchoPlayerBackdropMode.stage,
+                        ),
                       ),
                     ),
-                  ),
+                    SafeArea(
+                      child: LayoutBuilder(
+                        builder: (context, constraints) {
+                          final useWideLayout =
+                              constraints.maxWidth > constraints.maxHeight ||
+                              constraints.maxWidth >=
+                                  context.echoBreakpoints.expanded;
+                          return useWideLayout
+                              ? _buildWidePlayerLayout(
+                                  currentSong,
+                                  subtitle: subtitle,
+                                )
+                              : _buildPortraitPlayerLayout(
+                                  currentSong,
+                                  subtitle: subtitle,
+                                );
+                        },
+                      ),
+                    ),
+                  ],
                 ),
               ),
-              SafeArea(
-                child: LayoutBuilder(
-                  builder: (context, constraints) {
-                    final useWideLayout =
-                        constraints.maxWidth > constraints.maxHeight ||
-                        constraints.maxWidth >=
-                            context.echoBreakpoints.expanded;
-                    return FadeTransition(
-                      opacity: _sceneController,
-                      child: useWideLayout
-                          ? _buildWidePlayerLayout(
-                              currentSong,
-                              subtitle: subtitle,
-                            )
-                          : _buildPortraitPlayerLayout(
-                              currentSong,
-                              subtitle: subtitle,
-                            ),
-                    );
-                  },
-                ),
-              ),
-            ],
-          ),
-        ),
+            ),
+          );
+        },
       ),
     );
   }
@@ -590,12 +524,12 @@ class _FullPlayerPageState extends ConsumerState<FullPlayerPage>
             (compactHeight
                     ? context.echoTypography.title
                     : context.echoTypography.headline)
-                .copyWith(color: Colors.white);
+                .copyWith(color: context.echoColors.ink);
         final subtitleStyle =
             (compactHeight
                     ? context.echoTypography.metadata
                     : context.echoTypography.body)
-                .copyWith(color: Colors.white.withValues(alpha: 0.88));
+                .copyWith(color: context.echoColors.muted);
 
         return SingleChildScrollView(
           key: const ValueKey<String>('full_player_details_pane'),
@@ -656,16 +590,16 @@ class _FullPlayerPageState extends ConsumerState<FullPlayerPage>
             (constraints.maxHeight - coverSize - titleReserve) / 2;
         final coverTopSpace = availableTopSpace.clamp(spacing.xs, spacing.xl);
         final expandedTitleStyle = context.echoTypography.headline.copyWith(
-          color: Colors.white,
+          color: context.echoColors.ink,
         );
         final compactTitleStyle = context.echoTypography.title.copyWith(
-          color: Colors.white,
+          color: context.echoColors.ink,
         );
         final expandedSubtitleStyle = context.echoTypography.body.copyWith(
-          color: Colors.white.withValues(alpha: 0.88),
+          color: context.echoColors.muted,
         );
         final compactSubtitleStyle = context.echoTypography.metadata.copyWith(
-          color: Colors.white.withValues(alpha: 0.88),
+          color: context.echoColors.muted,
         );
 
         return AnimatedBuilder(
@@ -747,27 +681,31 @@ class _FullPlayerPageState extends ConsumerState<FullPlayerPage>
       child: Hero(
         tag: playerCoverHeroTag,
         createRectTween: playerCoverRectTween,
-        child: RepaintBoundary(
-          child: DecoratedBox(
-            decoration: BoxDecoration(
-              color: context.echoColors.raised,
-              borderRadius: context.echoRadii.surface,
-              boxShadow: <BoxShadow>[
-                BoxShadow(
-                  color: const Color(0xFF04080C).withValues(alpha: 0.24),
-                  blurRadius: 40,
-                  offset: const Offset(0, 16),
+        child: Builder(
+          builder: (context) {
+            return RepaintBoundary(
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  color: context.echoColors.raised,
+                  borderRadius: context.echoRadii.surface,
+                  boxShadow: <BoxShadow>[
+                    BoxShadow(
+                      color: context.echoColors.scrim.withValues(alpha: 0.24),
+                      blurRadius: 40,
+                      offset: const Offset(0, 16),
+                    ),
+                  ],
                 ),
-              ],
-            ),
-            child: ClipRRect(
-              borderRadius: context.echoRadii.surface,
-              child: SizedBox.square(
-                dimension: size,
-                child: _buildSongCover(song, size),
+                child: ClipRRect(
+                  borderRadius: context.echoRadii.surface,
+                  child: SizedBox.square(
+                    dimension: size,
+                    child: _buildSongCover(song, size),
+                  ),
+                ),
               ),
-            ),
-          ),
+            );
+          },
         ),
       ),
     );
@@ -1038,7 +976,7 @@ class _FullPlayerPageState extends ConsumerState<FullPlayerPage>
               mainAxisSize: MainAxisSize.min,
               mainAxisAlignment: MainAxisAlignment.center,
               children: <Widget>[
-                Icon(icon, size: 16, color: Colors.white),
+                Icon(icon, size: 16, color: context.echoColors.ink),
                 SizedBox(width: context.echoSpacing.xs),
                 Flexible(
                   child: Text(
@@ -1047,7 +985,7 @@ class _FullPlayerPageState extends ConsumerState<FullPlayerPage>
                     overflow: TextOverflow.ellipsis,
                     textAlign: TextAlign.center,
                     style: context.echoTypography.metadata.copyWith(
-                      color: Colors.white.withValues(alpha: 0.88),
+                      color: context.echoColors.muted,
                     ),
                   ),
                 ),
@@ -1093,7 +1031,7 @@ class _PlayerTopBar extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                   textAlign: TextAlign.center,
                   style: context.echoTypography.label.copyWith(
-                    color: Colors.white,
+                    color: context.echoColors.ink,
                   ),
                 ),
               ),
@@ -1135,10 +1073,10 @@ class _PlayerLyricsPane extends ConsumerWidget {
         }
         return SyncedLyricsView(
           lyrics: bestLyrics,
-          activePrimaryColor: Colors.white,
-          activeSecondaryColor: Colors.white,
-          inactivePrimaryColor: Colors.white.withValues(alpha: 0.82),
-          inactiveSecondaryColor: Colors.white.withValues(alpha: 0.76),
+          activePrimaryColor: context.echoColors.ink,
+          activeSecondaryColor: context.echoColors.ink,
+          inactivePrimaryColor: context.echoColors.muted,
+          inactiveSecondaryColor: context.echoColors.muted,
         );
       },
       loading: () => const _PlayerLyricsLoading(),
@@ -1183,13 +1121,13 @@ class _PlayerLyricsMessage extends StatelessWidget {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: <Widget>[
-                    Icon(icon, size: 32, color: Colors.white),
+                    Icon(icon, size: 32, color: context.echoColors.ink),
                     SizedBox(height: context.echoSpacing.sm),
                     Text(
                       title,
                       textAlign: TextAlign.center,
                       style: context.echoTypography.title.copyWith(
-                        color: Colors.white,
+                        color: context.echoColors.ink,
                       ),
                     ),
                     SizedBox(height: context.echoSpacing.xs),
@@ -1197,7 +1135,7 @@ class _PlayerLyricsMessage extends StatelessWidget {
                       description,
                       textAlign: TextAlign.center,
                       style: context.echoTypography.body.copyWith(
-                        color: Colors.white.withValues(alpha: 0.82),
+                        color: context.echoColors.muted,
                       ),
                     ),
                   ],
@@ -1231,7 +1169,7 @@ class _PlayerLyricsLoading extends StatelessWidget {
               for (final width in <double>[220, 280, 196, 250]) ...<Widget>[
                 DecoratedBox(
                   decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.22),
+                    color: context.echoColors.ink.withValues(alpha: 0.18),
                     borderRadius: context.echoRadii.detail,
                   ),
                   child: SizedBox(width: width, height: 16),
@@ -1362,7 +1300,7 @@ class _ProgressBarState extends ConsumerState<ProgressBar>
     final progressLabel =
         '${_formatDuration(displayPosition)} / ${_formatDuration(state.duration)}';
     final timeStyle = context.echoTypography.metadata.copyWith(
-      color: Colors.white.withValues(alpha: 0.88),
+      color: context.echoColors.muted,
     );
 
     return Column(
@@ -1390,10 +1328,10 @@ class _ProgressBarState extends ConsumerState<ProgressBar>
                 return '${_formatDuration(position)} / '
                     '${_formatDuration(state.duration)}';
               },
-              activeColor: Colors.white,
-              secondaryColor: Colors.white.withValues(alpha: 0.42),
-              inactiveColor: Colors.white.withValues(alpha: 0.18),
-              thumbColor: Colors.white,
+              activeColor: context.echoColors.accent,
+              secondaryColor: context.echoColors.accent.withValues(alpha: 0.42),
+              inactiveColor: context.echoColors.divider,
+              thumbColor: context.echoColors.ink,
               onChangeStart: state.duration <= Duration.zero
                   ? null
                   : (value) {
@@ -1591,16 +1529,17 @@ class _PlayerIconButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = context.echoColors;
     final enabled = onPressed != null;
     final foreground = emphasized
-        ? Colors.black
+        ? EchoColors.readableOn(colors.ink)
         : enabled
-        ? Colors.white
-        : Colors.white.withValues(alpha: 0.38);
+        ? colors.ink
+        : colors.onDisabled;
     final background = emphasized
-        ? Colors.white
+        ? colors.ink
         : selected
-        ? Colors.white.withValues(alpha: 0.16)
+        ? colors.ink.withValues(alpha: 0.14)
         : Colors.transparent;
 
     return EchoPressable(
@@ -1617,7 +1556,7 @@ class _PlayerIconButton extends StatelessWidget {
             color: background,
             borderRadius: context.echoRadii.pill,
             border: !emphasized && selected
-                ? Border.all(color: Colors.white.withValues(alpha: 0.3))
+                ? Border.all(color: colors.accent)
                 : null,
           ),
           child: Center(

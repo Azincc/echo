@@ -2,10 +2,14 @@ import 'dart:ui' show Tristate;
 
 import 'package:echoes/core/design/echo_design.dart';
 import 'package:echoes/core/theme/app_theme.dart';
+import 'package:echoes/data/models/song.dart';
+import 'package:echoes/features/player/widgets/mini_player.dart';
+import 'package:echoes/providers/player_provider.dart';
 import 'package:echoes/widgets/echo_app_shell/echo_app_shell.dart';
 import 'package:echoes/widgets/echo_app_shell/echo_network_status_bar.dart';
 import 'package:echoes/widgets/echo_app_shell/echo_shell_navigation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 const _destinations = <EchoShellDestination>[
@@ -39,6 +43,7 @@ void main() {
       expect(_mediumNavigation, findsNothing);
       expect(_expandedNavigation, findsNothing);
       expect(find.byType(NavigationBar), findsNothing);
+      expect(tester.getSize(_compactNavigation).height, 64);
 
       await _pumpShell(tester, size: const Size(600, 800));
       expect(_compactNavigation, findsNothing);
@@ -49,6 +54,8 @@ void main() {
       expect(find.bySemanticsLabel('音乐流'), findsOneWidget);
       expect(find.bySemanticsLabel('探索'), findsOneWidget);
       expect(find.bySemanticsLabel('我的'), findsOneWidget);
+      expect(tester.getSize(_mediumNavigation).width, 96);
+      expect(_verticalShellDividers, findsNothing);
 
       await _pumpShell(tester, size: const Size(839, 800));
       expect(_mediumNavigation, findsOneWidget);
@@ -58,6 +65,8 @@ void main() {
       expect(_mediumNavigation, findsNothing);
       expect(_expandedNavigation, findsOneWidget);
       expect(find.byType(NavigationDrawer), findsNothing);
+      expect(tester.getSize(_expandedNavigation).width, 232);
+      expect(_verticalShellDividers, findsNothing);
     });
 
     testWidgets('destinations expose selected semantics and 48dp targets', (
@@ -86,11 +95,38 @@ void main() {
       expect(selectedBranch, 1);
     });
 
+    testWidgets('uses filled icons and restrained selection markers', (
+      tester,
+    ) async {
+      await _pumpShell(tester, size: const Size(390, 800));
+
+      final selectedMarker = _compactSelectionIndicator(0);
+      final unselectedMarker = _compactSelectionIndicator(1);
+      expect(tester.getSize(selectedMarker), const Size(24, 3));
+      expect(tester.widget<AnimatedOpacity>(selectedMarker).opacity, 1);
+      expect(tester.widget<AnimatedOpacity>(unselectedMarker).opacity, 0);
+      expect(find.byIcon(AppIcons.homeFilled), findsOneWidget);
+      expect(find.byIcon(AppIcons.home), findsNothing);
+      expect(find.byIcon(AppIcons.discover), findsOneWidget);
+
+      await _pumpShell(
+        tester,
+        size: const Size(600, 800),
+        selectedBranchIndex: 1,
+      );
+      expect(
+        tester.widget<AnimatedOpacity>(_mediumSelectionIndicator(1)).opacity,
+        1,
+      );
+      expect(tester.getSize(_mediumSelectionIndicator(1)), const Size(3, 28));
+      expect(find.byIcon(AppIcons.discoverFilled), findsOneWidget);
+    });
+
     testWidgets('200 percent text remains usable in every window class', (
       tester,
     ) async {
       for (final size in const <Size>[
-        Size(360, 800),
+        Size(320, 800),
         Size(600, 960),
         Size(840, 960),
       ]) {
@@ -143,10 +179,68 @@ void main() {
         if (size.width < EchoBreakpoints.standard.medium) {
           final navigationRect = tester.getRect(_compactNavigation);
           expect(playerRect.bottom, lessThanOrEqualTo(navigationRect.top));
+          expect(playerRect.left, 12);
+          expect(size.width - playerRect.right, 12);
+          expect(navigationRect.top - playerRect.bottom, 4);
         } else {
           expect(playerRect.bottom, lessThanOrEqualTo(size.height - 24));
+          expect(size.width - playerRect.right, 12);
         }
+
+        final chromeRect = tester.getRect(_miniPlayerChrome);
+        expect(chromeRect.contains(playerRect.topLeft), isTrue);
+        expect(chromeRect.contains(playerRect.bottomRight), isTrue);
       }
+    });
+
+    testWidgets('real MiniPlayer fits 320dp chrome at 200 percent text', (
+      tester,
+    ) async {
+      final song = Song(
+        id: 'song-1',
+        title: '一首标题很长的歌曲用于验证紧凑布局',
+        artist: '一位名字很长的歌手',
+        duration: 240,
+      );
+
+      await _pumpShell(
+        tester,
+        size: const Size(320, 800),
+        textScale: 2,
+        showMiniPlayer: true,
+        disableAnimations: true,
+        miniPlayer: MiniPlayerView(
+          playerState: PlayerState(
+            currentSong: song,
+            queue: <Song>[song],
+            currentIndex: 0,
+            isPlaying: true,
+            position: const Duration(seconds: 80),
+            duration: const Duration(seconds: 240),
+          ),
+          albumColor: const Color(0xFF556F60),
+          onOpenPlayer: () {},
+          onTogglePlayPause: () async {},
+          onPrevious: () async {},
+          onNext: () async {},
+          onSeek: (_) async {},
+          onOpenActions: () {},
+        ),
+      );
+
+      expect(tester.takeException(), isNull);
+      final surface = find.byKey(const Key('mini-player-surface'));
+      final surfaceRect = tester.getRect(surface);
+      final navigationRect = tester.getRect(_compactNavigation);
+      final progressRect = tester.getRect(
+        find.byKey(const Key('mini-player-progress')),
+      );
+
+      expect(surfaceRect.width, 296);
+      expect(surfaceRect.height, MiniPlayer.height);
+      expect(navigationRect.top - surfaceRect.bottom, 4);
+      expect(progressRect.left, surfaceRect.left);
+      expect(progressRect.bottom, surfaceRect.bottom);
     });
 
     testWidgets('hidden MiniPlayer releases its slot', (tester) async {
@@ -182,6 +276,10 @@ void main() {
         ),
       );
       expect(animatedSize.duration, Duration.zero);
+      expect(
+        tester.widget<AnimatedOpacity>(_compactSelectionIndicator(0)).duration,
+        Duration.zero,
+      );
     });
   });
 }
@@ -197,8 +295,21 @@ Finder get _miniPlayer =>
     find.byKey(const ValueKey<String>('test-mini-player'));
 Finder get _miniPlayerSlot =>
     find.byKey(const ValueKey<String>('echo-mini-player-slot'));
+Finder get _miniPlayerChrome =>
+    find.byKey(const ValueKey<String>('echo-mini-player-chrome'));
 Finder get _networkStatusSlot =>
     find.byKey(const ValueKey<String>('echo-network-status-slot'));
+Finder get _verticalShellDividers => find.byWidgetPredicate(
+  (widget) => widget is EchoDivider && widget.axis == Axis.vertical,
+);
+
+Finder _compactSelectionIndicator(int branchIndex) => find.byKey(
+  ValueKey<String>('echo-compact-selection-indicator-$branchIndex'),
+);
+
+Finder _mediumSelectionIndicator(int branchIndex) => find.byKey(
+  ValueKey<String>('echo-medium-selection-indicator-$branchIndex'),
+);
 
 Future<void> _pumpShell(
   WidgetTester tester, {
@@ -208,35 +319,41 @@ Future<void> _pumpShell(
   bool showMiniPlayer = false,
   bool disableAnimations = false,
   EchoNetworkStatus networkStatus = EchoNetworkStatus.online,
+  int selectedBranchIndex = 0,
   ValueChanged<int>? onDestinationSelected,
+  Widget? miniPlayer,
 }) async {
   tester.view.devicePixelRatio = 1;
   tester.view.physicalSize = size;
   addTearDown(tester.view.reset);
 
   await tester.pumpWidget(
-    MaterialApp(
-      theme: AppTheme.light(),
-      home: MediaQuery(
-        data: MediaQueryData(
-          size: size,
-          padding: EdgeInsets.only(bottom: bottomSafeArea),
-          textScaler: TextScaler.linear(textScale),
-          disableAnimations: disableAnimations,
-        ),
-        child: EchoAppShell(
-          scaffoldKey: GlobalKey<ScaffoldState>(),
-          drawer: const SizedBox(width: 320),
-          destinations: _destinations,
-          selectedBranchIndex: 0,
-          onDestinationSelected: onDestinationSelected ?? (_) {},
-          showMiniPlayer: showMiniPlayer,
-          networkStatus: networkStatus,
-          miniPlayer: const SizedBox(
-            key: ValueKey<String>('test-mini-player'),
-            height: 72,
+    ProviderScope(
+      child: MaterialApp(
+        theme: AppTheme.light(),
+        home: MediaQuery(
+          data: MediaQueryData(
+            size: size,
+            padding: EdgeInsets.only(bottom: bottomSafeArea),
+            textScaler: TextScaler.linear(textScale),
+            disableAnimations: disableAnimations,
           ),
-          body: const SizedBox.expand(key: ValueKey<String>('test-content')),
+          child: EchoAppShell(
+            scaffoldKey: GlobalKey<ScaffoldState>(),
+            drawer: const SizedBox(width: 320),
+            destinations: _destinations,
+            selectedBranchIndex: selectedBranchIndex,
+            onDestinationSelected: onDestinationSelected ?? (_) {},
+            showMiniPlayer: showMiniPlayer,
+            networkStatus: networkStatus,
+            miniPlayer:
+                miniPlayer ??
+                const SizedBox(
+                  key: ValueKey<String>('test-mini-player'),
+                  height: 72,
+                ),
+            body: const SizedBox.expand(key: ValueKey<String>('test-content')),
+          ),
         ),
       ),
     ),

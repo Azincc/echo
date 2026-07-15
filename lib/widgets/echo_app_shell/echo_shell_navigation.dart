@@ -43,23 +43,24 @@ class EchoCompactNavigation extends StatelessWidget {
         color: colors.surface,
         child: SafeArea(
           top: false,
-          child: Padding(
-            padding: EdgeInsets.symmetric(
-              horizontal: spacing.xs,
-              vertical: spacing.xxs,
-            ),
-            child: Row(
-              children: <Widget>[
-                for (final destination in destinations)
-                  Expanded(
-                    child: _CompactDestination(
-                      destination: destination,
-                      selected: destination.branchIndex == selectedBranchIndex,
-                      onPressed: () =>
-                          onDestinationSelected(destination.branchIndex),
+          child: SizedBox(
+            height: 64,
+            child: Padding(
+              padding: EdgeInsets.symmetric(horizontal: spacing.xxs),
+              child: Row(
+                children: <Widget>[
+                  for (final destination in destinations)
+                    Expanded(
+                      child: _CompactDestination(
+                        destination: destination,
+                        selected:
+                            destination.branchIndex == selectedBranchIndex,
+                        onPressed: () =>
+                            onDestinationSelected(destination.branchIndex),
+                      ),
                     ),
-                  ),
-              ],
+                ],
+              ),
             ),
           ),
         ),
@@ -96,7 +97,7 @@ class EchoMediumNavigationRail extends StatelessWidget {
         child: SafeArea(
           right: false,
           child: SizedBox(
-            width: 112,
+            width: 96,
             child: Column(
               children: <Widget>[
                 Padding(
@@ -110,15 +111,12 @@ class EchoMediumNavigationRail extends StatelessWidget {
                 EchoDivider(inset: spacing.sm, endInset: spacing.sm),
                 Expanded(
                   child: ListView.builder(
-                    padding: EdgeInsets.symmetric(
-                      horizontal: spacing.xs,
-                      vertical: spacing.sm,
-                    ),
+                    padding: EdgeInsets.symmetric(vertical: spacing.sm),
                     itemCount: destinations.length,
                     itemBuilder: (context, index) {
                       final destination = destinations[index];
                       return Padding(
-                        padding: EdgeInsets.only(bottom: spacing.xs),
+                        padding: EdgeInsets.only(bottom: spacing.xxs),
                         child: _RailDestination(
                           destination: destination,
                           selected:
@@ -209,7 +207,7 @@ class EchoExpandedNavigationSidebar extends StatelessWidget {
                     itemBuilder: (context, index) {
                       final destination = destinations[index];
                       return Padding(
-                        padding: EdgeInsets.only(bottom: spacing.xs),
+                        padding: EdgeInsets.only(bottom: spacing.xxs),
                         child: _SidebarDestination(
                           destination: destination,
                           selected:
@@ -245,7 +243,6 @@ class _CompactDestination extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = context.echoColors;
     final spacing = context.echoSpacing;
-    final motion = context.echoMotion;
     final foreground = selected ? colors.accent : colors.muted;
 
     return EchoPressable(
@@ -254,44 +251,48 @@ class _CompactDestination extends StatelessWidget {
       onPressed: onPressed,
       enableHaptics: true,
       minimumSize: const Size(double.infinity, 64),
-      borderRadius: context.echoRadii.control,
-      child: Padding(
-        padding: EdgeInsets.symmetric(
-          horizontal: spacing.xxs,
-          vertical: spacing.xs,
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: <Widget>[
-            AnimatedContainer(
-              duration: motion.resolve(context, motion.state),
-              curve: motion.easeOut,
-              width: 48,
-              height: 32,
-              decoration: BoxDecoration(
-                color: selected
-                    ? colors.accent.withValues(alpha: 0.14)
-                    : Colors.transparent,
-                borderRadius: context.echoRadii.pill,
+      borderRadius: context.echoRadii.detail,
+      child: Stack(
+        fit: StackFit.expand,
+        children: <Widget>[
+          Align(
+            alignment: Alignment.topCenter,
+            child: _SelectionMarker(
+              markerKey: ValueKey<String>(
+                'echo-compact-selection-indicator-'
+                '${destination.branchIndex}',
               ),
-              child: Icon(
-                selected ? destination.selectedIcon : destination.icon,
-                size: context.echoInteraction.smallIconSize,
-                color: foreground,
+              selected: selected,
+              axis: Axis.horizontal,
+            ),
+          ),
+          Center(
+            child: Padding(
+              padding: EdgeInsets.symmetric(horizontal: spacing.xxs),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: <Widget>[
+                  _AnimatedDestinationIcon(
+                    icon: selected
+                        ? destination.selectedIcon
+                        : destination.icon,
+                    color: foreground,
+                    size: context.echoInteraction.smallIconSize,
+                  ),
+                  SizedBox(height: spacing.xxs),
+                  _AnimatedDestinationLabel(
+                    label: destination.label,
+                    color: foreground,
+                    selected: selected,
+                    textAlign: TextAlign.center,
+                    maxLines: 1,
+                  ),
+                ],
               ),
             ),
-            SizedBox(height: spacing.xxs),
-            Text(
-              destination.label,
-              textAlign: TextAlign.center,
-              style: context.echoTypography.label.copyWith(
-                color: foreground,
-                fontWeight: selected ? FontWeight.w700 : FontWeight.w600,
-              ),
-            ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
@@ -312,7 +313,6 @@ class _RailDestination extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = context.echoColors;
     final spacing = context.echoSpacing;
-    final motion = context.echoMotion;
     final foreground = selected ? colors.accent : colors.muted;
 
     return EchoPressable(
@@ -320,37 +320,47 @@ class _RailDestination extends StatelessWidget {
       selected: selected,
       onPressed: onPressed,
       enableHaptics: true,
-      minimumSize: const Size(double.infinity, 72),
-      borderRadius: context.echoRadii.control,
-      child: AnimatedContainer(
-        duration: motion.resolve(context, motion.state),
-        curve: motion.easeOut,
-        padding: EdgeInsets.symmetric(
-          horizontal: spacing.xxs,
-          vertical: spacing.xs,
+      minimumSize: const Size(double.infinity, 80),
+      borderRadius: context.echoRadii.detail,
+      child: Padding(
+        padding: EdgeInsetsDirectional.fromSTEB(
+          spacing.xxs,
+          spacing.xs,
+          spacing.xxs,
+          spacing.xs,
         ),
-        decoration: BoxDecoration(
-          color: selected
-              ? colors.accent.withValues(alpha: 0.12)
-              : Colors.transparent,
-          borderRadius: context.echoRadii.control,
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          mainAxisAlignment: MainAxisAlignment.center,
+        child: Row(
           children: <Widget>[
-            Icon(
-              selected ? destination.selectedIcon : destination.icon,
-              size: context.echoInteraction.iconSize,
-              color: foreground,
+            _SelectionMarker(
+              markerKey: ValueKey<String>(
+                'echo-medium-selection-indicator-'
+                '${destination.branchIndex}',
+              ),
+              selected: selected,
+              axis: Axis.vertical,
             ),
-            SizedBox(height: spacing.xxs),
-            Text(
-              destination.label,
-              textAlign: TextAlign.center,
-              style: context.echoTypography.label.copyWith(
-                color: foreground,
-                fontWeight: selected ? FontWeight.w700 : FontWeight.w600,
+            SizedBox(width: spacing.xxs),
+            Expanded(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: <Widget>[
+                  _AnimatedDestinationIcon(
+                    icon: selected
+                        ? destination.selectedIcon
+                        : destination.icon,
+                    color: foreground,
+                    size: context.echoInteraction.iconSize,
+                  ),
+                  SizedBox(height: spacing.xxs),
+                  _AnimatedDestinationLabel(
+                    label: destination.label,
+                    color: foreground,
+                    selected: selected,
+                    textAlign: TextAlign.center,
+                    maxLines: 2,
+                  ),
+                ],
               ),
             ),
           ],
@@ -375,53 +385,163 @@ class _SidebarDestination extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = context.echoColors;
     final spacing = context.echoSpacing;
-    final motion = context.echoMotion;
-    final foreground = selected ? colors.accent : colors.ink;
+    final foreground = selected ? colors.accent : colors.muted;
 
     return EchoPressable(
       semanticLabel: destination.label,
       selected: selected,
       onPressed: onPressed,
       enableHaptics: true,
-      minimumSize: const Size(double.infinity, 56),
-      borderRadius: context.echoRadii.control,
-      child: AnimatedContainer(
-        duration: motion.resolve(context, motion.state),
-        curve: motion.easeOut,
-        padding: EdgeInsets.symmetric(
-          horizontal: spacing.sm,
-          vertical: spacing.xs,
-        ),
-        decoration: BoxDecoration(
-          color: selected
-              ? colors.accent.withValues(alpha: 0.12)
-              : Colors.transparent,
-          borderRadius: context.echoRadii.control,
+      minimumSize: const Size(double.infinity, 64),
+      borderRadius: context.echoRadii.detail,
+      child: Padding(
+        padding: EdgeInsetsDirectional.fromSTEB(
+          spacing.xxs,
+          spacing.xs,
+          spacing.xs,
+          spacing.xs,
         ),
         child: Row(
           children: <Widget>[
+            _SelectionMarker(
+              markerKey: ValueKey<String>(
+                'echo-expanded-selection-indicator-'
+                '${destination.branchIndex}',
+              ),
+              selected: selected,
+              axis: Axis.vertical,
+            ),
+            SizedBox(width: spacing.xs),
             SizedBox.square(
               dimension: context.echoInteraction.minimumTouchTarget,
               child: Center(
-                child: Icon(
-                  selected ? destination.selectedIcon : destination.icon,
-                  size: context.echoInteraction.iconSize,
+                child: _AnimatedDestinationIcon(
+                  icon: selected ? destination.selectedIcon : destination.icon,
                   color: foreground,
+                  size: context.echoInteraction.iconSize,
                 ),
               ),
             ),
-            SizedBox(width: spacing.xs),
+            SizedBox(width: spacing.xxs),
             Expanded(
-              child: Text(
-                destination.label,
-                style: context.echoTypography.title.copyWith(
-                  color: foreground,
-                  fontWeight: selected ? FontWeight.w700 : FontWeight.w600,
-                ),
+              child: _AnimatedDestinationLabel(
+                label: destination.label,
+                color: foreground,
+                selected: selected,
+                style: context.echoTypography.title,
+                maxLines: 2,
               ),
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _SelectionMarker extends StatelessWidget {
+  const _SelectionMarker({
+    required this.markerKey,
+    required this.selected,
+    required this.axis,
+  });
+
+  final Key markerKey;
+  final bool selected;
+  final Axis axis;
+
+  @override
+  Widget build(BuildContext context) {
+    final motion = context.echoMotion;
+    final duration = motion.resolve(context, motion.state);
+    final horizontal = axis == Axis.horizontal;
+
+    return SizedBox(
+      width: horizontal ? 24 : 3,
+      height: horizontal ? 3 : 28,
+      child: AnimatedOpacity(
+        key: markerKey,
+        duration: duration,
+        curve: motion.easeOut,
+        opacity: selected ? 1 : 0,
+        child: AnimatedScale(
+          duration: duration,
+          curve: motion.easeOut,
+          scale: selected ? 1 : 0.68,
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              color: context.echoColors.accent,
+              borderRadius: context.echoRadii.detail,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _AnimatedDestinationIcon extends StatelessWidget {
+  const _AnimatedDestinationIcon({
+    required this.icon,
+    required this.color,
+    required this.size,
+  });
+
+  final IconData icon;
+  final Color color;
+  final double size;
+
+  @override
+  Widget build(BuildContext context) {
+    final motion = context.echoMotion;
+    return AnimatedSwitcher(
+      duration: motion.resolve(context, motion.state),
+      switchInCurve: motion.easeOut,
+      switchOutCurve: motion.easeOut,
+      child: Icon(
+        icon,
+        key: ValueKey<String>(
+          '${icon.codePoint}-${icon.fontFamily}-${icon.fontPackage}',
+        ),
+        size: size,
+        color: color,
+      ),
+    );
+  }
+}
+
+class _AnimatedDestinationLabel extends StatelessWidget {
+  const _AnimatedDestinationLabel({
+    required this.label,
+    required this.color,
+    required this.selected,
+    this.style,
+    this.textAlign = TextAlign.start,
+    this.maxLines = 1,
+  });
+
+  final String label;
+  final Color color;
+  final bool selected;
+  final TextStyle? style;
+  final TextAlign textAlign;
+  final int maxLines;
+
+  @override
+  Widget build(BuildContext context) {
+    final motion = context.echoMotion;
+    return AnimatedDefaultTextStyle(
+      duration: motion.resolve(context, motion.state),
+      curve: motion.easeOut,
+      style: (style ?? context.echoTypography.label).copyWith(
+        color: color,
+        fontWeight: selected ? FontWeight.w700 : FontWeight.w600,
+      ),
+      child: Text(
+        label,
+        maxLines: maxLines,
+        overflow: TextOverflow.ellipsis,
+        textAlign: textAlign,
       ),
     );
   }

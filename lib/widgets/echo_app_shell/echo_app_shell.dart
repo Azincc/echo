@@ -102,6 +102,7 @@ class EchoMiniPlayerSlot extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final motion = context.echoMotion;
+    final spacing = context.echoSpacing;
 
     return SizedBox(
       key: const ValueKey<String>('echo-mini-player-slot'),
@@ -113,11 +114,20 @@ class EchoMiniPlayerSlot extends StatelessWidget {
           curve: motion.easeOut,
           child: visible
               ? ColoredBox(
-                  color: context.echoColors.surface,
+                  color: context.echoColors.canvas,
                   child: SafeArea(
                     top: false,
                     bottom: includeBottomSafeArea,
-                    child: child,
+                    child: Padding(
+                      key: const ValueKey<String>('echo-mini-player-chrome'),
+                      padding: EdgeInsets.fromLTRB(
+                        spacing.sm,
+                        spacing.xs,
+                        spacing.sm,
+                        spacing.xxs,
+                      ),
+                      child: child,
+                    ),
                   ),
                 )
               : const SizedBox.shrink(),
@@ -168,7 +178,6 @@ class _WideShellBody extends StatelessWidget {
             onDestinationSelected: onDestinationSelected,
             onOpenDrawer: onOpenDrawer,
           ),
-        const EchoDivider(axis: Axis.vertical),
         Expanded(
           child: Column(
             children: <Widget>[

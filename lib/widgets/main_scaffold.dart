@@ -1,16 +1,22 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../core/design/echo_design.dart';
+import '../core/network/connectivity_monitor.dart';
 import '../core/utils/logger.dart';
+import '../data/models/server_address.dart';
 import '../features/player/widgets/mini_player.dart';
+import '../providers/api_provider.dart';
 import '../providers/navigation_provider.dart';
 import '../providers/offline_download_provider.dart';
 import '../providers/player_provider.dart';
 import 'app_drawer.dart';
 import 'echo_app_shell/echo_app_shell.dart';
+import 'echo_app_shell/echo_network_status_bar.dart';
 import 'echo_app_shell/echo_shell_navigation.dart';
 
 // GlobalKey used to access Scaffold state (e.g. opening drawer).
@@ -110,6 +116,7 @@ class MainScaffold extends ConsumerStatefulWidget {
     this.miniPlayerOverride,
     this.showMiniPlayerOverride,
     this.showExploreTabOverride,
+    this.networkStatusOverride,
   });
 
   @visibleForTesting
@@ -124,6 +131,9 @@ class MainScaffold extends ConsumerStatefulWidget {
   @visibleForTesting
   final bool? showExploreTabOverride;
 
+  @visibleForTesting
+  final EchoNetworkStatus? networkStatusOverride;
+
   @override
   ConsumerState<MainScaffold> createState() => _MainScaffoldState();
 }
@@ -135,17 +145,72 @@ class _MainScaffoldState extends ConsumerState<MainScaffold> {
   );
   int? _lastSyncedBranchIndex;
   bool _branchFallbackScheduled = false;
+  StreamSubscription<NetworkType>? _networkTypeSubscription;
+  Timer? _initialNetworkStateTimer;
+  NetworkType? _observedNetworkType;
 
   @override
   void initState() {
     super.initState();
     _scheduleVisibleBranchSync();
+    if (widget.networkStatusOverride == null) {
+      _startNetworkObservation();
+    }
   }
 
   @override
   void didUpdateWidget(covariant MainScaffold oldWidget) {
     super.didUpdateWidget(oldWidget);
     _scheduleVisibleBranchSync();
+    if (oldWidget.networkStatusOverride != widget.networkStatusOverride) {
+      if (widget.networkStatusOverride == null) {
+        _startNetworkObservation();
+      } else {
+        _stopNetworkObservation();
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    _stopNetworkObservation();
+    super.dispose();
+  }
+
+  void _startNetworkObservation() {
+    _stopNetworkObservation();
+    final monitor = ref.read(connectivityMonitorProvider);
+    _networkTypeSubscription = monitor.networkTypeStream.listen((networkType) {
+      _initialNetworkStateTimer?.cancel();
+      if (!mounted || _observedNetworkType == networkType) return;
+      setState(() {
+        _observedNetworkType = networkType;
+      });
+    });
+    _initialNetworkStateTimer = Timer(const Duration(milliseconds: 450), () {
+      if (!mounted || _observedNetworkType != null) return;
+      setState(() {
+        _observedNetworkType = monitor.currentNetworkType;
+      });
+    });
+  }
+
+  void _stopNetworkObservation() {
+    _initialNetworkStateTimer?.cancel();
+    _initialNetworkStateTimer = null;
+    _networkTypeSubscription?.cancel();
+    _networkTypeSubscription = null;
+    _observedNetworkType = null;
+  }
+
+  EchoNetworkStatus _resolveNetworkStatus({
+    required bool activeAddressIsHealthy,
+  }) {
+    final networkType = _observedNetworkType;
+    if (networkType == null) return EchoNetworkStatus.online;
+    if (networkType == NetworkType.none) return EchoNetworkStatus.offline;
+    if (!activeAddressIsHealthy) return EchoNetworkStatus.weak;
+    return EchoNetworkStatus.online;
   }
 
   void _scheduleVisibleBranchSync() {
@@ -285,6 +350,14 @@ class _MainScaffoldState extends ConsumerState<MainScaffold> {
               return config.isEnabledAndConfigured;
             }),
           );
+    final activeAddressIsHealthy = ref.watch(
+      activeAddressProvider.select((address) {
+        return address?.status == ServerAddressStatus.ok;
+      }),
+    );
+    final networkStatus =
+        widget.networkStatusOverride ??
+        _resolveNetworkStatus(activeAddressIsHealthy: activeAddressIsHealthy);
     final currentBranchIndex = widget.navigationShell.currentIndex;
     final destinations = echoMainDestinations(showExploreTab: showExploreTab);
     final currentBranchIsVisible = destinations.any(
@@ -318,6 +391,7 @@ class _MainScaffoldState extends ConsumerState<MainScaffold> {
         },
         miniPlayer: widget.miniPlayerOverride ?? const MiniPlayer(),
         showMiniPlayer: hasMiniPlayer,
+        networkStatus: networkStatus,
         onOpenDrawer: openEchoAppDrawer,
       ),
     );

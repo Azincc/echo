@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../core/design/echo_design.dart';
+import 'echo_network_status_bar.dart';
 import 'echo_shell_navigation.dart';
 
 class EchoAppShell extends StatelessWidget {
@@ -14,6 +15,7 @@ class EchoAppShell extends StatelessWidget {
     required this.onDestinationSelected,
     required this.miniPlayer,
     required this.showMiniPlayer,
+    this.networkStatus = EchoNetworkStatus.online,
     this.onOpenDrawer,
   });
 
@@ -25,6 +27,7 @@ class EchoAppShell extends StatelessWidget {
   final ValueChanged<int> onDestinationSelected;
   final Widget miniPlayer;
   final bool showMiniPlayer;
+  final EchoNetworkStatus networkStatus;
   final VoidCallback? onOpenDrawer;
 
   @override
@@ -32,6 +35,11 @@ class EchoAppShell extends StatelessWidget {
     final width = MediaQuery.sizeOf(context).width;
     final windowClass = context.echoBreakpoints.classify(width);
     final colors = context.echoColors;
+    final networkStatusBar = EchoNetworkStatusBar(
+      status: networkStatus,
+      includeBottomSafeArea:
+          windowClass != EchoWindowClass.compact && !showMiniPlayer,
+    );
 
     return Scaffold(
       key: scaffoldKey,
@@ -54,12 +62,14 @@ class EchoAppShell extends StatelessWidget {
           body: body,
           miniPlayer: miniPlayer,
           showMiniPlayer: showMiniPlayer,
+          networkStatusBar: networkStatusBar,
         ),
       },
       bottomNavigationBar: windowClass == EchoWindowClass.compact
           ? Column(
               mainAxisSize: MainAxisSize.min,
               children: <Widget>[
+                networkStatusBar,
                 EchoMiniPlayerSlot(
                   visible: showMiniPlayer,
                   includeBottomSafeArea: false,
@@ -127,6 +137,7 @@ class _WideShellBody extends StatelessWidget {
     required this.body,
     required this.miniPlayer,
     required this.showMiniPlayer,
+    required this.networkStatusBar,
   });
 
   final EchoWindowClass windowClass;
@@ -137,6 +148,7 @@ class _WideShellBody extends StatelessWidget {
   final Widget body;
   final Widget miniPlayer;
   final bool showMiniPlayer;
+  final Widget networkStatusBar;
 
   @override
   Widget build(BuildContext context) {
@@ -167,6 +179,7 @@ class _WideShellBody extends StatelessWidget {
                   child: body,
                 ),
               ),
+              networkStatusBar,
               EchoMiniPlayerSlot(visible: showMiniPlayer, child: miniPlayer),
             ],
           ),

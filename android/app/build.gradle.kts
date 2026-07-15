@@ -1,5 +1,4 @@
 import java.util.Properties
-import java.io.FileInputStream
 
 plugins {
     id("com.android.application")
@@ -8,12 +7,32 @@ plugins {
     id("dev.flutter.flutter-gradle-plugin")
 }
 
-// 加载签名配置
+// Release signing values may come from ignored local properties or ECHO_* env vars.
 val keystoreProperties = Properties()
 val keystorePropertiesFile = rootProject.file("key.properties")
 if (keystorePropertiesFile.exists()) {
     keystorePropertiesFile.inputStream().use { keystoreProperties.load(it) }
 }
+
+fun releaseSigningValue(propertyName: String, environmentName: String): String? {
+    return System.getenv(environmentName)?.trim()?.takeIf { it.isNotEmpty() }
+        ?: keystoreProperties.getProperty(propertyName)?.trim()?.takeIf { it.isNotEmpty() }
+}
+
+val configuredReleaseStoreFile = releaseSigningValue("storeFile", "ECHO_STORE_FILE")
+    ?.let { project.file(it) }
+val defaultReleaseStoreFile = project.file("Z:/echokey/keystore.jks")
+val releaseStoreFile = configuredReleaseStoreFile
+    ?.takeIf { it.isFile }
+    ?: defaultReleaseStoreFile
+val releaseStorePassword = releaseSigningValue("storePassword", "ECHO_STORE_PASSWORD")
+val releaseKeyAlias = releaseSigningValue("keyAlias", "ECHO_KEY_ALIAS")
+val releaseKeyPassword = releaseSigningValue("keyPassword", "ECHO_KEY_PASSWORD")
+    ?: releaseStorePassword
+val hasReleaseSigning = releaseStoreFile.isFile &&
+    releaseStorePassword != null &&
+    releaseKeyAlias != null &&
+    releaseKeyPassword != null
 
 android {
     namespace = "com.az1n.echoes"
@@ -38,26 +57,25 @@ android {
     }
 
     signingConfigs {
-        // 仅当 key.properties 存在时创建 release 签名配置
-        if (keystorePropertiesFile.exists()) {
+        // Never create or apply release signing unless the full credential set exists.
+        if (hasReleaseSigning) {
             create("release") {
-                keyAlias = keystoreProperties.getProperty("keyAlias")
-                val keyPass = keystoreProperties.getProperty("keyPassword")
-                keyPassword = if (keyPass.isNullOrEmpty()) keystoreProperties.getProperty("storePassword") else keyPass
-                storeFile = if (keystoreProperties.getProperty("storeFile").startsWith("/")) {
-                    file(keystoreProperties.getProperty("storeFile"))
-                } else {
-                    file(keystoreProperties.getProperty("storeFile"))
-                }
-                storePassword = keystoreProperties.getProperty("storePassword")
+                keyAlias = releaseKeyAlias
+                keyPassword = releaseKeyPassword
+                storeFile = releaseStoreFile
+                storePassword = releaseStorePassword
             }
         }
     }
 
     buildTypes {
+        debug {
+            // Flutter debug launches always use Android's system debug keystore.
+            signingConfig = signingConfigs.getByName("debug")
+        }
         release {
-            // 如果有签名配置则使用，否则使用 debug 签名（适用于 CI 环境）
-            signingConfig = if (keystorePropertiesFile.exists()) {
+            // Preserve unsigned-CI behavior by falling back to debug signing.
+            signingConfig = if (hasReleaseSigning) {
                 signingConfigs.getByName("release")
             } else {
                 signingConfigs.getByName("debug")

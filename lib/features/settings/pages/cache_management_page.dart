@@ -1,422 +1,404 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/design/echo_design.dart';
+import '../../../core/utils/toast_notifier.dart';
 import '../../../providers/audio_cache_provider.dart';
 import '../../../providers/download_provider.dart';
 import '../../download/pages/download_manager_page.dart';
+import '../widgets/echo_settings_components.dart';
 
-/// 缓存管理页面
-class CacheManagementPage extends ConsumerWidget {
+class CacheManagementPage extends StatelessWidget {
   const CacheManagementPage({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('缓存管理')),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          _buildAudioCacheSection(context, ref),
-          const SizedBox(height: 12),
-          _buildImageCacheSection(context, ref),
-          const SizedBox(height: 12),
-          _buildLyricsCacheSection(context, ref),
-          const SizedBox(height: 12),
-          _buildDownloadSection(context, ref),
-        ],
+  Widget build(BuildContext context) {
+    return EchoScaffold(
+      topBar: EchoTopBar.back(context: context, title: '缓存管理'),
+      body: Align(
+        alignment: Alignment.topCenter,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 920),
+          child: ListView(
+            padding: EdgeInsets.fromLTRB(
+              context.echoSpacing.md,
+              context.echoSpacing.lg,
+              context.echoSpacing.md,
+              context.echoSpacing.xxl,
+            ),
+            children: <Widget>[
+              const _AudioCacheSection(),
+              SizedBox(height: context.echoSpacing.xl),
+              const _SupportingCacheSection(),
+              SizedBox(height: context.echoSpacing.xl),
+              const _DownloadDirectorySection(),
+            ],
+          ),
+        ),
       ),
     );
   }
+}
 
-  // ---------------------------------------------------------------------------
-  // 音频缓存
-  // ---------------------------------------------------------------------------
+class _AudioCacheSection extends ConsumerWidget {
+  const _AudioCacheSection();
 
-  Widget _buildAudioCacheSection(BuildContext context, WidgetRef ref) {
+  static const _limits = <(String, int)>[
+    ('512 MB', 512 * 1024 * 1024),
+    ('1 GB', 1 * 1024 * 1024 * 1024),
+    ('2 GB', 2 * 1024 * 1024 * 1024),
+    ('4 GB', 4 * 1024 * 1024 * 1024),
+  ];
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
     final sizeAsync = ref.watch(audioCacheSizeProvider);
     final maxCacheSize = ref.watch(maxCacheSizeProvider);
 
-    return Card(
-      margin: EdgeInsets.zero,
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Icon(
-                  Icons.music_note_outlined,
-                  size: 20,
-                  color: Theme.of(context).colorScheme.primary,
+    return EchoSettingsSection(
+      title: '音频缓存',
+      description: '临时保存播放过的音频，减少重复加载；不会影响明确下载的歌曲。',
+      children: <Widget>[
+        EchoSurface(
+          level: EchoSurfaceLevel.raised,
+          borderColor: context.echoColors.controlBoundary,
+          padding: EdgeInsets.all(context.echoSpacing.md),
+          child: sizeAsync.when(
+            data: (size) {
+              final progress = maxCacheSize <= 0
+                  ? 0.0
+                  : (size / maxCacheSize).clamp(0.0, 1.0);
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: <Widget>[
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: <Widget>[
+                      SizedBox.square(
+                        dimension: context.echoInteraction.minimumTouchTarget,
+                        child: Center(
+                          child: Icon(
+                            AppIcons.music,
+                            color: context.echoColors.accent,
+                          ),
+                        ),
+                      ),
+                      SizedBox(width: context.echoSpacing.sm),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: <Widget>[
+                            Text(
+                              _formatBytes(size),
+                              style: context.echoTypography.headline.copyWith(
+                                fontFeatures: const <FontFeature>[
+                                  FontFeature.tabularFigures(),
+                                ],
+                              ),
+                            ),
+                            SizedBox(height: context.echoSpacing.xxs),
+                            Text(
+                              '上限 ${_formatBytes(maxCacheSize)}',
+                              style: context.echoTypography.body.copyWith(
+                                color: context.echoColors.muted,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  SizedBox(height: context.echoSpacing.md),
+                  EchoProgressBar(
+                    value: progress,
+                    height: 6,
+                    semanticLabel: '音频缓存占用',
+                  ),
+                ],
+              );
+            },
+            loading: () => Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                const EchoSkeleton.line(width: 180, height: 28),
+                SizedBox(height: context.echoSpacing.sm),
+                const EchoSkeleton.line(width: 120),
+                SizedBox(height: context.echoSpacing.md),
+                const EchoSkeleton(height: 6),
+              ],
+            ),
+            error: (error, stackTrace) => Row(
+              children: <Widget>[
+                Icon(AppIcons.error, color: context.echoColors.error),
+                SizedBox(width: context.echoSpacing.sm),
+                Expanded(
+                  child: Text('无法计算音频缓存大小', style: context.echoTypography.body),
                 ),
-                const SizedBox(width: 8),
-                const Text(
-                  '音频缓存',
-                  style: TextStyle(fontWeight: FontWeight.w600, fontSize: 15),
-                ),
-                const Spacer(),
-                sizeAsync.when(
-                  data: (size) => Text(
-                    '${_formatBytes(size)} / ${_formatBytes(maxCacheSize)}',
-                    style: TextStyle(
-                      fontSize: 13,
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
-                    ),
-                  ),
-                  loading: () => const SizedBox(
-                    width: 16,
-                    height: 16,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  ),
-                  error: (_, _) => const Text(
-                    '获取失败',
-                    style: TextStyle(fontSize: 13, color: Colors.red),
-                  ),
+                EchoButton.ghost(
+                  label: '重试',
+                  onPressed: () => ref.invalidate(audioCacheSizeProvider),
                 ),
               ],
             ),
-            // 进度条
-            sizeAsync.when(
-              data: (size) {
-                final progress = maxCacheSize > 0
-                    ? (size / maxCacheSize).clamp(0.0, 1.0)
-                    : 0.0;
-                return Padding(
-                  padding: const EdgeInsets.only(top: 10),
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(4),
-                    child: LinearProgressIndicator(
-                      value: progress,
-                      minHeight: 6,
-                      backgroundColor: Theme.of(
-                        context,
-                      ).colorScheme.surfaceContainerHighest,
-                    ),
-                  ),
-                );
-              },
-              loading: () => const SizedBox.shrink(),
-              error: (_, _) => const SizedBox.shrink(),
-            ),
-            const SizedBox(height: 12),
-            // 缓存上限选择
-            Text(
-              '缓存上限',
-              style: TextStyle(
-                fontSize: 13,
-                color: Theme.of(context).colorScheme.onSurfaceVariant,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Wrap(
-              spacing: 8,
-              runSpacing: 4,
-              children: [
-                _cacheLimitChip(
-                  context,
-                  ref,
-                  '512 MB',
-                  512 * 1024 * 1024,
-                  maxCacheSize,
-                ),
-                _cacheLimitChip(
-                  context,
-                  ref,
-                  '1 GB',
-                  1 * 1024 * 1024 * 1024,
-                  maxCacheSize,
-                ),
-                _cacheLimitChip(
-                  context,
-                  ref,
-                  '2 GB',
-                  2 * 1024 * 1024 * 1024,
-                  maxCacheSize,
-                ),
-                _cacheLimitChip(
-                  context,
-                  ref,
-                  '4 GB',
-                  4 * 1024 * 1024 * 1024,
-                  maxCacheSize,
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            SizedBox(
-              width: double.infinity,
-              child: OutlinedButton.icon(
-                onPressed: () => _confirmClear(
-                  context,
-                  ref,
-                  title: '清除音频缓存',
-                  message: '确定要清除所有音频缓存吗？这不会影响已下载的歌曲。',
-                  onConfirm: () async {
-                    await ref
-                        .read(audioCacheServiceProvider)
-                        .clearAllAudioCache();
-                    ref.invalidate(audioCacheSizeProvider);
-                  },
-                ),
-                icon: const Icon(Icons.delete_outline, size: 18),
-                label: const Text('清除音频缓存'),
-              ),
-            ),
-          ],
+          ),
         ),
-      ),
+        SizedBox(height: context.echoSpacing.md),
+        EchoSectionHeader(title: '缓存上限', description: '达到上限后会优先清理较少使用的临时音频。'),
+        SizedBox(height: context.echoSpacing.xs),
+        for (final limit in _limits)
+          EchoChoiceRow(
+            title: limit.$1,
+            description: limit.$2 == maxCacheSize ? '当前上限' : null,
+            selected: limit.$2 == maxCacheSize,
+            icon: AppIcons.storage,
+            onPressed: () {
+              ref.read(maxCacheSizeProvider.notifier).set(limit.$2);
+            },
+          ),
+        EchoSettingRow(
+          icon: AppIcons.delete,
+          title: '清除音频缓存',
+          description: '移除临时音频，不会删除已经下载的歌曲。',
+          destructive: true,
+          trailing: Icon(
+            AppIcons.delete,
+            size: 20,
+            color: context.echoColors.error,
+          ),
+          onPressed: () => _confirmClear(
+            context: context,
+            title: '清除音频缓存',
+            message: '确定要清除所有音频缓存吗？这不会影响已下载的歌曲。',
+            onConfirm: () async {
+              await ref.read(audioCacheServiceProvider).clearAllAudioCache();
+              ref.invalidate(audioCacheSizeProvider);
+            },
+          ),
+        ),
+      ],
     );
   }
+}
 
-  Widget _cacheLimitChip(
-    BuildContext context,
-    WidgetRef ref,
-    String label,
-    int bytes,
-    int currentMax,
-  ) {
-    final isSelected = currentMax == bytes;
-    return ChoiceChip(
-      label: Text(label),
-      selected: isSelected,
-      onSelected: (_) {
-        ref.read(maxCacheSizeProvider.notifier).set(bytes);
-      },
-      visualDensity: VisualDensity.compact,
+class _SupportingCacheSection extends StatelessWidget {
+  const _SupportingCacheSection();
+
+  @override
+  Widget build(BuildContext context) {
+    return const EchoSettingsSection(
+      title: '图片、资源与歌词',
+      description: '这些内容会在需要时重新加载，清理不会影响音乐库数据。',
+      children: <Widget>[_ImageCacheRows(), _LyricsCacheRows()],
     );
   }
+}
 
-  // ---------------------------------------------------------------------------
-  // 图片/资源缓存
-  // ---------------------------------------------------------------------------
+class _ImageCacheRows extends ConsumerWidget {
+  const _ImageCacheRows();
 
-  Widget _buildImageCacheSection(BuildContext context, WidgetRef ref) {
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
     final sizeAsync = ref.watch(imageCacheSizeProvider);
+    final value = sizeAsync.when(
+      data: _formatBytes,
+      loading: () => '正在计算…',
+      error: (error, stackTrace) => '获取失败',
+    );
 
-    return Card(
-      margin: EdgeInsets.zero,
-      child: ListTile(
-        leading: Icon(
-          Icons.image_outlined,
-          color: Theme.of(context).colorScheme.primary,
+    return Column(
+      children: <Widget>[
+        EchoSettingRow(
+          icon: AppIcons.image,
+          title: '图片与资源缓存',
+          value: value,
+          semanticLabel: sizeAsync.hasError ? '图片与资源缓存，获取失败，点击重试' : null,
+          onPressed: sizeAsync.hasError
+              ? () => ref.invalidate(imageCacheSizeProvider)
+              : null,
+          trailing: sizeAsync.isLoading
+              ? const SizedBox(width: 96, child: EchoSkeleton.line())
+              : sizeAsync.hasError
+              ? Icon(AppIcons.refresh, color: context.echoColors.error)
+              : const SizedBox.shrink(),
         ),
-        title: const Text('图片与资源缓存'),
-        trailing: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            sizeAsync.when(
-              data: (size) => Text(
-                _formatBytes(size),
-                style: TextStyle(
-                  fontSize: 13,
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                ),
-              ),
-              loading: () => const SizedBox(
-                width: 16,
-                height: 16,
-                child: CircularProgressIndicator(strokeWidth: 2),
-              ),
-              error: (_, _) => const Text(
-                '获取失败',
-                style: TextStyle(fontSize: 13, color: Colors.red),
-              ),
-            ),
-            const SizedBox(width: 4),
-            IconButton(
-              icon: const Icon(Icons.delete_outline, size: 20),
-              tooltip: '清除图片缓存',
-              onPressed: () => _confirmClear(
-                context,
-                ref,
-                title: '清除图片缓存',
-                message: '确定要清除所有图片与资源缓存吗？下次打开时会重新加载。',
-                onConfirm: () async {
-                  await ref.read(audioCacheServiceProvider).clearImageCache();
-                  ref.invalidate(imageCacheSizeProvider);
-                },
-              ),
-            ),
-          ],
+        EchoSettingRow(
+          icon: AppIcons.delete,
+          title: '清除图片与资源缓存',
+          description: '封面等资源会在下次打开时重新加载。',
+          destructive: true,
+          trailing: Icon(
+            AppIcons.delete,
+            size: 20,
+            color: context.echoColors.error,
+          ),
+          onPressed: () => _confirmClear(
+            context: context,
+            title: '清除图片缓存',
+            message: '确定要清除所有图片与资源缓存吗？下次打开时会重新加载。',
+            onConfirm: () async {
+              await ref.read(audioCacheServiceProvider).clearImageCache();
+              ref.invalidate(imageCacheSizeProvider);
+            },
+          ),
         ),
-      ),
+      ],
     );
   }
+}
 
-  // ---------------------------------------------------------------------------
-  // 歌词缓存
-  // ---------------------------------------------------------------------------
+class _LyricsCacheRows extends ConsumerWidget {
+  const _LyricsCacheRows();
 
-  Widget _buildLyricsCacheSection(BuildContext context, WidgetRef ref) {
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
     final countAsync = ref.watch(lyricsCacheCountProvider);
+    final value = countAsync.when(
+      data: (count) => '$count 条',
+      loading: () => '正在计算…',
+      error: (error, stackTrace) => '获取失败',
+    );
 
-    return Card(
-      margin: EdgeInsets.zero,
-      child: ListTile(
-        leading: Icon(
-          Icons.lyrics_outlined,
-          color: Theme.of(context).colorScheme.primary,
+    return Column(
+      children: <Widget>[
+        EchoSettingRow(
+          icon: AppIcons.lyrics,
+          title: '歌词缓存',
+          value: value,
+          semanticLabel: countAsync.hasError ? '歌词缓存，获取失败，点击重试' : null,
+          onPressed: countAsync.hasError
+              ? () => ref.invalidate(lyricsCacheCountProvider)
+              : null,
+          trailing: countAsync.isLoading
+              ? const SizedBox(width: 96, child: EchoSkeleton.line())
+              : countAsync.hasError
+              ? Icon(AppIcons.refresh, color: context.echoColors.error)
+              : const SizedBox.shrink(),
         ),
-        title: const Text('歌词缓存'),
-        trailing: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            countAsync.when(
-              data: (count) => Text(
-                '$count 条',
-                style: TextStyle(
-                  fontSize: 13,
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                ),
-              ),
-              loading: () => const SizedBox(
-                width: 16,
-                height: 16,
-                child: CircularProgressIndicator(strokeWidth: 2),
-              ),
-              error: (_, _) => const Text(
-                '获取失败',
-                style: TextStyle(fontSize: 13, color: Colors.red),
-              ),
-            ),
-            const SizedBox(width: 4),
-            IconButton(
-              icon: const Icon(Icons.delete_outline, size: 20),
-              tooltip: '清除歌词缓存',
-              onPressed: () => _confirmClear(
-                context,
-                ref,
-                title: '清除歌词缓存',
-                message: '确定要清除所有歌词缓存吗？下次播放时会重新获取歌词。',
-                onConfirm: () async {
-                  await ref.read(audioCacheServiceProvider).clearLyricsCache();
-                  ref.invalidate(lyricsCacheCountProvider);
-                },
-              ),
-            ),
-          ],
+        EchoSettingRow(
+          icon: AppIcons.delete,
+          title: '清除歌词缓存',
+          description: '歌词会在下次播放时重新获取。',
+          destructive: true,
+          trailing: Icon(
+            AppIcons.delete,
+            size: 20,
+            color: context.echoColors.error,
+          ),
+          onPressed: () => _confirmClear(
+            context: context,
+            title: '清除歌词缓存',
+            message: '确定要清除所有歌词缓存吗？下次播放时会重新获取歌词。',
+            onConfirm: () async {
+              await ref.read(audioCacheServiceProvider).clearLyricsCache();
+              ref.invalidate(lyricsCacheCountProvider);
+            },
+          ),
         ),
-      ),
+      ],
     );
   }
-  // ---------------------------------------------------------------------------
-  // 已下载歌曲
-  // ---------------------------------------------------------------------------
+}
 
-  Widget _buildDownloadSection(BuildContext context, WidgetRef ref) {
+class _DownloadDirectorySection extends ConsumerWidget {
+  const _DownloadDirectorySection();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
     final downloadedAsync = ref.watch(downloadedSongsProvider);
+    final value = downloadedAsync.when(
+      data: (songs) => '${songs.length} 首',
+      loading: () => '正在读取…',
+      error: (error, stackTrace) => '获取失败',
+    );
 
-    return Card(
-      margin: EdgeInsets.zero,
-      child: Padding(
-        padding: const EdgeInsets.all(16),
+    return EchoSettingsSection(
+      title: '下载目录',
+      description: '下载内容独立于临时缓存管理，可在下载管理中查看状态和目录。',
+      children: <Widget>[
+        EchoSettingRow(
+          icon: AppIcons.download,
+          title: '已下载歌曲',
+          value: value,
+          semanticLabel: downloadedAsync.hasError ? '已下载歌曲，获取失败，点击重试' : null,
+          onPressed: downloadedAsync.hasError
+              ? () => ref.invalidate(downloadedSongsProvider)
+              : null,
+          trailing: downloadedAsync.isLoading
+              ? const SizedBox(width: 96, child: EchoSkeleton.line())
+              : downloadedAsync.hasError
+              ? Icon(AppIcons.refresh, color: context.echoColors.error)
+              : const SizedBox.shrink(),
+        ),
+        EchoSettingRow(
+          icon: AppIcons.folderOpen,
+          title: '管理下载与目录',
+          description: '查看下载任务、失败状态以及设备上的保存位置。',
+          onPressed: () => Navigator.of(context).push<void>(
+            EchoPageRoute<void>(
+              context: context,
+              builder: (context) => const DownloadManagerPage(),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+Future<void> _confirmClear({
+  required BuildContext context,
+  required String title,
+  required String message,
+  required Future<void> Function() onConfirm,
+}) async {
+  final confirmed = await showEchoBottomSheet<bool>(
+    context: context,
+    useRootNavigator: true,
+    isScrollControlled: true,
+    builder: (sheetContext) => EchoBottomSheet(
+      title: title,
+      child: SingleChildScrollView(
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Icon(
-                  Icons.download_done_outlined,
-                  size: 20,
-                  color: Theme.of(context).colorScheme.primary,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: <Widget>[
+            Text(message, style: sheetContext.echoTypography.body),
+            SizedBox(height: sheetContext.echoSpacing.lg),
+            Wrap(
+              alignment: WrapAlignment.end,
+              spacing: sheetContext.echoSpacing.xs,
+              runSpacing: sheetContext.echoSpacing.xs,
+              children: <Widget>[
+                EchoButton.secondary(
+                  label: '取消',
+                  onPressed: () => Navigator.of(sheetContext).pop(false),
                 ),
-                const SizedBox(width: 8),
-                const Text(
-                  '已下载歌曲',
-                  style: TextStyle(fontWeight: FontWeight.w600, fontSize: 15),
-                ),
-                const Spacer(),
-                downloadedAsync.when(
-                  data: (songs) => Text(
-                    '${songs.length} 首',
-                    style: TextStyle(
-                      fontSize: 13,
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
-                    ),
-                  ),
-                  loading: () => const SizedBox(
-                    width: 16,
-                    height: 16,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  ),
-                  error: (_, _) => const Text(
-                    '获取失败',
-                    style: TextStyle(fontSize: 13, color: Colors.red),
-                  ),
+                EchoButton.destructive(
+                  label: '清除',
+                  onPressed: () => Navigator.of(sheetContext).pop(true),
                 ),
               ],
             ),
-            const SizedBox(height: 12),
-            SizedBox(
-              width: double.infinity,
-              child: OutlinedButton.icon(
-                onPressed: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => const DownloadManagerPage(),
-                    ),
-                  );
-                },
-                icon: const Icon(Icons.folder_open, size: 18),
-                label: const Text('管理下载'),
-              ),
-            ),
           ],
         ),
       ),
-    );
+    ),
+  );
+  if (confirmed != true) return;
+
+  await onConfirm();
+  if (context.mounted) {
+    ToastNotifier.show('$title 完成', kind: EchoMessageKind.success);
   }
+}
 
-  // ---------------------------------------------------------------------------
-  // Helpers
-  // ---------------------------------------------------------------------------
-
-  Future<void> _confirmClear(
-    BuildContext context,
-    WidgetRef ref, {
-    required String title,
-    required String message,
-    required Future<void> Function() onConfirm,
-  }) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text(title),
-        content: Text(message),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('取消'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('清除'),
-          ),
-        ],
-      ),
-    );
-
-    if (confirmed == true) {
-      await onConfirm();
-      if (context.mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('$title 完成')));
-      }
-    }
+String _formatBytes(int bytes) {
+  if (bytes <= 0) return '0 B';
+  const units = <String>['B', 'KB', 'MB', 'GB'];
+  var unitIndex = 0;
+  var size = bytes.toDouble();
+  while (size >= 1024 && unitIndex < units.length - 1) {
+    size /= 1024;
+    unitIndex++;
   }
-
-  String _formatBytes(int bytes) {
-    if (bytes <= 0) return '0 B';
-    const units = ['B', 'KB', 'MB', 'GB'];
-    int unitIndex = 0;
-    double size = bytes.toDouble();
-    while (size >= 1024 && unitIndex < units.length - 1) {
-      size /= 1024;
-      unitIndex++;
-    }
-    return '${size.toStringAsFixed(unitIndex == 0 ? 0 : 1)} ${units[unitIndex]}';
-  }
+  return '${size.toStringAsFixed(unitIndex == 0 ? 0 : 1)} ${units[unitIndex]}';
 }

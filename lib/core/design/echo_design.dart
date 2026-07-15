@@ -1,0 +1,25 @@
+// Public Echo UI surface. Semantic tokens remain the source of truth; the
+// framework theme is intentionally kept outside this barrel.
+export '../theme/app_icons.dart';
+export 'components/echo_bottom_sheet.dart';
+export 'components/echo_button.dart';
+export 'components/echo_divider.dart';
+export 'components/echo_empty_state.dart';
+export 'components/echo_icon_button.dart';
+export 'components/echo_message.dart';
+export 'components/echo_page_header.dart';
+export 'components/echo_pressable.dart';
+export 'components/echo_progress_bar.dart';
+export 'components/echo_refresh_view.dart';
+export 'components/echo_section_header.dart';
+export 'components/echo_skeleton.dart';
+export 'components/echo_surface.dart';
+export 'components/echo_text_field.dart';
+export 'echo_context.dart';
+export 'tokens/echo_breakpoints.dart';
+export 'tokens/echo_colors.dart';
+export 'tokens/echo_interaction.dart';
+export 'tokens/echo_motion.dart';
+export 'tokens/echo_radii.dart';
+export 'tokens/echo_spacing.dart';
+export 'tokens/echo_typography.dart';

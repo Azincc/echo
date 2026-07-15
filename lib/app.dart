@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'core/utils/logger.dart';
+import 'core/utils/toast_notifier.dart';
 import 'core/theme/app_theme.dart';
 import 'package:flutter/foundation.dart'
     show TargetPlatform, defaultTargetPlatform, kIsWeb;
@@ -14,6 +16,7 @@ import 'features/discover/pages/discover_page.dart';
 import 'features/explore/pages/explore_page.dart';
 import 'features/library/pages/library_page.dart';
 import 'features/library/pages/edit_library_page.dart';
+
 /// 应用主入口 Widget
 class App extends ConsumerWidget {
   const App({super.key});
@@ -55,6 +58,23 @@ class App extends ConsumerWidget {
     return VisualDensity.standard;
   }
 
+  SystemUiOverlayStyle _systemUiOverlayStyle(BuildContext context) {
+    final theme = Theme.of(context);
+    final dark = theme.brightness == Brightness.dark;
+    return SystemUiOverlayStyle(
+      statusBarColor: Colors.transparent,
+      statusBarIconBrightness: dark ? Brightness.light : Brightness.dark,
+      statusBarBrightness: dark ? Brightness.dark : Brightness.light,
+      systemStatusBarContrastEnforced: false,
+      systemNavigationBarColor: theme.scaffoldBackgroundColor,
+      systemNavigationBarDividerColor: theme.dividerColor,
+      systemNavigationBarIconBrightness: dark
+          ? Brightness.light
+          : Brightness.dark,
+      systemNavigationBarContrastEnforced: false,
+    );
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final router = ref.watch(routerProvider);
@@ -66,34 +86,41 @@ class App extends ConsumerWidget {
       darkTheme: AppTheme.dark(seedColor: themeSettings.seedColor),
       themeMode: themeSettings.mode,
       routerConfig: router,
+      scaffoldMessengerKey: rootScaffoldMessengerKey,
       debugShowCheckedModeBanner: false,
       builder: (context, child) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          ToastNotifier.flush();
+        });
         final mediaQueryData = MediaQuery.of(context);
-        if (!_isDesktopScaledPlatform()) {
-          return child!;
+        Widget content = child!;
+        if (_isDesktopScaledPlatform()) {
+          final desktopTextScale = _resolveDesktopTextScale(mediaQueryData);
+          final desktopVisualDensity = _resolveDesktopVisualDensity(
+            desktopTextScale,
+          );
+
+          // High-DPI desktop windows can feel oversized with the default
+          // metrics. Apply a mild adaptive scale-down for Windows/macOS while
+          // leaving smaller desktop windows untouched.
+          content = MediaQuery(
+            data: mediaQueryData.copyWith(
+              textScaler: TextScaler.linear(
+                mediaQueryData.textScaler.scale(1.0) * desktopTextScale,
+              ),
+            ),
+            child: Theme(
+              data: Theme.of(
+                context,
+              ).copyWith(visualDensity: desktopVisualDensity),
+              child: content,
+            ),
+          );
         }
 
-        final desktopTextScale = _resolveDesktopTextScale(mediaQueryData);
-        final desktopVisualDensity = _resolveDesktopVisualDensity(
-          desktopTextScale,
-        );
-
-        // High-DPI desktop windows can feel oversized with the default Material
-        // metrics. Apply a mild adaptive scale-down for Windows/macOS based on
-        // the current viewport and DPR, while leaving smaller desktop windows
-        // untouched.
-        return MediaQuery(
-          data: mediaQueryData.copyWith(
-            textScaler: TextScaler.linear(
-              mediaQueryData.textScaler.scale(1.0) * desktopTextScale,
-            ),
-          ),
-          child: Theme(
-            data: Theme.of(
-              context,
-            ).copyWith(visualDensity: desktopVisualDensity),
-            child: child!,
-          ),
+        return AnnotatedRegion<SystemUiOverlayStyle>(
+          value: _systemUiOverlayStyle(context),
+          child: content,
         );
       },
     );

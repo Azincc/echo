@@ -1,26 +1,28 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:just_audio/just_audio.dart';
 
-import '../../../providers/player_provider.dart';
-import '../../../providers/palette_provider.dart';
-import '../../../providers/lyrics_cover_provider.dart';
-import '../../../providers/audio_quality_provider.dart';
-import '../../../providers/library_provider.dart';
-import '../../../providers/offline_download_provider.dart';
-import '../../../data/models/lyrics.dart';
+import '../../../core/design/echo_design.dart';
+import '../../../core/network/connectivity_monitor.dart';
 import '../../../data/models/audio_quality.dart';
 import '../../../data/models/embed_service_config.dart';
 import '../../../data/models/song.dart';
-import '../../../core/network/connectivity_monitor.dart';
+import '../../../providers/audio_quality_provider.dart';
+import '../../../providers/library_provider.dart';
+import '../../../providers/lyrics_cover_provider.dart';
+import '../../../providers/offline_download_provider.dart';
+import '../../../providers/palette_provider.dart';
+import '../../../providers/player_provider.dart';
 import '../../../widgets/cover_art_image.dart';
-import '../widgets/player_hero_helpers.dart';
 import '../widgets/play_queue_sheet.dart';
+import '../widgets/player_hero_helpers.dart';
 import '../widgets/song_options_sheet.dart';
 import '../widgets/synced_lyrics_view.dart';
 
-/// 全屏播放器
+/// Echo's immersive now-playing scene.
 class FullPlayerPage extends ConsumerStatefulWidget {
   const FullPlayerPage({super.key});
 
@@ -33,79 +35,72 @@ class _FullPlayerPageState extends ConsumerState<FullPlayerPage>
   bool _showLyrics = false;
   bool _showBitRate = false;
   bool _isClosingRoute = false;
-
-  /// Palette colours are deferred until the route animation (Hero flight)
-  /// completes so that the background transitions smoothly instead of
-  /// snapping from surfaceContainer to the theme gradient.
   bool _routeAnimComplete = false;
+  bool _sceneStarted = false;
+
   Animation<double>? _routeAnimation;
-  late AnimationController _controller;
-  late AnimationController _lyricsController;
-  late Animation<double> _topBarAnimation;
-  late Animation<double> _controlsAnimation;
-  late Animation<double> _bottomBarAnimation;
-  late Animation<double> _lyricsProgress;
+  late final AnimationController _sceneController;
+  late final AnimationController _lyricsController;
+  late final Animation<double> _lyricsProgress;
 
   @override
   void initState() {
     super.initState();
-    _controller = AnimationController(
+    _sceneController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 800),
+      duration: EchoMotion.standard.scene,
     );
     _lyricsController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 320),
+      duration: EchoMotion.standard.state,
       value: _showLyrics ? 1 : 0,
-    );
-
-    _topBarAnimation = CurvedAnimation(
-      parent: _controller,
-      // Delay top bar until background has likely covered the top area
-      curve: const Interval(0.6, 1.0, curve: Curves.easeOut),
-    );
-
-    _controlsAnimation = CurvedAnimation(
-      parent: _controller,
-      curve: const Interval(0.4, 0.9, curve: Curves.easeOut),
-    );
-
-    _bottomBarAnimation = CurvedAnimation(
-      parent: _controller,
-      curve: const Interval(0.5, 1.0, curve: Curves.easeOut),
     );
     _lyricsProgress = CurvedAnimation(
       parent: _lyricsController,
-      curve: Curves.easeInOutCubic,
+      curve: EchoMotion.standard.sceneCurve,
+      reverseCurve: EchoMotion.standard.easeOut,
     );
 
-    _controller.forward();
-
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      // Only allow the palette to be painted after the route transition
-      // (Hero flight) has fully completed, so the background can transition
-      // smoothly from surfaceContainer → palette gradient.
+      if (!mounted) return;
       _routeAnimation = ModalRoute.of(context)?.animation;
       if (_routeAnimation != null &&
           _routeAnimation!.status != AnimationStatus.completed) {
         _routeAnimation!.addStatusListener(_onRouteAnimationStatus);
       } else {
-        // Animation already completed (e.g. slow first frame).
         _deferRouteAnimComplete();
       }
     });
   }
 
-  void _onRouteAnimationStatus(AnimationStatus status) {
-    if (status == AnimationStatus.completed) {
-      _routeAnimation?.removeStatusListener(_onRouteAnimationStatus);
-      _deferRouteAnimComplete();
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final motion = context.echoMotion;
+    final sceneDuration = motion.resolve(context, motion.scene);
+    final stateDuration = motion.resolve(context, motion.state);
+    _sceneController.duration = sceneDuration;
+    _lyricsController.duration = stateDuration;
+
+    if (!_sceneStarted) {
+      _sceneStarted = true;
+      if (sceneDuration == Duration.zero) {
+        _sceneController.value = 1;
+      } else {
+        _sceneController.forward();
+      }
+    } else if (context.echoReduceMotion) {
+      _sceneController.value = 1;
+      _lyricsController.value = _showLyrics ? 1 : 0;
     }
   }
 
-  /// Set [_routeAnimComplete] after one more frame so that the
-  /// [AnimatedContainer] has a committed "before" decoration to
-  /// animate from.
+  void _onRouteAnimationStatus(AnimationStatus status) {
+    if (status != AnimationStatus.completed) return;
+    _routeAnimation?.removeStatusListener(_onRouteAnimationStatus);
+    _deferRouteAnimComplete();
+  }
+
   void _deferRouteAnimComplete() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) setState(() => _routeAnimComplete = true);
@@ -116,87 +111,83 @@ class _FullPlayerPageState extends ConsumerState<FullPlayerPage>
   void dispose() {
     _routeAnimation?.removeStatusListener(_onRouteAnimationStatus);
     _lyricsController.dispose();
-    _controller.dispose();
+    _sceneController.dispose();
     super.dispose();
-  }
-
-  Color _limitBackgroundLuminance(Color color, {double maxLuminance = 0.3}) {
-    final luminance = color.computeLuminance();
-    if (luminance <= maxLuminance) return color;
-
-    final blendFactor = ((luminance - maxLuminance) / (1 - maxLuminance)).clamp(
-      0.0,
-      0.82,
-    );
-    return Color.lerp(color, Colors.black, blendFactor) ?? color;
-  }
-
-  String _buildSubtitle({
-    required String? artistName,
-    required String? albumName,
-    bool includeAlbum = true,
-  }) {
-    final artist = artistName?.trim() ?? '';
-    final album = albumName?.trim() ?? '';
-
-    if (!includeAlbum) {
-      return artist;
-    }
-    if (artist.isNotEmpty && album.isNotEmpty) {
-      return '$artist · $album';
-    }
-    if (artist.isNotEmpty) return artist;
-    if (album.isNotEmpty) return album;
-    return '';
   }
 
   Future<void> _closeToMini() async {
     if (_isClosingRoute || !mounted) return;
     _isClosingRoute = true;
+    final navigator = Navigator.of(context);
 
     try {
-      if (_showLyrics) {
-        // Collapse lyrics first so the cover Hero has a stable Rect.
-        await _lyricsController.animateBack(
-          0.0,
-          duration: const Duration(milliseconds: 180),
-          curve: Curves.easeInOutCubic,
-        );
+      final motion = context.echoMotion;
+      final settleDuration = motion.resolve(context, motion.feedback);
+      final backgroundSettleDuration = motion.resolve(context, motion.scene);
+      if (_showLyrics || _lyricsController.value > 0) {
+        setState(() => _showLyrics = false);
+        if (settleDuration == Duration.zero) {
+          _lyricsController.value = 0;
+        } else {
+          await _lyricsController.animateBack(
+            0,
+            duration: settleDuration,
+            curve: motion.easeOut,
+          );
+        }
         if (!mounted) return;
-        // Let the framework lay out one more frame with the collapsed state
-        // so Hero can capture the correct source Rect.
         await WidgetsBinding.instance.endOfFrame;
-        if (!mounted) return;
       }
 
-      // Fade the background back towards surfaceContainer before popping.
-      // This avoids a hard snap from palette gradient to the mini-player's
-      // plain surfaceContainer colour during the Hero flight.
       if (_routeAnimComplete) {
         setState(() => _routeAnimComplete = false);
-        await Future.delayed(const Duration(milliseconds: 180));
+        if (backgroundSettleDuration > Duration.zero) {
+          await Future<void>.delayed(backgroundSettleDuration);
+        } else {
+          await WidgetsBinding.instance.endOfFrame;
+        }
         if (!mounted) return;
       }
 
-      Navigator.of(context).pop();
+      if (!mounted) return;
+      navigator.pop();
     } catch (_) {
-      // Reset the guard so the user can retry closing.
       _isClosingRoute = false;
     }
   }
 
+  String _buildSubtitle(Song song) {
+    final artist = song.artist?.trim() ?? '';
+    final album = song.album?.trim() ?? '';
+    if (artist.isNotEmpty && album.isNotEmpty) return '$artist · $album';
+    if (artist.isNotEmpty) return artist;
+    return album;
+  }
+
   Widget _buildSongCover(Song song, double size) {
     final previewCover = song.previewCoverUrl?.trim();
-    if (song.isPreview && previewCover != null && previewCover.isNotEmpty) {
+    if (song.isPreview && previewCover?.isNotEmpty == true) {
       return Image.network(
-        previewCover,
+        previewCover!,
         width: size,
         height: size,
-        fit: BoxFit.contain,
-        errorBuilder: (context, error, stackTrace) => Container(
-          color: Theme.of(context).colorScheme.surfaceContainerHighest,
-          alignment: Alignment.center,
-          child: const Icon(Icons.music_note, size: 64),
+        fit: BoxFit.cover,
+        semanticLabel: '${song.title} 封面',
+        errorBuilder: (context, error, stackTrace) => Semantics(
+          image: true,
+          label: '暂无封面',
+          child: ExcludeSemantics(
+            child: ColoredBox(
+              color: context.echoColors.raised,
+              child: Center(
+                child: Icon(
+                  AppIcons.music,
+                  size: 56,
+                  color: context.echoColors.muted,
+                ),
+              ),
+            ),
+          ),
         ),
       );
     }
@@ -204,15 +195,16 @@ class _FullPlayerPageState extends ConsumerState<FullPlayerPage>
     return CoverArtImage(
       coverArtId: song.coverArt,
       size: size,
-      requestSize: 640,
-      fit: BoxFit.contain,
+      requestSize: 720,
+      fit: BoxFit.cover,
+      semanticLabel: '${song.title} 封面',
     );
   }
 
   Future<void> _enqueuePreviewSong(Song song, {bool force = false}) async {
     final activeLibrary = ref.read(activeLibraryProvider);
     if (activeLibrary == null) {
-      _showSnackBar('当前没有活跃音乐库');
+      _showMessage('当前没有活跃音乐库', kind: EchoMessageKind.warning);
       return;
     }
 
@@ -228,123 +220,163 @@ class _FullPlayerPageState extends ConsumerState<FullPlayerPage>
             config: config,
             force: force,
           );
-      _showSnackBar(force ? '已重新添加到离线下载队列' : '已添加到离线下载队列');
-    } catch (e) {
-      if (e.toString().contains('已在离线队列中') && !force) {
-        _showForceRedownloadDialog(song);
+      _showMessage(force ? '已重新添加到离线下载队列' : '已添加到离线下载队列');
+    } catch (error) {
+      if (error.toString().contains('已在离线队列中') && !force) {
+        await _showForceRedownloadConfirmation(song);
       } else {
-        _showSnackBar('添加失败: $e');
+        _showMessage('添加失败: $error', kind: EchoMessageKind.error);
       }
     }
   }
 
-  void _showForceRedownloadDialog(Song song) {
+  Future<void> _showForceRedownloadConfirmation(Song song) async {
     if (!mounted) return;
-    showDialog<bool>(
+    final confirmed = await showEchoBottomSheet<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('歌曲已存在'),
-        content: Text('「${song.title}」已在离线队列中，是否重新下载？'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(false),
-            child: const Text('取消'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(ctx).pop(true),
-            child: const Text('重新下载'),
-          ),
-        ],
+      useRootNavigator: true,
+      builder: (sheetContext) => EchoBottomSheet(
+        title: '歌曲已存在',
+        subtitle: '「${song.title}」已在离线队列中。',
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: <Widget>[
+            Text(
+              '是否重新下载？这会替换队列中已有的任务。',
+              style: context.echoTypography.body.copyWith(
+                color: context.echoColors.muted,
+              ),
+            ),
+            SizedBox(height: context.echoSpacing.lg),
+            EchoButton.primary(
+              label: '重新下载',
+              expand: true,
+              onPressed: () => Navigator.of(sheetContext).pop(true),
+            ),
+            SizedBox(height: context.echoSpacing.xs),
+            EchoButton.ghost(
+              label: '取消',
+              expand: true,
+              onPressed: () => Navigator.of(sheetContext).pop(false),
+            ),
+          ],
+        ),
       ),
-    ).then((confirmed) {
-      if (confirmed == true) {
-        _enqueuePreviewSong(song, force: true);
-      }
-    });
+    );
+    if (confirmed == true) await _enqueuePreviewSong(song, force: true);
   }
 
-  void _showSnackBar(String message) {
+  void _showMessage(
+    String message, {
+    EchoMessageKind kind = EchoMessageKind.info,
+  }) {
     if (!mounted) return;
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text(message)));
+    showEchoMessage(context, message, kind: kind);
+  }
+
+  void _showSongActions(Song song) {
+    if (song.isPreview) {
+      unawaited(
+        showSongOptionsSheet(
+          context: context,
+          song: song,
+          mode: SongOptionsSheetMode.offlineOnly,
+          extraActions: <SongOptionsExtraAction>[
+            SongOptionsExtraAction(
+              icon: AppIcons.downloadOutline,
+              title: '添加到离线下载队列',
+              onPressed: () => _enqueuePreviewSong(song),
+            ),
+          ],
+        ),
+      );
+      return;
+    }
+    unawaited(showSongOptionsSheet(context: context, song: song));
+  }
+
+  void _toggleLyrics() {
+    final next = !_showLyrics;
+    setState(() => _showLyrics = next);
+    if (context.echoReduceMotion) {
+      _lyricsController.value = next ? 1 : 0;
+    } else if (next) {
+      _lyricsController.forward();
+    } else {
+      _lyricsController.reverse();
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    final playerState = ref.watch(playerProvider);
-    final currentSong = playerState.currentSong;
-    final lyricsAsync = ref.watch(currentLyricsProvider);
-    final paletteAsync = ref.watch(currentSongPaletteProvider);
-    final paletteGenerator = paletteAsync.valueOrNull;
+    final currentSong = ref.watch(
+      playerProvider.select((state) => state.currentSong),
+    );
+    final palette = ref.watch(currentSongPaletteProvider).valueOrNull;
 
     if (currentSong == null) {
-      return Scaffold(
-        appBar: AppBar(title: const Text('正在播放')),
-        body: const Center(child: Text('暂无播放内容')),
+      return AnnotatedRegion<SystemUiOverlayStyle>(
+        value: Theme.of(context).brightness == Brightness.dark
+            ? SystemUiOverlayStyle.light
+            : SystemUiOverlayStyle.dark,
+        child: Scaffold(
+          backgroundColor: context.echoColors.canvas,
+          body: SafeArea(
+            child: Column(
+              children: <Widget>[
+                Align(
+                  alignment: AlignmentDirectional.centerStart,
+                  child: Padding(
+                    padding: EdgeInsets.all(context.echoSpacing.xs),
+                    child: EchoIconButton(
+                      icon: AppIcons.chevronDown,
+                      label: '关闭播放器',
+                      onPressed: _closeToMini,
+                    ),
+                  ),
+                ),
+                const Expanded(
+                  child: EchoEmptyState(
+                    title: '暂无播放内容',
+                    description: '从音乐流、搜索或资料库选择一首歌曲开始播放。',
+                    icon: AppIcons.music,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
       );
     }
 
-    // 构建背景渐变
-    // 只有在路由动画完成（Hero 降落）后才使用调色板颜色，
-    // 确保 AnimatedContainer 从 surfaceContainer 平滑过渡到主题渐变色，
-    // 而不是在 Hero 降落那一帧突然跳变。
-    final miniPlayerBgColor = Theme.of(context).colorScheme.surfaceContainer;
-    final Color backgroundColor;
-    final Color scaffoldBackgroundColor;
-
-    final paletteReady =
-        _routeAnimComplete && paletteGenerator?.dominantColor?.color != null;
-
-    if (paletteReady) {
-      backgroundColor = _limitBackgroundLuminance(
-        paletteGenerator!.dominantColor!.color,
-        maxLuminance: 0.32,
-      );
-      scaffoldBackgroundColor = _limitBackgroundLuminance(
-        Theme.of(context).scaffoldBackgroundColor,
-        maxLuminance: 0.2,
-      );
-    } else {
-      backgroundColor = miniPlayerBgColor;
-      scaffoldBackgroundColor = miniPlayerBgColor;
-    }
-    const primaryTextColor = Colors.white;
-    final secondaryTextColor = Colors.white.withValues(alpha: 0.78);
-    const lyricsActivePrimaryColor = Colors.white;
-    const lyricsActiveSecondaryColor = Colors.white;
-    final lyricsInactivePrimaryColor = Colors.white.withValues(alpha: 0.64);
-    final lyricsInactiveSecondaryColor = Colors.white.withValues(alpha: 0.5);
-    final artistName = currentSong.artist?.trim();
-    final albumName = currentSong.album?.trim();
-    final subtitle = _buildSubtitle(
-      artistName: artistName,
-      albumName: albumName,
-      includeAlbum: true,
+    final albumColor = palette?.dominantColor?.color;
+    final miniSurface = playerMiniSurfaceColor(context, albumColor);
+    final stageColor = playerStageColor(context, albumColor);
+    final resolvedTopColor = _routeAnimComplete ? stageColor : miniSurface;
+    final resolvedBottomColor = _routeAnimComplete
+        ? Color.lerp(stageColor, Colors.black, 0.62)!
+        : miniSurface;
+    final subtitle = _buildSubtitle(currentSong);
+    final sceneDuration = context.echoMotion.resolve(
+      context,
+      context.echoMotion.scene,
     );
-    final hasSubtitle = subtitle.isNotEmpty;
 
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: SystemUiOverlayStyle.light,
       child: PopScope<void>(
         canPop: false,
         onPopInvokedWithResult: (didPop, result) async {
-          if (didPop) return;
-          await _closeToMini();
+          if (!didPop) await _closeToMini();
         },
         child: Scaffold(
           backgroundColor: Colors.transparent,
           body: Stack(
-            children: [
-              // 背景 Hero
+            children: <Widget>[
               Positioned.fill(
                 child: Hero(
-                  tag: 'player-background',
-                  // Always show the mini-player's simple container during
-                  // flight (push → fromHero is mini; pop → toHero is mini).
-                  // This avoids any mismatch with AnimatedContainer's own
-                  // color transition and keeps a stable surfaceContainer
-                  // throughout the Hero flight.
+                  tag: playerBackgroundHeroTag,
                   flightShuttleBuilder:
                       (
                         flightContext,
@@ -359,192 +391,36 @@ class _FullPlayerPageState extends ConsumerState<FullPlayerPage>
                         return hero.child;
                       },
                   child: AnimatedContainer(
-                    duration: const Duration(milliseconds: 500),
-                    curve: Curves.easeInOut,
+                    duration: sceneDuration,
+                    curve: context.echoMotion.sceneCurve,
                     decoration: BoxDecoration(
-                      color: scaffoldBackgroundColor,
+                      color: resolvedBottomColor,
                       gradient: LinearGradient(
                         begin: Alignment.topCenter,
                         end: Alignment.bottomCenter,
-                        colors: [
-                          backgroundColor.withValues(alpha: 0.85),
-                          scaffoldBackgroundColor,
-                        ],
+                        colors: <Color>[resolvedTopColor, resolvedBottomColor],
                       ),
                     ),
                   ),
                 ),
               ),
-              // 内容
               SafeArea(
                 child: FadeTransition(
-                  opacity: ModalRoute.of(context)!.animation!,
+                  opacity: _sceneController,
                   child: Column(
-                    children: [
-                      // 顶部操作栏
-                      FadeTransition(
-                        opacity: _topBarAnimation,
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 8),
-                          child: IconTheme(
-                            data: Theme.of(
-                              context,
-                            ).iconTheme.copyWith(color: primaryTextColor),
-                            child: Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                IconButton(
-                                  icon: const Icon(Icons.keyboard_arrow_down),
-                                  onPressed: _closeToMini,
-                                ),
-                                Text(
-                                  '正在播放',
-                                  style: Theme.of(context).textTheme.titleMedium
-                                      ?.copyWith(color: primaryTextColor),
-                                ),
-                                IconButton(
-                                  icon: const Icon(Icons.more_vert),
-                                  onPressed: () {
-                                    if (currentSong.isPreview) {
-                                      showSongOptionsSheet(
-                                        context: context,
-                                        song: currentSong,
-                                        mode: SongOptionsSheetMode.offlineOnly,
-                                        extraActions: [
-                                          SongOptionsExtraAction(
-                                            icon: Icons.download_outlined,
-                                            title: '添加到离线下载队列',
-                                            onPressed: () async {
-                                              await _enqueuePreviewSong(
-                                                currentSong,
-                                              );
-                                            },
-                                          ),
-                                        ],
-                                      );
-                                    } else {
-                                      showSongOptionsSheet(
-                                        context: context,
-                                        song: currentSong,
-                                      );
-                                    }
-                                  },
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
+                    children: <Widget>[
+                      _PlayerTopBar(
+                        song: currentSong,
+                        onClose: _closeToMini,
+                        onOpenActions: () => _showSongActions(currentSong),
                       ),
-
-                      // 中间内容区域
                       Expanded(
                         child: _buildMiddleContent(
-                          currentSong: currentSong,
-                          lyricsAsync: lyricsAsync,
-                          hasSubtitle: hasSubtitle,
+                          currentSong,
                           subtitle: subtitle,
-                          primaryTextColor: primaryTextColor,
-                          secondaryTextColor: secondaryTextColor,
-                          lyricsActivePrimaryColor: lyricsActivePrimaryColor,
-                          lyricsActiveSecondaryColor:
-                              lyricsActiveSecondaryColor,
-                          lyricsInactivePrimaryColor:
-                              lyricsInactivePrimaryColor,
-                          lyricsInactiveSecondaryColor:
-                              lyricsInactiveSecondaryColor,
                         ),
                       ),
-
-                      // 底部固定控制栏
-                      FadeTransition(
-                        opacity: _controlsAnimation,
-                        child: SlideTransition(
-                          position: _controlsAnimation.drive(
-                            Tween<Offset>(
-                              begin: const Offset(0, 0.2),
-                              end: Offset.zero,
-                            ),
-                          ),
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 24,
-                              vertical: 16,
-                            ),
-                            child: Column(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                // 进度条
-                                const ProgressBar(),
-
-                                const SizedBox(height: 24),
-
-                                // 播放控制按钮
-                                PlaybackControls(currentSong: currentSong),
-
-                                const SizedBox(height: 8),
-
-                                // 底部操作按钮
-                                FadeTransition(
-                                  opacity: _bottomBarAnimation,
-                                  child: SizedBox(
-                                    width: 160,
-                                    child: Row(
-                                      mainAxisAlignment:
-                                          MainAxisAlignment.spaceBetween,
-                                      children: [
-                                        // 歌词按钮
-                                        IconButton(
-                                          icon: Icon(
-                                            Icons.lyrics,
-                                            color: _showLyrics
-                                                ? Colors.white
-                                                : Colors.white.withValues(
-                                                    alpha: 0.72,
-                                                  ),
-                                          ),
-                                          onPressed: () {
-                                            final nextShowLyrics = !_showLyrics;
-                                            setState(() {
-                                              _showLyrics = nextShowLyrics;
-                                            });
-                                            if (nextShowLyrics) {
-                                              _lyricsController.forward();
-                                            } else {
-                                              _lyricsController.reverse();
-                                            }
-                                          },
-                                        ),
-
-                                        // 播放队列按钮
-                                        IconButton(
-                                          icon: Icon(
-                                            Icons.queue_music,
-                                            color: Colors.white.withValues(
-                                              alpha: 0.78,
-                                            ),
-                                          ),
-                                          onPressed: () {
-                                            showModalBottomSheet(
-                                              context: context,
-                                              builder: (context) =>
-                                                  const PlayQueueSheet(),
-                                              isScrollControlled: true,
-                                            );
-                                          },
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                ),
-
-                                // 音质指示
-                                const SizedBox(height: 4),
-                                _buildQualityIndicator(ref),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ),
+                      _buildControlPanel(currentSong),
                     ],
                   ),
                 ),
@@ -556,181 +432,135 @@ class _FullPlayerPageState extends ConsumerState<FullPlayerPage>
     );
   }
 
-  Widget _buildMiddleContent({
-    required Song currentSong,
-    required AsyncValue<Lyrics?> lyricsAsync,
-    required bool hasSubtitle,
-    required String subtitle,
-    required Color primaryTextColor,
-    required Color secondaryTextColor,
-    required Color lyricsActivePrimaryColor,
-    required Color lyricsActiveSecondaryColor,
-    required Color lyricsInactivePrimaryColor,
-    required Color lyricsInactiveSecondaryColor,
-  }) {
+  Widget _buildMiddleContent(Song song, {required String subtitle}) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        const horizontalPadding = 24.0;
+        final spacing = context.echoSpacing;
+        final textScale = MediaQuery.textScalerOf(context).scale(1);
+        final horizontalPadding =
+            context.echoWindowClass == EchoWindowClass.compact
+            ? spacing.lg
+            : spacing.xl;
+        final titleReserve =
+            (24 * textScale * 1.18 * 2) +
+            (subtitle.isEmpty ? 0 : 15 * textScale * 1.45 * 2) +
+            spacing.xxl;
         final maxCoverByWidth = (constraints.maxWidth - horizontalPadding * 2)
-            .clamp(0.0, 320.0);
-        final maxCoverByHeight = (constraints.maxHeight * 0.62).clamp(
+            .clamp(0.0, 400.0);
+        final maxCoverByHeight = (constraints.maxHeight - titleReserve).clamp(
           0.0,
-          360.0,
+          400.0,
         );
-        final baseCoverSize = maxCoverByWidth < maxCoverByHeight
+        final coverSize = maxCoverByWidth < maxCoverByHeight
             ? maxCoverByWidth
             : maxCoverByHeight;
-        final bTopSpace = (constraints.maxHeight - baseCoverSize - 140).clamp(
-          18.0,
-          96.0,
+        final availableTopSpace =
+            (constraints.maxHeight - coverSize - titleReserve) / 2;
+        final coverTopSpace = availableTopSpace.clamp(spacing.xs, spacing.xl);
+        final expandedTitleStyle = context.echoTypography.headline.copyWith(
+          color: Colors.white,
         );
-        const cTopSpace = 8.0;
-        const bCoverGap = 24.0;
-        const cCoverGap = 8.0;
-
-        final titleStyleFrom =
-            Theme.of(context).textTheme.headlineSmall?.copyWith(
-              fontWeight: FontWeight.bold,
-              color: primaryTextColor,
-            ) ??
-            TextStyle(
-              fontSize: 24,
-              fontWeight: FontWeight.bold,
-              color: primaryTextColor,
-            );
-        final titleStyleTo =
-            Theme.of(context).textTheme.titleMedium?.copyWith(
-              fontWeight: FontWeight.bold,
-              color: primaryTextColor,
-            ) ??
-            TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.bold,
-              color: primaryTextColor,
-            );
-        final subtitleStyleFrom =
-            Theme.of(
-              context,
-            ).textTheme.bodyLarge?.copyWith(color: secondaryTextColor) ??
-            TextStyle(fontSize: 16, color: secondaryTextColor);
-        final subtitleStyleTo =
-            Theme.of(
-              context,
-            ).textTheme.bodySmall?.copyWith(color: secondaryTextColor) ??
-            TextStyle(fontSize: 12, color: secondaryTextColor);
+        final compactTitleStyle = context.echoTypography.title.copyWith(
+          color: Colors.white,
+        );
+        final expandedSubtitleStyle = context.echoTypography.body.copyWith(
+          color: Colors.white.withValues(alpha: 0.88),
+        );
+        final compactSubtitleStyle = context.echoTypography.metadata.copyWith(
+          color: Colors.white.withValues(alpha: 0.88),
+        );
 
         return AnimatedBuilder(
           animation: _lyricsProgress,
-          builder: (context, _) {
-            final t = _lyricsProgress.value;
-            final topSpace = bTopSpace + (cTopSpace - bTopSpace) * t;
-            final coverSize = baseCoverSize * (1 - t);
-            final coverGap = bCoverGap + (cCoverGap - bCoverGap) * t;
-            final titleStyle =
-                TextStyle.lerp(titleStyleFrom, titleStyleTo, t) ?? titleStyleTo;
-            final subtitleStyle =
-                TextStyle.lerp(subtitleStyleFrom, subtitleStyleTo, t) ??
-                subtitleStyleTo;
-            final shouldBuildLyrics = _showLyrics || t > 0.001;
+          builder: (context, child) {
+            final progress = _lyricsProgress.value;
+            final currentCoverSize = coverSize * (1 - progress);
+            final topSpace = coverTopSpace * (1 - progress);
+            final coverGap = spacing.lg + (spacing.xs - spacing.lg) * progress;
+            final titleStyle = TextStyle.lerp(
+              expandedTitleStyle,
+              compactTitleStyle,
+              progress,
+            )!;
+            final subtitleStyle = TextStyle.lerp(
+              expandedSubtitleStyle,
+              compactSubtitleStyle,
+              progress,
+            )!;
+            final shouldBuildLyrics = _showLyrics || progress > 0.001;
+            final identity = _buildSongIdentity(
+              song: song,
+              subtitle: subtitle,
+              titleStyle: titleStyle,
+              subtitleStyle: subtitleStyle,
+            );
 
-            return Stack(
-              children: [
-                Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: horizontalPadding,
-                  ),
-                  child: Column(
-                    children: [
-                      SizedBox(height: topSpace),
-                      if (coverSize > 0.1)
-                        Opacity(
-                          opacity: 1 - t,
-                          child: Hero(
-                            tag: 'player-cover',
-                            createRectTween: playerCoverRectTween,
-                            child: Container(
-                              width: coverSize,
-                              height: coverSize,
-                              decoration: BoxDecoration(
-                                borderRadius: BorderRadius.circular(16),
-                                color: Theme.of(
-                                  context,
-                                ).colorScheme.surfaceContainerHighest,
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: Colors.black.withValues(alpha: 0.2),
-                                    blurRadius: 20,
-                                    offset: const Offset(0, 10),
-                                  ),
-                                ],
-                              ),
-                              child: ClipRRect(
-                                borderRadius: BorderRadius.circular(16),
-                                child: _buildSongCover(currentSong, coverSize),
+            return Padding(
+              padding: EdgeInsets.symmetric(horizontal: horizontalPadding),
+              child: Column(
+                children: <Widget>[
+                  SizedBox(height: topSpace),
+                  if (currentCoverSize > 0.5)
+                    Opacity(
+                      opacity: 1 - progress,
+                      child: Hero(
+                        tag: playerCoverHeroTag,
+                        createRectTween: playerCoverRectTween,
+                        child: RepaintBoundary(
+                          child: DecoratedBox(
+                            decoration: BoxDecoration(
+                              color: context.echoColors.raised,
+                              borderRadius: context.echoRadii.surface,
+                              boxShadow: <BoxShadow>[
+                                BoxShadow(
+                                  color: const Color(
+                                    0xFF04080C,
+                                  ).withValues(alpha: 0.24),
+                                  blurRadius: 40,
+                                  offset: const Offset(0, 16),
+                                ),
+                              ],
+                            ),
+                            child: ClipRRect(
+                              borderRadius: context.echoRadii.surface,
+                              child: SizedBox.square(
+                                dimension: currentCoverSize,
+                                child: _buildSongCover(song, currentCoverSize),
                               ),
                             ),
                           ),
                         ),
-                      SizedBox(height: coverGap),
-                      Hero(
-                        tag: 'player-title',
-                        createRectTween: playerLinearRectTween,
-                        flightShuttleBuilder: playerTextFlightShuttleBuilder,
-                        child: Material(
-                          type: MaterialType.transparency,
-                          child: Text(
-                            currentSong.title,
-                            style: titleStyle,
-                            textAlign: TextAlign.center,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
+                      ),
+                    ),
+                  SizedBox(height: coverGap),
+                  if (shouldBuildLyrics) ...<Widget>[
+                    ConstrainedBox(
+                      constraints: BoxConstraints(
+                        maxHeight: (constraints.maxHeight * 0.32)
+                            .clamp(72.0, 180.0)
+                            .toDouble(),
+                      ),
+                      child: identity,
+                    ),
+                    SizedBox(height: spacing.xxs),
+                    Expanded(
+                      child: ClipRect(
+                        child: Align(
+                          alignment: Alignment.topCenter,
+                          heightFactor: progress,
+                          child: const _PlayerLyricsPane(),
                         ),
                       ),
-                      if (hasSubtitle) ...[
-                        const SizedBox(height: 4),
-                        Hero(
-                          tag: 'player-subtitle',
-                          createRectTween: playerLinearRectTween,
-                          flightShuttleBuilder: playerTextFlightShuttleBuilder,
-                          child: Material(
-                            type: MaterialType.transparency,
-                            child: Text(
-                              subtitle,
-                              style: subtitleStyle,
-                              textAlign: TextAlign.center,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                        ),
-                      ],
-                      const SizedBox(height: 8),
-                      Expanded(
-                        child: ClipRect(
-                          child: Align(
-                            alignment: Alignment.topCenter,
-                            heightFactor: t,
-                            child: shouldBuildLyrics
-                                ? _buildLyricsView(
-                                    lyricsAsync,
-                                    activePrimaryColor:
-                                        lyricsActivePrimaryColor,
-                                    activeSecondaryColor:
-                                        lyricsActiveSecondaryColor,
-                                    inactivePrimaryColor:
-                                        lyricsInactivePrimaryColor,
-                                    inactiveSecondaryColor:
-                                        lyricsInactiveSecondaryColor,
-                                  )
-                                : const SizedBox.shrink(),
-                          ),
-                        ),
+                    ),
+                  ] else
+                    Expanded(
+                      child: Align(
+                        alignment: Alignment.topCenter,
+                        child: identity,
                       ),
-                    ],
-                  ),
-                ),
-              ],
+                    ),
+                ],
+              ),
             );
           },
         );
@@ -738,24 +568,111 @@ class _FullPlayerPageState extends ConsumerState<FullPlayerPage>
     );
   }
 
-  /// 格式化采样率：44100 → 44.1kHz, 96000 → 96kHz
-  String _formatSamplingRate(int rate) {
-    final kHz = rate / 1000;
-    if (kHz == kHz.truncateToDouble()) {
-      return '${kHz.toInt()}kHz';
-    }
-    return '${kHz.toStringAsFixed(1)}kHz';
+  Widget _buildSongIdentity({
+    required Song song,
+    required String subtitle,
+    required TextStyle titleStyle,
+    required TextStyle subtitleStyle,
+  }) {
+    return SingleChildScrollView(
+      primary: false,
+      physics: const ClampingScrollPhysics(),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          Hero(
+            tag: playerTitleHeroTag,
+            createRectTween: playerLinearRectTween,
+            flightShuttleBuilder: playerTextFlightShuttleBuilder,
+            child: Material(
+              type: MaterialType.transparency,
+              child: Text(
+                song.title,
+                style: titleStyle,
+                textAlign: TextAlign.center,
+              ),
+            ),
+          ),
+          if (subtitle.isNotEmpty) ...<Widget>[
+            SizedBox(height: context.echoSpacing.xxs),
+            Hero(
+              tag: playerSubtitleHeroTag,
+              createRectTween: playerLinearRectTween,
+              flightShuttleBuilder: playerTextFlightShuttleBuilder,
+              child: Material(
+                type: MaterialType.transparency,
+                child: Text(
+                  subtitle,
+                  style: subtitleStyle,
+                  textAlign: TextAlign.center,
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
   }
 
-  /// 构建音频规格文本（位深/采样率）
+  Widget _buildControlPanel(Song song) {
+    final spacing = context.echoSpacing;
+    final horizontalPadding = context.echoWindowClass == EchoWindowClass.compact
+        ? spacing.md
+        : spacing.xl;
+
+    return Padding(
+      padding: EdgeInsets.fromLTRB(
+        horizontalPadding,
+        spacing.xs,
+        horizontalPadding,
+        spacing.sm,
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          const ProgressBar(),
+          SizedBox(height: spacing.sm),
+          PlaybackControls(currentSong: song),
+          SizedBox(height: spacing.xs),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: <Widget>[
+              _PlayerIconButton(
+                icon: _showLyrics ? AppIcons.lyricsFilled : AppIcons.lyrics,
+                label: _showLyrics ? '显示封面' : '显示歌词',
+                selected: _showLyrics,
+                onPressed: _toggleLyrics,
+              ),
+              SizedBox(width: spacing.lg),
+              _PlayerIconButton(
+                icon: AppIcons.queue,
+                label: '播放队列',
+                onPressed: () =>
+                    unawaited(showPlayQueueSheet(context: context)),
+              ),
+            ],
+          ),
+          _buildQualityIndicator(),
+        ],
+      ),
+    );
+  }
+
+  String _formatSamplingRate(int rate) {
+    final khz = rate / 1000;
+    return khz == khz.truncateToDouble()
+        ? '${khz.toInt()}kHz'
+        : '${khz.toStringAsFixed(1)}kHz';
+  }
+
   String _buildAudioSpecText(Song? song) {
     final bitDepth = song?.bitDepth;
     final samplingRate = song?.samplingRate;
     if (bitDepth != null && samplingRate != null && samplingRate > 0) {
       return '${bitDepth}bit/${_formatSamplingRate(samplingRate)}';
-    } else if (bitDepth != null) {
-      return '${bitDepth}bit';
-    } else if (samplingRate != null && samplingRate > 0) {
+    }
+    if (bitDepth != null) return '${bitDepth}bit';
+    if (samplingRate != null && samplingRate > 0) {
       return _formatSamplingRate(samplingRate);
     }
     return '';
@@ -764,201 +681,321 @@ class _FullPlayerPageState extends ConsumerState<FullPlayerPage>
   String _normalizeQualityPartForCompare(String value) {
     final trimmed = value.trim();
     if (trimmed.isEmpty) return '';
-
     final bitrateMatch = RegExp(
       r'(\d{2,4})\s*(k|kbps|kbit/s|kb/s)',
       caseSensitive: false,
     ).firstMatch(trimmed);
-    if (bitrateMatch != null) {
-      return '${bitrateMatch.group(1)}k';
-    }
-
+    if (bitrateMatch != null) return '${bitrateMatch.group(1)}k';
     return trimmed.toLowerCase().replaceAll(RegExp(r'\s+'), '');
   }
 
   void _appendUniqueQualityPart(List<String> parts, String part) {
     final candidate = part.trim();
     if (candidate.isEmpty) return;
-
-    final normalizedCandidate = _normalizeQualityPartForCompare(candidate);
-    final duplicated = parts.any(
-      (existing) =>
-          _normalizeQualityPartForCompare(existing) == normalizedCandidate,
-    );
-    if (!duplicated) {
-      parts.add(candidate);
+    final normalized = _normalizeQualityPartForCompare(candidate);
+    if (parts.any(
+      (existing) => _normalizeQualityPartForCompare(existing) == normalized,
+    )) {
+      return;
     }
+    parts.add(candidate);
   }
 
-  Widget _buildQualityIndicator(WidgetRef ref) {
-    final playerState = ref.watch(playerProvider);
-    final song = playerState.currentSong;
-    final rawBitRate = playerState.currentBitRateKbps > 0
-        ? playerState.currentBitRateKbps
-        : ((song?.bitRate ?? 0) >= 10000
-              ? ((song?.bitRate ?? 0) ~/ 1000)
-              : (song?.bitRate ?? 0));
-    final bitRateText = rawBitRate > 0 ? '${rawBitRate}Kbps' : '未知码率';
-    final audioSpecText = _buildAudioSpecText(song);
+  Widget _buildQualityIndicator() {
+    return Consumer(
+      builder: (context, ref, child) {
+        final playerState = ref.watch(
+          playerProvider.select(
+            (state) => (
+              currentSong: state.currentSong,
+              currentBitRateKbps: state.currentBitRateKbps,
+              currentQuality: state.currentQuality,
+              playbackSource: state.playbackSource,
+            ),
+          ),
+        );
+        final song = playerState.currentSong;
+        final rawBitRate = playerState.currentBitRateKbps > 0
+            ? playerState.currentBitRateKbps
+            : ((song?.bitRate ?? 0) >= 10000
+                  ? ((song?.bitRate ?? 0) ~/ 1000)
+                  : (song?.bitRate ?? 0));
+        final bitRateText = rawBitRate > 0 ? '${rawBitRate}Kbps' : '未知码率';
+        final audioSpecText = _buildAudioSpecText(song);
+        final parts = <String>[];
+        IconData icon;
 
-    if (song?.isPreview == true) {
-      final qualityLabel = song?.previewQualityLabel?.trim();
-      final parts = <String>['试听'];
-      _appendUniqueQualityPart(
-        parts,
-        qualityLabel == null || qualityLabel.isEmpty ? '未知音质' : qualityLabel,
-      );
-      if (_showBitRate) {
-        _appendUniqueQualityPart(parts, bitRateText);
-      }
-      if (audioSpecText.isNotEmpty) {
-        _appendUniqueQualityPart(parts, audioSpecText);
-      }
-      final text = parts.join('·');
-      return GestureDetector(
-        onTap: () => setState(() => _showBitRate = !_showBitRate),
-        behavior: HitTestBehavior.opaque,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(
-                Icons.headphones,
-                size: 12,
-                color: Colors.white.withValues(alpha: 0.76),
-              ),
-              const SizedBox(width: 4),
-              Text(
-                text,
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  fontSize: 10,
-                  color: Colors.white.withValues(alpha: 0.76),
+        if (song?.isPreview == true) {
+          final qualityLabel = song?.previewQualityLabel?.trim();
+          parts.add('试听');
+          _appendUniqueQualityPart(
+            parts,
+            qualityLabel?.isNotEmpty == true ? qualityLabel! : '未知音质',
+          );
+          icon = AppIcons.headphones;
+        } else {
+          final quality =
+              playerState.currentQuality ?? ref.watch(effectiveQualityProvider);
+          final qualityLabel = switch (quality) {
+            AudioQualityLevel.original => '原始无损',
+            AudioQualityLevel.high => '高品质',
+            AudioQualityLevel.standard => '标准',
+            AudioQualityLevel.dataSaver => '流量节省',
+            null => '未知音质',
+          };
+          final source = playerState.playbackSource ?? PlaybackSource.stream;
+          switch (source) {
+            case PlaybackSource.downloaded:
+              parts.add('本地已下载');
+              icon = AppIcons.offline;
+            case PlaybackSource.cached:
+              parts.add('本地缓存');
+              icon = AppIcons.checkCircleOutline;
+            case PlaybackSource.stream:
+              final networkType = ref
+                  .watch(currentNetworkTypeProvider)
+                  .valueOrNull;
+              parts.add(switch (networkType) {
+                NetworkType.wifi => 'Wi-Fi',
+                NetworkType.mobile => '移动数据',
+                NetworkType.none => '无网络',
+                null => '未知网络',
+              });
+              icon = networkType == NetworkType.none
+                  ? AppIcons.offline
+                  : AppIcons.cloud;
+          }
+          parts.add(qualityLabel);
+        }
+
+        if (_showBitRate) _appendUniqueQualityPart(parts, bitRateText);
+        if (audioSpecText.isNotEmpty) {
+          _appendUniqueQualityPart(parts, audioSpecText);
+        }
+        final text = parts.join(' · ');
+
+        return EchoPressable(
+          semanticLabel: '$text，${_showBitRate ? '点击收起码率' : '点击显示码率'}',
+          onPressed: () => setState(() => _showBitRate = !_showBitRate),
+          minimumSize: Size(
+            context.echoInteraction.minimumTouchTarget,
+            context.echoInteraction.minimumTouchTarget,
+          ),
+          child: Padding(
+            padding: EdgeInsets.symmetric(horizontal: context.echoSpacing.sm),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: <Widget>[
+                Icon(icon, size: 16, color: Colors.white),
+                SizedBox(width: context.echoSpacing.xs),
+                Flexible(
+                  child: Text(
+                    text,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    textAlign: TextAlign.center,
+                    style: context.echoTypography.metadata.copyWith(
+                      color: Colors.white.withValues(alpha: 0.88),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _PlayerTopBar extends StatelessWidget {
+  const _PlayerTopBar({
+    required this.song,
+    required this.onClose,
+    required this.onOpenActions,
+  });
+
+  final Song song;
+  final VoidCallback onClose;
+  final VoidCallback onOpenActions;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.symmetric(horizontal: context.echoSpacing.xs),
+      child: SizedBox(
+        height: 56,
+        child: Row(
+          children: <Widget>[
+            _PlayerIconButton(
+              icon: AppIcons.chevronDown,
+              label: '收起播放器',
+              onPressed: onClose,
+            ),
+            Expanded(
+              child: Semantics(
+                header: true,
+                child: Text(
+                  '正在播放',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.center,
+                  style: context.echoTypography.label.copyWith(
+                    color: Colors.white,
+                  ),
                 ),
               ),
-            ],
-          ),
-        ),
-      );
-    }
-
-    final AudioQualityLevel quality =
-        playerState.currentQuality ?? ref.watch(effectiveQualityProvider);
-    final source = playerState.playbackSource ?? PlaybackSource.stream;
-    final networkType = ref.watch(currentNetworkTypeProvider).valueOrNull;
-    final qualityLabel = switch (quality) {
-      AudioQualityLevel.original => '原始无损',
-      AudioQualityLevel.high => '高品质',
-      AudioQualityLevel.standard => '标准',
-      AudioQualityLevel.dataSaver => '流量节省',
-    };
-
-    IconData icon;
-    Color? color;
-    final parts = <String>[];
-
-    switch (source) {
-      case PlaybackSource.downloaded:
-        parts.add('本地已下载');
-        icon = Icons.offline_pin;
-        color = Colors.green;
-        break;
-      case PlaybackSource.cached:
-        parts.add('本地缓存');
-        icon = Icons.check_circle_outline;
-        color = Colors.blue;
-        break;
-      case PlaybackSource.stream:
-        final netName = switch (networkType) {
-          NetworkType.wifi => 'Wi-Fi',
-          NetworkType.mobile => '移动数据',
-          NetworkType.none => '无网络',
-          null => '未知网络',
-        };
-        parts.add(netName);
-        icon = networkType == NetworkType.none
-            ? Icons.offline_pin
-            : Icons.cloud_queue;
-        color = networkType == NetworkType.none ? Colors.orange : null;
-        break;
-    }
-
-    parts.add(qualityLabel);
-    if (_showBitRate) {
-      _appendUniqueQualityPart(parts, bitRateText);
-    }
-    if (audioSpecText.isNotEmpty) {
-      _appendUniqueQualityPart(parts, audioSpecText);
-    }
-    final text = parts.join('·');
-
-    return GestureDetector(
-      onTap: () => setState(() => _showBitRate = !_showBitRate),
-      behavior: HitTestBehavior.opaque,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              icon,
-              size: 12,
-              color: color ?? Colors.white.withValues(alpha: 0.76),
             ),
-            const SizedBox(width: 4),
-            Text(
-              text,
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                fontSize: 10,
-                color: color ?? Colors.white.withValues(alpha: 0.76),
-              ),
+            _PlayerIconButton(
+              icon: AppIcons.more,
+              label: '${song.title} 操作',
+              onPressed: onOpenActions,
             ),
           ],
         ),
       ),
     );
   }
+}
 
-  Widget _buildLyricsView(
-    AsyncValue<Lyrics?> lyricsAsync, {
-    required Color activePrimaryColor,
-    required Color activeSecondaryColor,
-    required Color inactivePrimaryColor,
-    required Color inactiveSecondaryColor,
-  }) {
+class _PlayerLyricsPane extends ConsumerWidget {
+  const _PlayerLyricsPane();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final lyricsAsync = ref.watch(currentLyricsProvider);
     return lyricsAsync.when(
       data: (lyrics) {
         if (lyrics == null || lyrics.isEmpty) {
-          return Center(
-            child: Text('暂无歌词', style: TextStyle(color: activePrimaryColor)),
+          return const _PlayerLyricsMessage(
+            icon: AppIcons.lyrics,
+            title: '暂无歌词',
+            description: '当前曲目没有可用的歌词内容。',
           );
         }
         final bestLyrics = lyrics.getBest();
         if (bestLyrics == null) {
-          return Center(
-            child: Text('暂无歌词', style: TextStyle(color: activePrimaryColor)),
+          return const _PlayerLyricsMessage(
+            icon: AppIcons.lyrics,
+            title: '暂无歌词',
+            description: '当前曲目没有可用的歌词内容。',
           );
         }
         return SyncedLyricsView(
           lyrics: bestLyrics,
-          activePrimaryColor: activePrimaryColor,
-          activeSecondaryColor: activeSecondaryColor,
-          inactivePrimaryColor: inactivePrimaryColor,
-          inactiveSecondaryColor: inactiveSecondaryColor,
+          activePrimaryColor: Colors.white,
+          activeSecondaryColor: Colors.white,
+          inactivePrimaryColor: Colors.white.withValues(alpha: 0.82),
+          inactiveSecondaryColor: Colors.white.withValues(alpha: 0.76),
         );
       },
-      loading: () =>
-          const Center(child: CircularProgressIndicator(color: Colors.white)),
-      error: (err, stack) => Center(
-        child: Text('加载歌词失败', style: TextStyle(color: activePrimaryColor)),
+      loading: () => const _PlayerLyricsLoading(),
+      error: (error, stackTrace) => _PlayerLyricsMessage(
+        icon: AppIcons.error,
+        title: '歌词加载失败',
+        description: '播放不受影响，可以立即重试。',
+        actionLabel: '重试',
+        onAction: () => ref.invalidate(currentLyricsProvider),
       ),
     );
   }
 }
 
-/// 进度条组件
+class _PlayerLyricsMessage extends StatelessWidget {
+  const _PlayerLyricsMessage({
+    required this.icon,
+    required this.title,
+    required this.description,
+    this.actionLabel,
+    this.onAction,
+  });
+
+  final IconData icon;
+  final String title;
+  final String description;
+  final String? actionLabel;
+  final VoidCallback? onAction;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: SingleChildScrollView(
+        padding: EdgeInsets.all(context.echoSpacing.lg),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            Semantics(
+              liveRegion: true,
+              label: '$title，$description',
+              child: ExcludeSemantics(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: <Widget>[
+                    Icon(icon, size: 32, color: Colors.white),
+                    SizedBox(height: context.echoSpacing.sm),
+                    Text(
+                      title,
+                      textAlign: TextAlign.center,
+                      style: context.echoTypography.title.copyWith(
+                        color: Colors.white,
+                      ),
+                    ),
+                    SizedBox(height: context.echoSpacing.xs),
+                    Text(
+                      description,
+                      textAlign: TextAlign.center,
+                      style: context.echoTypography.body.copyWith(
+                        color: Colors.white.withValues(alpha: 0.82),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            if (actionLabel != null && onAction != null) ...<Widget>[
+              SizedBox(height: context.echoSpacing.lg),
+              EchoButton.secondary(label: actionLabel!, onPressed: onAction),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _PlayerLyricsLoading extends StatelessWidget {
+  const _PlayerLyricsLoading();
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      liveRegion: true,
+      label: '歌词加载中',
+      child: ExcludeSemantics(
+        child: Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              for (final width in <double>[220, 280, 196, 250]) ...<Widget>[
+                DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.22),
+                    borderRadius: context.echoRadii.detail,
+                  ),
+                  child: SizedBox(width: width, height: 16),
+                ),
+                SizedBox(height: context.echoSpacing.md),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Buffered playback progress with a 48dp interaction target.
 class ProgressBar extends ConsumerStatefulWidget {
   const ProgressBar({super.key});
 
@@ -972,6 +1009,7 @@ class _ProgressBarState extends ConsumerState<ProgressBar>
   late final AnimationController _loadingOpacityController;
   late final Animation<double> _loadingOpacity;
   bool _isLoadingPulseActive = false;
+  bool _reduceMotion = false;
 
   @override
   void initState() {
@@ -980,12 +1018,24 @@ class _ProgressBarState extends ConsumerState<ProgressBar>
       vsync: this,
       duration: const Duration(milliseconds: 900),
     );
-    _loadingOpacity = Tween<double>(begin: 0.95, end: 0.42).animate(
+    _loadingOpacity = Tween<double>(begin: 1, end: 0.52).animate(
       CurvedAnimation(
         parent: _loadingOpacityController,
         curve: Curves.easeInOut,
       ),
     );
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _reduceMotion = context.echoReduceMotion;
+    if (_reduceMotion) {
+      _loadingOpacityController
+        ..stop()
+        ..value = 0;
+      _isLoadingPulseActive = false;
+    }
   }
 
   @override
@@ -995,289 +1045,270 @@ class _ProgressBarState extends ConsumerState<ProgressBar>
   }
 
   void _syncLoadingPulse(bool shouldPulse) {
-    if (shouldPulse == _isLoadingPulseActive) return;
-    _isLoadingPulseActive = shouldPulse;
-    if (shouldPulse) {
+    final resolved = shouldPulse && !_reduceMotion;
+    if (resolved == _isLoadingPulseActive) return;
+    _isLoadingPulseActive = resolved;
+    if (resolved) {
       _loadingOpacityController.repeat(reverse: true);
     } else {
-      _loadingOpacityController.stop();
-      _loadingOpacityController.value = 0.0;
+      _loadingOpacityController
+        ..stop()
+        ..value = 0;
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final playerState = ref.watch(playerProvider);
-    final position = playerState.position;
-    final duration = playerState.duration;
-    final buffered = playerState.bufferedPosition;
+    final state = ref.watch(
+      playerProvider.select(
+        (state) => (
+          position: state.position,
+          duration: state.duration,
+          buffered: state.bufferedPosition,
+          processing: state.processingState,
+        ),
+      ),
+    );
     final isLoading =
-        playerState.processingState == ProcessingState.loading ||
-        playerState.processingState == ProcessingState.buffering;
+        state.processing == ProcessingState.loading ||
+        state.processing == ProcessingState.buffering;
     _syncLoadingPulse(isLoading);
 
-    // 确保 value 在有效范围内 (0 到 max)
-    final maxMilliseconds = duration.inMilliseconds > 0
-        ? duration.inMilliseconds.toDouble()
+    final maxMilliseconds = state.duration.inMilliseconds > 0
+        ? state.duration.inMilliseconds.toDouble()
         : 1.0;
-    final currentMilliseconds = position.inMilliseconds.toDouble();
-    final bufferedMilliseconds = buffered.inMilliseconds.toDouble();
-
-    // 如果正在拖动，使用拖动值，否则使用当前播放进度
-    // 限制在 0 到 max 之间
-    final sliderValue = (_dragValue ?? currentMilliseconds).clamp(
-      0.0,
-      maxMilliseconds,
-    );
-    final bufferedFraction = (bufferedMilliseconds / maxMilliseconds).clamp(
-      0.0,
-      1.0,
-    );
-    final displayPosition = _dragValue != null
-        ? Duration(milliseconds: _dragValue!.toInt())
-        : position;
-    final timeTextStyle = Theme.of(context).textTheme.bodySmall?.copyWith(
-      color: Colors.white.withValues(alpha: 0.78),
+    final sliderValue = (_dragValue ?? state.position.inMilliseconds.toDouble())
+        .clamp(0.0, maxMilliseconds);
+    final bufferedValue = state.buffered.inMilliseconds
+        .toDouble()
+        .clamp(0.0, maxMilliseconds)
+        .toDouble();
+    final displayPosition = _dragValue == null
+        ? state.position
+        : Duration(milliseconds: _dragValue!.round());
+    final progressLabel =
+        '${_formatDuration(displayPosition)} / ${_formatDuration(state.duration)}';
+    final timeStyle = context.echoTypography.metadata.copyWith(
+      color: Colors.white.withValues(alpha: 0.88),
     );
 
-    return Column(
-      children: [
-        AnimatedBuilder(
-          animation: _loadingOpacity,
-          builder: (context, child) {
-            final opacity = isLoading ? _loadingOpacity.value : 1.0;
-            return Opacity(opacity: opacity, child: child);
-          },
-          child: SliderTheme(
-            data: SliderTheme.of(context).copyWith(
-              trackHeight: 3,
-              trackShape: _BufferedTrackShape(
-                bufferedFraction: bufferedFraction,
+    return Semantics(
+      container: true,
+      label: '播放进度',
+      value: progressLabel,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          SizedBox(
+            height: context.echoInteraction.minimumTouchTarget,
+            child: AnimatedBuilder(
+              animation: _loadingOpacity,
+              builder: (context, child) => Opacity(
+                opacity: isLoading && !_reduceMotion
+                    ? _loadingOpacity.value
+                    : 1,
+                child: child,
               ),
-              thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6),
-              overlayShape: const RoundSliderOverlayShape(overlayRadius: 14),
-            ),
-            child: Slider(
-              value: sliderValue,
-              max: maxMilliseconds,
-              onChanged: (value) {
-                setState(() {
-                  _dragValue = value;
-                });
-              },
-              onChangeEnd: (value) {
-                ref
-                    .read(playerProvider.notifier)
-                    .seek(Duration(milliseconds: value.toInt()));
-                setState(() {
-                  _dragValue = null;
-                });
-              },
+              child: EchoSlider(
+                value: sliderValue,
+                min: 0,
+                max: maxMilliseconds,
+                secondaryValue: bufferedValue,
+                semanticLabel: '播放进度',
+                semanticValue: progressLabel,
+                activeColor: Colors.white,
+                secondaryColor: Colors.white.withValues(alpha: 0.42),
+                inactiveColor: Colors.white.withValues(alpha: 0.18),
+                thumbColor: Colors.white,
+                onChanged: state.duration <= Duration.zero
+                    ? null
+                    : (value) => setState(() => _dragValue = value),
+                onChangeEnd: state.duration <= Duration.zero
+                    ? null
+                    : (_) {
+                        final value = _dragValue ?? sliderValue;
+                        HapticFeedback.selectionClick();
+                        unawaited(
+                          ref
+                              .read(playerProvider.notifier)
+                              .seek(Duration(milliseconds: value.round())),
+                        );
+                        setState(() => _dragValue = null);
+                      },
+              ),
             ),
           ),
-        ),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(_formatDuration(displayPosition), style: timeTextStyle),
-              Text(_formatDuration(duration), style: timeTextStyle),
-            ],
+          Padding(
+            padding: EdgeInsets.symmetric(horizontal: context.echoSpacing.sm),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: <Widget>[
+                Text(_formatDuration(displayPosition), style: timeStyle),
+                Text(_formatDuration(state.duration), style: timeStyle),
+              ],
+            ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 
-  String _formatDuration(Duration duration) {
-    // 处理负数情况（虽然进度条一般不会由负数，但 robust 一点）
-    if (duration.isNegative) return "0:00";
-    final minutes = duration.inMinutes;
-    final seconds = duration.inSeconds % 60;
-    return '${minutes.toString()}:${seconds.toString().padLeft(2, '0')}';
+  static String _formatDuration(Duration duration) {
+    final safe = duration.isNegative ? Duration.zero : duration;
+    final minutes = safe.inMinutes;
+    final seconds = safe.inSeconds % 60;
+    return '$minutes:${seconds.toString().padLeft(2, '0')}';
   }
 }
 
-/// 自定义 Slider 轨道形状：inactive → buffer → active 三层绘制
-class _BufferedTrackShape extends SliderTrackShape {
-  final double bufferedFraction;
-
-  const _BufferedTrackShape({required this.bufferedFraction});
-
-  @override
-  Rect getPreferredRect({
-    required RenderBox parentBox,
-    Offset offset = Offset.zero,
-    required SliderThemeData sliderTheme,
-    bool isEnabled = false,
-    bool isDiscrete = false,
-  }) {
-    final trackHeight = sliderTheme.trackHeight ?? 3;
-    final trackLeft = offset.dx + 14; // thumb radius
-    final trackTop = offset.dy + (parentBox.size.height - trackHeight) / 2;
-    final trackWidth = parentBox.size.width - 28;
-    return Rect.fromLTWH(trackLeft, trackTop, trackWidth, trackHeight);
-  }
-
-  @override
-  void paint(
-    PaintingContext context,
-    Offset offset, {
-    required RenderBox parentBox,
-    required SliderThemeData sliderTheme,
-    required Animation<double> enableAnimation,
-    required TextDirection textDirection,
-    required Offset thumbCenter,
-    Offset? secondaryOffset,
-    bool isDiscrete = false,
-    bool isEnabled = false,
-    double additionalActiveTrackHeight = 0,
-  }) {
-    final canvas = context.canvas;
-    final trackHeight = sliderTheme.trackHeight ?? 3;
-    final radius = Radius.circular(trackHeight / 2);
-
-    final trackRect = getPreferredRect(
-      parentBox: parentBox,
-      offset: offset,
-      sliderTheme: sliderTheme,
-    );
-
-    // 1) 底层：inactive 轨道（暗色，全宽）
-    final inactiveRect = RRect.fromRectAndRadius(trackRect, radius);
-    final inactivePaint = Paint()..color = Colors.white.withValues(alpha: 0.15);
-    canvas.drawRRect(inactiveRect, inactivePaint);
-
-    // 2) 中层：buffer 缓冲进度（半透明白色）
-    if (bufferedFraction > 0) {
-      final bufferedWidth = trackRect.width * bufferedFraction;
-      final bufferedRRect = RRect.fromLTRBR(
-        trackRect.left,
-        trackRect.top,
-        trackRect.left + bufferedWidth,
-        trackRect.bottom,
-        radius,
-      );
-      final bufferedPaint = Paint()
-        ..color = Colors.white.withValues(alpha: 0.38);
-      canvas.drawRRect(bufferedRRect, bufferedPaint);
-    }
-
-    // 3) 顶层：active 轨道（已播放部分，主题色）
-    final activeRight = thumbCenter.dx;
-    if (activeRight > trackRect.left) {
-      final activeRRect = RRect.fromLTRBR(
-        trackRect.left,
-        trackRect.top,
-        activeRight,
-        trackRect.bottom,
-        radius,
-      );
-      final activeColor = sliderTheme.activeTrackColor ?? Colors.white;
-      final activePaint = Paint()..color = activeColor;
-      canvas.drawRRect(activeRRect, activePaint);
-    }
-  }
-}
-
-/// 播放控制按钮
+/// Playback controls keep business actions in the provider while using a
+/// provider-selected record so position ticks do not rebuild the row.
 class PlaybackControls extends ConsumerWidget {
-  final Song currentSong;
-
   const PlaybackControls({super.key, required this.currentSong});
+
+  final Song currentSong;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final playerState = ref.watch(playerProvider);
-    final inactiveControlColor = Colors.white.withValues(alpha: 0.78);
-    final playbackMode = playerState.shuffleEnabled
+    final state = ref.watch(
+      playerProvider.select(
+        (state) => (
+          isPlaying: state.isPlaying,
+          hasPrevious: state.hasPrevious,
+          hasNext: state.hasNext,
+          shuffleEnabled: state.shuffleEnabled,
+          loopMode: state.loopMode,
+          starred: state.currentSong?.starred ?? currentSong.starred,
+        ),
+      ),
+    );
+    final mode = state.shuffleEnabled
         ? PlaybackMode.shuffle
-        : (playerState.loopMode == LoopMode.one
-              ? PlaybackMode.repeatOne
-              : PlaybackMode.repeatAll);
+        : state.loopMode == LoopMode.one
+        ? PlaybackMode.repeatOne
+        : PlaybackMode.repeatAll;
+    final modeIcon = switch (mode) {
+      PlaybackMode.shuffle => AppIcons.shuffle,
+      PlaybackMode.repeatAll => AppIcons.repeat,
+      PlaybackMode.repeatOne => AppIcons.repeatOne,
+    };
+    final modeLabel = switch (mode) {
+      PlaybackMode.shuffle => '随机播放，点击切换到列表循环',
+      PlaybackMode.repeatAll => '列表循环，点击切换到单曲循环',
+      PlaybackMode.repeatOne => '单曲循环，点击切换到随机播放',
+    };
 
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        // 播放模式按钮（三态）
-        IconButton(
-          icon: Icon(
-            _getPlaybackModeIcon(playbackMode),
-            color: inactiveControlColor,
-          ),
-          onPressed: () {
-            ref.read(playerProvider.notifier).cyclePlaybackMode();
-          },
-        ),
-
-        const SizedBox(width: 12),
-
-        // 上一首按钮
-        IconButton(
-          iconSize: 36,
-          icon: Icon(Icons.skip_previous, color: inactiveControlColor),
-          onPressed: playerState.hasPrevious
-              ? () {
-                  ref.read(playerProvider.notifier).previous();
-                }
-              : null,
-        ),
-
-        const SizedBox(width: 12),
-
-        // 播放/暂停按钮（大）
-        Container(
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            color: Theme.of(context).colorScheme.primary,
-          ),
-          child: IconButton(
-            iconSize: 48,
-            icon: Icon(
-              playerState.isPlaying ? Icons.pause : Icons.play_arrow,
-              color: Theme.of(context).colorScheme.onPrimary,
+    return Center(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 390),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: <Widget>[
+            _PlayerIconButton(
+              icon: modeIcon,
+              label: modeLabel,
+              selected: mode != PlaybackMode.repeatAll,
+              onPressed: () {
+                ref.read(playerProvider.notifier).cyclePlaybackMode();
+              },
             ),
-            onPressed: () {
-              ref.read(playerProvider.notifier).togglePlayPause();
-            },
-          ),
+            _PlayerIconButton(
+              icon: AppIcons.previous,
+              label: '上一首',
+              iconSize: 30,
+              onPressed: !state.hasPrevious
+                  ? null
+                  : () =>
+                        unawaited(ref.read(playerProvider.notifier).previous()),
+            ),
+            _PlayerIconButton(
+              icon: state.isPlaying ? AppIcons.pause : AppIcons.play,
+              label: state.isPlaying ? '暂停' : '播放',
+              emphasized: true,
+              dimension: 64,
+              iconSize: 32,
+              onPressed: () => unawaited(
+                ref.read(playerProvider.notifier).togglePlayPause(),
+              ),
+            ),
+            _PlayerIconButton(
+              icon: AppIcons.next,
+              label: '下一首',
+              iconSize: 30,
+              onPressed: !state.hasNext
+                  ? null
+                  : () => unawaited(ref.read(playerProvider.notifier).next()),
+            ),
+            _PlayerIconButton(
+              icon: state.starred ? AppIcons.heart : AppIcons.heartOutline,
+              label: state.starred ? '取消红心' : '红心',
+              selected: state.starred,
+              onPressed: () {
+                ref.read(playerProvider.notifier).toggleFavorite();
+              },
+            ),
+          ],
         ),
-
-        const SizedBox(width: 12),
-
-        // 下一首按钮
-        IconButton(
-          iconSize: 36,
-          icon: Icon(Icons.skip_next, color: inactiveControlColor),
-          onPressed: playerState.hasNext
-              ? () {
-                  ref.read(playerProvider.notifier).next();
-                }
-              : null,
-        ),
-
-        const SizedBox(width: 12),
-
-        // 收藏按钮
-        IconButton(
-          icon: Icon(
-            currentSong.starred ? Icons.favorite : Icons.favorite_border,
-            color: currentSong.starred ? Colors.red : inactiveControlColor,
-          ),
-          onPressed: () {
-            ref.read(playerProvider.notifier).toggleFavorite();
-          },
-        ),
-      ],
+      ),
     );
   }
+}
 
-  IconData _getPlaybackModeIcon(PlaybackMode mode) {
-    return switch (mode) {
-      PlaybackMode.shuffle => Icons.shuffle,
-      PlaybackMode.repeatAll => Icons.repeat,
-      PlaybackMode.repeatOne => Icons.repeat_one,
-    };
+class _PlayerIconButton extends StatelessWidget {
+  const _PlayerIconButton({
+    required this.icon,
+    required this.label,
+    required this.onPressed,
+    this.selected = false,
+    this.emphasized = false,
+    this.dimension = 48,
+    this.iconSize = 22,
+  });
+
+  final IconData icon;
+  final String label;
+  final VoidCallback? onPressed;
+  final bool selected;
+  final bool emphasized;
+  final double dimension;
+  final double iconSize;
+
+  @override
+  Widget build(BuildContext context) {
+    final enabled = onPressed != null;
+    final foreground = emphasized
+        ? Colors.black
+        : enabled
+        ? Colors.white
+        : Colors.white.withValues(alpha: 0.38);
+    final background = emphasized
+        ? Colors.white
+        : selected
+        ? Colors.white.withValues(alpha: 0.16)
+        : Colors.transparent;
+
+    return EchoPressable(
+      semanticLabel: label,
+      selected: selected,
+      onPressed: onPressed,
+      enableHaptics: true,
+      minimumSize: Size.square(dimension),
+      borderRadius: context.echoRadii.pill,
+      child: SizedBox.square(
+        dimension: dimension,
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            color: background,
+            borderRadius: context.echoRadii.pill,
+            border: !emphasized && selected
+                ? Border.all(color: Colors.white.withValues(alpha: 0.3))
+                : null,
+          ),
+          child: Center(
+            child: Icon(icon, size: iconSize, color: foreground),
+          ),
+        ),
+      ),
+    );
   }
 }

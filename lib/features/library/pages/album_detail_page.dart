@@ -1,28 +1,26 @@
-import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import '../../../core/design/echo_design.dart';
+import '../../../core/utils/toast_notifier.dart';
 import '../../../data/models/album.dart';
 import '../../../data/models/song.dart';
+import '../../../providers/auth_provider.dart';
+import '../../../providers/download_provider.dart';
 import '../../../providers/music_provider.dart';
 import '../../../providers/navigation_provider.dart';
 import '../../../providers/player_provider.dart';
-import '../../../providers/download_provider.dart';
-import '../../../providers/auth_provider.dart';
-import '../../../widgets/cover_art_image.dart';
+import '../../../widgets/song_list_item.dart';
+import '../../../widgets/visible_remote_retry_scope.dart';
 import '../../player/widgets/song_options_sheet.dart';
 import '../utils/library_sorting.dart';
 import '../widgets/album_options_sheet.dart';
-import 'package:marquee/marquee.dart';
-import '../../../widgets/error_placeholder.dart';
-import '../../../widgets/song_list_item.dart';
-import '../../../widgets/skeleton_templates.dart';
-import '../../../widgets/visible_remote_retry_scope.dart';
+import '../widgets/media_detail_components.dart';
 
-/// 专辑详情页
 class AlbumDetailPage extends ConsumerStatefulWidget {
-  final String albumId;
-
   const AlbumDetailPage({super.key, required this.albumId});
+
+  final String albumId;
 
   @override
   ConsumerState<AlbumDetailPage> createState() => _AlbumDetailPageState();
@@ -33,410 +31,357 @@ class _AlbumDetailPageState extends ConsumerState<AlbumDetailPage> {
 
   @override
   Widget build(BuildContext context) {
-    final albumDetailAsync = ref.watch(albumDetailProvider(widget.albumId));
+    final detailAsync = ref.watch(albumDetailProvider(widget.albumId));
     final loadFailed = ref.watch(albumDetailLoadFailedProvider(widget.albumId));
+    final currentAlbum = detailAsync.valueOrNull?.album;
 
     return VisibleRemoteRetryScope(
       branchIndex: libraryBranchIndex,
       debugLabel: 'album_detail_page',
-      shouldRetry: (ref) => loadFailed || albumDetailAsync.hasError,
+      shouldRetry: (ref) => loadFailed || detailAsync.hasError,
       onRetry: (ref) => ref.invalidate(albumDetailProvider(widget.albumId)),
-      child: Scaffold(
-        body: albumDetailAsync.when(
-          data: (albumDetail) {
-            final hasAlbumData = albumDetail != null;
-            final album =
-                albumDetail?.album ??
-                Album(
-                  id: widget.albumId,
-                  name: loadFailed ? '专辑加载失败' : '专辑不存在',
-                  songCount: 0,
-                  duration: 0,
-                );
-            final songs = sortSongs(
-              albumDetail?.songs ?? const <Song>[],
-              _sortOption,
-            );
+      child: EchoScaffold(
+        topBar: EchoTopBar.back(
+          context: context,
+          title: '专辑',
+          actions: <Widget>[
+            EchoIconButton(
+              icon: AppIcons.sort,
+              label: '歌曲排序：${_sortOption.label}',
+              onPressed: currentAlbum == null ? null : _selectSortOption,
+            ),
+            EchoIconButton(
+              icon: AppIcons.more,
+              label: '专辑操作',
+              onPressed: currentAlbum == null
+                  ? null
+                  : () => showAlbumOptionsSheet(
+                      context: context,
+                      ref: ref,
+                      album: currentAlbum,
+                    ),
+            ),
+          ],
+        ),
+        body: detailAsync.when(
+          data: (detail) {
+            if (detail == null) {
+              return loadFailed
+                  ? EchoErrorState(
+                      title: '专辑加载失败',
+                      description: '无法读取专辑详情。请检查网络后重试。',
+                      actionLabel: '重试',
+                      onAction: _retry,
+                    )
+                  : const EchoEmptyState(
+                      title: '专辑不存在',
+                      description: '服务器没有返回这张专辑，内容可能已经被移动或删除。',
+                      icon: AppIcons.albumOutline,
+                    );
+            }
 
+            final album = detail.album;
+            final songs = sortSongs(detail.songs, _sortOption);
             return Align(
               alignment: Alignment.topCenter,
               child: ConstrainedBox(
                 constraints: const BoxConstraints(maxWidth: 1400),
                 child: CustomScrollView(
-                  slivers: [
-                    SliverAppBar(
-                      expandedHeight: 300,
-                      pinned: true,
-                      actions: [
-                        PopupMenuButton<SongSortOption>(
-                          tooltip: '歌曲排序：${_sortOption.label}',
-                          icon: const Icon(Icons.sort),
-                          initialValue: _sortOption,
-                          onSelected: (option) {
-                            if (option == _sortOption) return;
-                            setState(() {
-                              _sortOption = option;
-                            });
-                          },
-                          itemBuilder: (context) => selectableSongSortOptions
-                              .map(
-                                (option) =>
-                                    CheckedPopupMenuItem<SongSortOption>(
-                                      value: option,
-                                      checked: option == _sortOption,
-                                      child: Text(option.label),
-                                    ),
-                              )
-                              .toList(),
-                        ),
-                        IconButton(
-                          onPressed: hasAlbumData
-                              ? () {
-                                  showAlbumOptionsSheet(
-                                    context: context,
-                                    ref: ref,
-                                    album: album,
-                                  );
-                                }
-                              : null,
-                          icon: const Icon(Icons.more_horiz),
-                          tooltip: '专辑操作',
-                        ),
-                      ],
-                      flexibleSpace: Stack(
-                        children: [
-                          // Layer 1: Parallax Image
-                          FlexibleSpaceBar(
-                            background: CoverArtImage(
-                              coverArtId: album.coverArt,
-                              requestSize: 1400,
-                              fit: BoxFit.cover,
-                            ),
-                          ),
-                          // Layer 2: Fixed Gradient Shadow (follows divider)
-                          Positioned(
-                            left: 0,
-                            right: 0,
-                            bottom: 0,
-                            height: 120, // Approx 1/3 to 1/4 of expanded height
-                            child: Container(
-                              decoration: BoxDecoration(
-                                gradient: LinearGradient(
-                                  begin: Alignment.topCenter,
-                                  end: Alignment.bottomCenter,
-                                  colors: [
-                                    Theme.of(context).scaffoldBackgroundColor
-                                        .withValues(alpha: 0.0),
-                                    Theme.of(context).scaffoldBackgroundColor
-                                        .withValues(alpha: 0.5),
-                                    Theme.of(context).scaffoldBackgroundColor
-                                        .withValues(alpha: 0.9),
-                                  ],
-                                  // Smooth fade from top of this container to bottom
-                                  stops: const [0.0, 0.6, 1.0],
-                                ),
-                              ),
-                            ),
-                          ),
-                          // Layer 3: Title (Animation)
-                          FlexibleSpaceBar(
-                            titlePadding: EdgeInsets.zero,
-                            title: SizedBox(
-                              height: 50,
-                              child: Builder(
-                                builder: (context) {
-                                  final settings = context
-                                      .dependOnInheritedWidgetOfExactType<
-                                        FlexibleSpaceBarSettings
-                                      >();
-                                  final deltaExtent =
-                                      settings!.maxExtent - settings.minExtent;
-                                  final t =
-                                      (settings.currentExtent -
-                                          settings.minExtent) /
-                                      deltaExtent;
-                                  // t goes from 0.0 (collapsed) to 1.0 (expanded)
-
-                                  // Dynamic padding:
-                                  // Collapsed: left 56 (clears back button)
-                                  // Expanded: left 16 (standard margin)
-                                  final tClamped = t.clamp(0.0, 1.0);
-
-                                  // helper function
-                                  final leftPadding =
-                                      lerpDouble(56.0, 16.0, tClamped) ?? 16.0;
-
-                                  final isDark =
-                                      Theme.of(context).brightness ==
-                                      Brightness.dark;
-                                  final textColor = isDark
-                                      ? Colors.white
-                                      : Colors.black;
-                                  final shadowColor = isDark
-                                      ? Colors.black.withValues(alpha: 0.8)
-                                      : Colors.white.withValues(alpha: 0.8);
-
-                                  final textStyle = TextStyle(
-                                    color: textColor,
-                                    shadows: [
-                                      Shadow(
-                                        offset: const Offset(0, 1),
-                                        blurRadius: 3.0,
-                                        color: shadowColor,
-                                      ),
-                                    ],
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.w500,
-                                  );
-
-                                  return Padding(
-                                    padding: EdgeInsets.only(
-                                      left: leftPadding,
-                                      right: 16,
-                                      bottom: 16,
-                                    ),
-                                    child: LayoutBuilder(
-                                      builder: (context, constraints) {
-                                        final textPainter =
-                                            TextPainter(
-                                              text: TextSpan(
-                                                text: album.name,
-                                                style: textStyle,
-                                              ),
-                                              maxLines: 1,
-                                              textDirection: TextDirection.ltr,
-                                            )..layout(
-                                              minWidth: 0,
-                                              maxWidth: double.infinity,
-                                            );
-
-                                        final isOverflowing =
-                                            textPainter.width >
-                                            constraints.maxWidth;
-
-                                        if (isOverflowing) {
-                                          return Marquee(
-                                            text: album.name,
-                                            style: textStyle,
-                                            scrollAxis: Axis.horizontal,
-                                            crossAxisAlignment:
-                                                CrossAxisAlignment.end,
-                                            blankSpace: 20.0,
-                                            velocity: 30.0,
-                                            pauseAfterRound: const Duration(
-                                              seconds: 2,
-                                            ),
-                                            startPadding: 0.0,
-                                            accelerationDuration:
-                                                const Duration(seconds: 1),
-                                            accelerationCurve: Curves.linear,
-                                            decelerationDuration:
-                                                const Duration(
-                                                  milliseconds: 500,
-                                                ),
-                                            decelerationCurve: Curves.easeOut,
-                                          );
-                                        } else {
-                                          return Align(
-                                            alignment: Alignment.bottomLeft,
-                                            child: Text(
-                                              album.name,
-                                              style: textStyle,
-                                              maxLines: 1,
-                                              overflow: TextOverflow.ellipsis,
-                                            ),
-                                          );
-                                        }
-                                      },
-                                    ),
-                                  );
-                                },
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
+                  slivers: <Widget>[
                     SliverToBoxAdapter(
-                      child: Padding(
-                        padding: const EdgeInsets.all(16),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            if (album.artist != null)
-                              Text(
-                                album.artist!,
-                                style: Theme.of(context).textTheme.titleMedium,
-                              ),
-                            const SizedBox(height: 4),
-                            Text(
-                              '${album.songCount} 首 · ${album.durationString}',
-                              style: Theme.of(context).textTheme.bodyMedium
-                                  ?.copyWith(
-                                    color: Theme.of(
-                                      context,
-                                    ).colorScheme.onSurfaceVariant,
-                                  ),
-                            ),
-                            if (loadFailed && !hasAlbumData) ...[
-                              const SizedBox(height: 12),
-                              Row(
-                                children: [
-                                  Icon(
-                                    Icons.wifi_off,
-                                    size: 16,
-                                    color: Theme.of(
-                                      context,
-                                    ).colorScheme.onSurfaceVariant,
-                                  ),
-                                  const SizedBox(width: 6),
-                                  Text(
-                                    '网络异常，专辑加载失败',
-                                    style: Theme.of(context).textTheme.bodySmall
-                                        ?.copyWith(
-                                          color: Theme.of(
-                                            context,
-                                          ).colorScheme.onSurfaceVariant,
-                                        ),
-                                  ),
-                                ],
-                              ),
-                            ],
-                            const SizedBox(height: 16),
-                            Row(
-                              children: [
-                                FilledButton.icon(
-                                  onPressed: songs.isEmpty
-                                      ? null
-                                      : () {
-                                          // 播放全部
-                                          ref
-                                              .read(playerProvider.notifier)
-                                              .playQueue(songs);
-                                        },
-                                  icon: const Icon(Icons.play_arrow),
-                                  label: const Text('播放全部'),
-                                ),
-                                const SizedBox(width: 8),
-                                IconButton(
-                                  onPressed: hasAlbumData
-                                      ? () async {
-                                          try {
-                                            final musicRepository = ref.read(
-                                              musicRepositoryProvider,
-                                            );
-                                            if (musicRepository == null) return;
-                                            await musicRepository
-                                                .setAlbumStarred(
-                                                  album.id,
-                                                  !album.starred,
-                                                );
-                                            // 刷新专辑详情和收藏列表
-                                            ref.invalidate(
-                                              albumDetailProvider(
-                                                widget.albumId,
-                                              ),
-                                            );
-                                            ref.invalidate(starredProvider);
-                                            ref.invalidate(
-                                              recentAlbumsProvider,
-                                            );
-                                            ref.invalidate(
-                                              frequentAlbumsProvider,
-                                            );
-                                          } catch (e) {
-                                            // 显示错误提示
-                                            if (context.mounted) {
-                                              ScaffoldMessenger.of(
-                                                context,
-                                              ).showSnackBar(
-                                                SnackBar(
-                                                  content: Text('操作失败: $e'),
-                                                ),
-                                              );
-                                            }
-                                          }
-                                        }
-                                      : null,
-                                  icon: Icon(
-                                    album.starred
-                                        ? Icons.favorite
-                                        : Icons.favorite_border,
-                                    color: album.starred ? Colors.red : null,
-                                  ),
-                                ),
-                                // 下载专辑按钮
-                                IconButton(
-                                  onPressed: songs.isEmpty
-                                      ? null
-                                      : () {
-                                          final authState = ref.read(
-                                            authStateProvider,
-                                          );
-                                          final libraryId =
-                                              authState.currentLibrary?.id ??
-                                              '';
-                                          if (libraryId.isEmpty) return;
-
-                                          final service = ref.read(
-                                            downloadServiceProvider,
-                                          );
-                                          service.enqueueBatch(
-                                            songs,
-                                            libraryId: libraryId,
-                                          );
-                                          ScaffoldMessenger.of(
-                                            context,
-                                          ).showSnackBar(
-                                            SnackBar(
-                                              content: Text(
-                                                '已添加 ${songs.length} 首歌曲到下载队列',
-                                              ),
-                                            ),
-                                          );
-                                        },
-                                  icon: const Icon(Icons.download_outlined),
-                                  tooltip: '下载专辑',
-                                ),
-                              ],
-                            ),
-                          ],
+                      child: _AlbumIdentityHeader(
+                        album: album,
+                        songs: songs,
+                        onPlay: songs.isEmpty
+                            ? null
+                            : () => ref
+                                  .read(playerProvider.notifier)
+                                  .playQueue(songs),
+                        onToggleStarred: () => _toggleStarred(album),
+                        onDownload: songs.isEmpty
+                            ? null
+                            : () => _downloadAlbum(songs),
+                      ),
+                    ),
+                    if (loadFailed)
+                      SliverToBoxAdapter(
+                        child: Padding(
+                          padding: EdgeInsets.fromLTRB(
+                            context.echoSpacing.md,
+                            context.echoSpacing.md,
+                            context.echoSpacing.md,
+                            0,
+                          ),
+                          child: MediaLoadNotice(
+                            message: '网络连接异常，当前可能显示缓存的专辑内容。',
+                            onRetry: _retry,
+                          ),
+                        ),
+                      ),
+                    SliverToBoxAdapter(
+                      child: EchoSectionHeader(
+                        title: '曲目',
+                        description: songs.isEmpty
+                            ? '这张专辑暂时没有可播放曲目'
+                            : '${songs.length} 首 · ${_sortOption.label}',
+                        padding: EdgeInsets.fromLTRB(
+                          context.echoSpacing.md,
+                          context.echoSpacing.lg,
+                          context.echoSpacing.md,
+                          context.echoSpacing.xs,
                         ),
                       ),
                     ),
-                    SliverList(
-                      delegate: SliverChildBuilderDelegate((context, index) {
-                        final song = songs[index];
-                        return SongListItem(
-                          song: song,
-                          index: index,
-                          variant: SongListItemVariant.albumTrack,
-                          onTap: () {
-                            // 播放歌曲
-                            ref
+                    if (songs.isEmpty)
+                      const SliverToBoxAdapter(
+                        child: EchoEmptyState(
+                          title: '暂无曲目',
+                          description: '服务器没有为这张专辑返回可播放歌曲。',
+                          icon: AppIcons.music,
+                          padding: EdgeInsets.all(32),
+                        ),
+                      )
+                    else
+                      SliverList(
+                        delegate: SliverChildBuilderDelegate((context, index) {
+                          final song = songs[index];
+                          return SongListItem(
+                            song: song,
+                            index: index,
+                            variant: SongListItemVariant.albumTrack,
+                            onTap: () => ref
                                 .read(playerProvider.notifier)
-                                .playQueue(songs, startIndex: index);
-                          },
-                          onLongPress: () {
-                            _showSongContextMenu(context, ref, song);
-                          },
-                        );
-                      }, childCount: songs.length),
+                                .playQueue(songs, startIndex: index),
+                            onLongPress: () => showSongOptionsSheet(
+                              context: context,
+                              song: song,
+                            ),
+                          );
+                        }, childCount: songs.length),
+                      ),
+                    SliverToBoxAdapter(
+                      child: SizedBox(height: context.echoSpacing.xxl),
                     ),
                   ],
                 ),
               ),
             );
           },
-          loading: () => const AlbumDetailSkeleton(),
-          error: (error, stack) =>
-              const ErrorPlaceholder(message: '专辑加载失败，请检查网络后重试'),
+          loading: () => const MediaDetailLoadingView(),
+          error: (error, stackTrace) => EchoErrorState(
+            title: '专辑加载失败',
+            description: '无法读取专辑详情。请检查网络后重试。',
+            actionLabel: '重试',
+            onAction: _retry,
+          ),
         ),
       ),
     );
   }
 
-  void _showSongContextMenu(BuildContext context, WidgetRef ref, Song song) {
-    showSongOptionsSheet(context: context, song: song);
+  Future<void> _selectSortOption() async {
+    final option = await showMediaSongSortSheet(
+      context: context,
+      current: _sortOption,
+    );
+    if (!mounted || option == null || option == _sortOption) return;
+    setState(() => _sortOption = option);
+  }
+
+  void _retry() {
+    ref.invalidate(albumDetailProvider(widget.albumId));
+  }
+
+  Future<void> _toggleStarred(Album album) async {
+    final repository = ref.read(musicRepositoryProvider);
+    if (repository == null) return;
+
+    try {
+      final nextStarred = !album.starred;
+      await repository.setAlbumStarred(album.id, nextStarred);
+      ref.invalidate(albumDetailProvider(widget.albumId));
+      ref.invalidate(starredProvider);
+      ref.invalidate(recentAlbumsProvider);
+      ref.invalidate(frequentAlbumsProvider);
+      if (mounted) {
+        ToastNotifier.show(
+          nextStarred ? '已收藏专辑' : '已取消收藏专辑',
+          kind: EchoMessageKind.success,
+        );
+      }
+    } catch (error) {
+      if (mounted) {
+        ToastNotifier.show('操作失败: $error', kind: EchoMessageKind.error);
+      }
+    }
+  }
+
+  Future<void> _downloadAlbum(List<Song> songs) async {
+    final libraryId = ref.read(authStateProvider).currentLibrary?.id ?? '';
+    if (libraryId.isEmpty) return;
+
+    await ref
+        .read(downloadServiceProvider)
+        .enqueueBatch(songs, libraryId: libraryId);
+    if (mounted) {
+      ToastNotifier.show(
+        '已添加 ${songs.length} 首歌曲到下载队列',
+        kind: EchoMessageKind.success,
+      );
+    }
+  }
+}
+
+class _AlbumIdentityHeader extends StatelessWidget {
+  const _AlbumIdentityHeader({
+    required this.album,
+    required this.songs,
+    required this.onPlay,
+    required this.onToggleStarred,
+    required this.onDownload,
+  });
+
+  final Album album;
+  final List<Song> songs;
+  final VoidCallback? onPlay;
+  final VoidCallback onToggleStarred;
+  final VoidCallback? onDownload;
+
+  @override
+  Widget build(BuildContext context) {
+    return MediaDetailHeaderSurface(
+      child: Padding(
+        padding: EdgeInsets.all(context.echoSpacing.lg),
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final wide = constraints.maxWidth >= 680;
+            final artwork = ConstrainedBox(
+              constraints: BoxConstraints(
+                maxWidth: wide ? 280 : 260,
+                maxHeight: wide ? 280 : 260,
+              ),
+              child: AspectRatio(
+                aspectRatio: 1,
+                child: MediaDetailArtwork(
+                  coverArtId: album.coverArt,
+                  semanticLabel: '${album.name} 封面',
+                  heroTag: 'album-cover-${album.id}',
+                ),
+              ),
+            );
+            final information = _AlbumInformation(
+              album: album,
+              songs: songs,
+              onPlay: onPlay,
+              onToggleStarred: onToggleStarred,
+              onDownload: onDownload,
+            );
+
+            if (!wide) {
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: <Widget>[
+                  Center(child: artwork),
+                  SizedBox(height: context.echoSpacing.lg),
+                  information,
+                ],
+              );
+            }
+            return Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: <Widget>[
+                artwork,
+                SizedBox(width: context.echoSpacing.xl),
+                Expanded(child: information),
+              ],
+            );
+          },
+        ),
+      ),
+    );
+  }
+}
+
+class _AlbumInformation extends StatelessWidget {
+  const _AlbumInformation({
+    required this.album,
+    required this.songs,
+    required this.onPlay,
+    required this.onToggleStarred,
+    required this.onDownload,
+  });
+
+  final Album album;
+  final List<Song> songs;
+  final VoidCallback? onPlay;
+  final VoidCallback onToggleStarred;
+  final VoidCallback? onDownload;
+
+  @override
+  Widget build(BuildContext context) {
+    final artist = album.artist?.trim();
+    final metadata = <String>[
+      if (album.year != null) '${album.year}',
+      if (album.genre?.trim().isNotEmpty == true) album.genre!.trim(),
+      '${songs.length} 首',
+      album.durationString,
+    ];
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        Semantics(
+          header: true,
+          child: Text(album.name, style: context.echoTypography.display),
+        ),
+        if (artist != null && artist.isNotEmpty) ...<Widget>[
+          SizedBox(height: context.echoSpacing.xs),
+          Text(
+            artist,
+            style: context.echoTypography.title.copyWith(
+              color: context.echoColors.muted,
+            ),
+          ),
+        ],
+        SizedBox(height: context.echoSpacing.sm),
+        Wrap(
+          spacing: context.echoSpacing.xs,
+          runSpacing: context.echoSpacing.xxs,
+          children: <Widget>[
+            for (final item in metadata)
+              Text(
+                item,
+                style: context.echoTypography.metadata.copyWith(
+                  color: context.echoColors.muted,
+                ),
+              ),
+          ],
+        ),
+        SizedBox(height: context.echoSpacing.lg),
+        Wrap(
+          spacing: context.echoSpacing.xs,
+          runSpacing: context.echoSpacing.xs,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: <Widget>[
+            EchoButton.primary(
+              label: '播放全部',
+              leadingIcon: AppIcons.play,
+              onPressed: onPlay,
+            ),
+            EchoIconButton(
+              icon: album.starred ? AppIcons.heart : AppIcons.heartOutline,
+              label: album.starred ? '取消收藏专辑' : '收藏专辑',
+              selected: album.starred,
+              onPressed: onToggleStarred,
+            ),
+            EchoIconButton(
+              icon: AppIcons.downloadOutline,
+              label: '下载专辑',
+              onPressed: onDownload,
+            ),
+          ],
+        ),
+      ],
+    );
   }
 }

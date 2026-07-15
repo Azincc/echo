@@ -1,9 +1,11 @@
-import 'package:echoes/core/design/echo_design.dart';
+import 'dart:ui' show SemanticsAction;
+
 import 'package:echoes/core/theme/app_theme.dart';
 import 'package:echoes/data/models/audio_quality.dart';
 import 'package:echoes/data/models/song.dart';
 import 'package:echoes/features/player/pages/full_player_page.dart';
 import 'package:echoes/features/player/widgets/player_hero_helpers.dart';
+import 'package:echoes/features/player/widgets/player_scrubber.dart';
 import 'package:echoes/providers/lyrics_cover_provider.dart';
 import 'package:echoes/providers/palette_provider.dart';
 import 'package:echoes/providers/player_provider.dart';
@@ -76,7 +78,7 @@ void main() {
     tester,
   ) async {
     tester.view.devicePixelRatio = 1;
-    tester.view.physicalSize = const Size(360, 800);
+    tester.view.physicalSize = const Size(320, 800);
     addTearDown(tester.view.resetDevicePixelRatio);
     addTearDown(tester.view.resetPhysicalSize);
 
@@ -160,7 +162,7 @@ void main() {
         find.byKey(const ValueKey<String>('full_player_cover')),
         findsOneWidget,
       );
-      expect(find.byType(EchoSlider), findsOneWidget);
+      expect(find.byType(EchoPlayerScrubber), findsOneWidget);
       final heroTags = tester
           .widgetList<Hero>(find.byType(Hero))
           .map((hero) => hero.tag)
@@ -310,12 +312,57 @@ void main() {
     );
     await tester.pump();
 
-    final progressSlider = find.byType(EchoSlider);
+    final progressSlider = find.byType(EchoPlayerScrubber);
     expect(progressSlider, findsOneWidget);
+    final progressSemantics = find.bySemanticsLabel('播放进度');
+    expect(progressSemantics, findsOneWidget);
+    final semanticsData = tester
+        .getSemantics(progressSemantics)
+        .getSemanticsData();
+    expect(semanticsData.hasAction(SemanticsAction.increase), isTrue);
+    expect(semanticsData.increasedValue, '0:40 / 4:00');
     await tester.drag(progressSlider, const Offset(120, 0));
     await tester.pump();
 
     expect(notifier.seekTargets, isNotEmpty);
     expect(notifier.seekTargets.last, greaterThan(const Duration(seconds: 30)));
+  });
+
+  testWidgets('changing songs cancels an in-flight seek', (tester) async {
+    final notifier = TestPlayerNotifier(initialState());
+    await tester.pumpWidget(
+      providerApp(notifier: notifier, home: const FullPlayerPage()),
+    );
+    await tester.pump();
+
+    final scrubber = find.byType(EchoPlayerScrubber);
+    final gesture = await tester.startGesture(tester.getCenter(scrubber));
+    await tester.pumpAndSettle();
+    await gesture.moveBy(const Offset(80, 0));
+    await tester.pump();
+    expect(notifier.seekTargets, isEmpty);
+
+    final nextSong = notifier.state.queue[1];
+    notifier.emit(
+      initialState().copyWith(
+        currentSong: nextSong,
+        currentIndex: 1,
+        position: const Duration(seconds: 5),
+        duration: const Duration(minutes: 3),
+        bufferedPosition: const Duration(seconds: 30),
+      ),
+    );
+    await tester.pump();
+    await gesture.up();
+    await tester.pump();
+
+    expect(notifier.seekTargets, isEmpty);
+    expect(
+      tester
+          .getSemantics(find.bySemanticsLabel('播放进度'))
+          .getSemanticsData()
+          .value,
+      '0:05 / 3:00',
+    );
   });
 }

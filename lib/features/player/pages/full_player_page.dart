@@ -19,6 +19,7 @@ import '../../../providers/player_provider.dart';
 import '../../../widgets/cover_art_image.dart';
 import '../widgets/play_queue_sheet.dart';
 import '../widgets/player_hero_helpers.dart';
+import '../widgets/player_scrubber.dart';
 import '../widgets/song_options_sheet.dart';
 import '../widgets/synced_lyrics_view.dart';
 
@@ -1256,6 +1257,7 @@ class ProgressBar extends ConsumerStatefulWidget {
 class _ProgressBarState extends ConsumerState<ProgressBar>
     with SingleTickerProviderStateMixin {
   double? _dragValue;
+  String? _dragSongId;
   late final AnimationController _loadingOpacityController;
   late final Animation<double> _loadingOpacity;
   bool _isLoadingPulseActive = false;
@@ -1307,11 +1309,28 @@ class _ProgressBarState extends ConsumerState<ProgressBar>
     }
   }
 
+  void _clearSeekSession() {
+    _dragValue = null;
+    _dragSongId = null;
+  }
+
+  void _cancelSeekSession() {
+    if (_dragValue == null && _dragSongId == null) return;
+    setState(_clearSeekSession);
+  }
+
   @override
   Widget build(BuildContext context) {
+    ref.listen<String?>(
+      playerProvider.select((state) => state.currentSong?.id),
+      (previous, next) {
+        if (previous != next) _cancelSeekSession();
+      },
+    );
     final state = ref.watch(
       playerProvider.select(
         (state) => (
+          songId: state.currentSong?.id,
           position: state.position,
           duration: state.duration,
           buffered: state.bufferedPosition,
@@ -1327,68 +1346,95 @@ class _ProgressBarState extends ConsumerState<ProgressBar>
     final maxMilliseconds = state.duration.inMilliseconds > 0
         ? state.duration.inMilliseconds.toDouble()
         : 1.0;
-    final sliderValue = (_dragValue ?? state.position.inMilliseconds.toDouble())
-        .clamp(0.0, maxMilliseconds);
+    final activeDragValue = _dragSongId == state.songId ? _dragValue : null;
+    final sliderValue =
+        (activeDragValue ?? state.position.inMilliseconds.toDouble()).clamp(
+          0.0,
+          maxMilliseconds,
+        );
     final bufferedValue = state.buffered.inMilliseconds
         .toDouble()
         .clamp(0.0, maxMilliseconds)
         .toDouble();
-    final displayPosition = _dragValue == null
+    final displayPosition = activeDragValue == null
         ? state.position
-        : Duration(milliseconds: _dragValue!.round());
+        : Duration(milliseconds: activeDragValue.round());
     final progressLabel =
         '${_formatDuration(displayPosition)} / ${_formatDuration(state.duration)}';
     final timeStyle = context.echoTypography.metadata.copyWith(
       color: Colors.white.withValues(alpha: 0.88),
     );
 
-    return Semantics(
-      container: true,
-      label: '播放进度',
-      value: progressLabel,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: <Widget>[
-          SizedBox(
-            height: context.echoInteraction.minimumTouchTarget,
-            child: AnimatedBuilder(
-              animation: _loadingOpacity,
-              builder: (context, child) => Opacity(
-                opacity: isLoading && !_reduceMotion
-                    ? _loadingOpacity.value
-                    : 1,
-                child: child,
-              ),
-              child: EchoSlider(
-                value: sliderValue,
-                min: 0,
-                max: maxMilliseconds,
-                secondaryValue: bufferedValue,
-                semanticLabel: '播放进度',
-                semanticValue: progressLabel,
-                activeColor: Colors.white,
-                secondaryColor: Colors.white.withValues(alpha: 0.42),
-                inactiveColor: Colors.white.withValues(alpha: 0.18),
-                thumbColor: Colors.white,
-                onChanged: state.duration <= Duration.zero
-                    ? null
-                    : (value) => setState(() => _dragValue = value),
-                onChangeEnd: state.duration <= Duration.zero
-                    ? null
-                    : (_) {
-                        final value = _dragValue ?? sliderValue;
-                        HapticFeedback.selectionClick();
-                        unawaited(
-                          ref
-                              .read(playerProvider.notifier)
-                              .seek(Duration(milliseconds: value.round())),
-                        );
-                        setState(() => _dragValue = null);
-                      },
-              ),
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: <Widget>[
+        SizedBox(
+          height: context.echoInteraction.minimumTouchTarget,
+          child: AnimatedBuilder(
+            animation: _loadingOpacity,
+            builder: (context, child) => Opacity(
+              opacity: isLoading && !_reduceMotion ? _loadingOpacity.value : 1,
+              child: child,
+            ),
+            child: EchoPlayerScrubber(
+              key: ValueKey<String?>(state.songId),
+              value: sliderValue,
+              min: 0,
+              max: maxMilliseconds,
+              secondaryValue: bufferedValue,
+              semanticStep: 10000,
+              semanticLabel: '播放进度',
+              semanticValue: progressLabel,
+              semanticValueFormatter: (value) {
+                final position = Duration(milliseconds: value.round());
+                return '${_formatDuration(position)} / '
+                    '${_formatDuration(state.duration)}';
+              },
+              activeColor: Colors.white,
+              secondaryColor: Colors.white.withValues(alpha: 0.42),
+              inactiveColor: Colors.white.withValues(alpha: 0.18),
+              thumbColor: Colors.white,
+              onChangeStart: state.duration <= Duration.zero
+                  ? null
+                  : (value) {
+                      setState(() {
+                        _dragSongId = state.songId;
+                        _dragValue = value;
+                      });
+                    },
+              onChanged: state.duration <= Duration.zero
+                  ? null
+                  : (value) {
+                      if (_dragSongId != state.songId) return;
+                      setState(() => _dragValue = value);
+                    },
+              onChangeEnd: state.duration <= Duration.zero
+                  ? null
+                  : (endedValue) {
+                      final sessionSongId = _dragSongId;
+                      final value = (_dragValue ?? endedValue)
+                          .clamp(0.0, maxMilliseconds)
+                          .toDouble();
+                      setState(_clearSeekSession);
+                      if (sessionSongId == null ||
+                          sessionSongId != state.songId) {
+                        return;
+                      }
+                      HapticFeedback.selectionClick();
+                      unawaited(
+                        ref
+                            .read(playerProvider.notifier)
+                            .seek(Duration(milliseconds: value.round())),
+                      );
+                    },
+              onChangeCancel: state.duration <= Duration.zero
+                  ? null
+                  : (_) => _cancelSeekSession(),
             ),
           ),
-          Padding(
+        ),
+        ExcludeSemantics(
+          child: Padding(
             padding: EdgeInsets.symmetric(horizontal: context.echoSpacing.sm),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -1398,8 +1444,8 @@ class _ProgressBarState extends ConsumerState<ProgressBar>
               ],
             ),
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 

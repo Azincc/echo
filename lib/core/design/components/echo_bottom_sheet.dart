@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../theme/app_icons.dart';
 import '../echo_context.dart';
+import '../tokens/echo_spacing.dart';
 import 'echo_icon_button.dart';
 import 'echo_pressable.dart';
 import 'echo_surface.dart';
@@ -58,12 +59,14 @@ class EchoBottomSheet extends StatelessWidget {
     required this.child,
     this.subtitle,
     this.showCloseButton = true,
+    this.constrainToAvailableHeight = false,
     this.padding,
   });
 
   final String title;
   final String? subtitle;
   final bool showCloseButton;
+  final bool constrainToAvailableHeight;
   final EdgeInsetsGeometry? padding;
   final Widget child;
 
@@ -149,21 +152,28 @@ class EchoBottomSheet extends StatelessWidget {
                     ),
                   ),
                 ),
-              Padding(
-                padding:
-                    padding ??
-                    EdgeInsets.fromLTRB(
-                      spacing.md,
-                      subtitle == null ? spacing.xs : 0,
-                      spacing.md,
-                      spacing.md,
-                    ),
-                child: child,
-              ),
+              if (constrainToAvailableHeight)
+                Flexible(child: _buildBody(spacing))
+              else
+                _buildBody(spacing),
             ],
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildBody(EchoSpacing spacing) {
+    return Padding(
+      padding:
+          padding ??
+          EdgeInsets.fromLTRB(
+            spacing.md,
+            subtitle == null ? spacing.xs : 0,
+            spacing.md,
+            spacing.md,
+          ),
+      child: child,
     );
   }
 }

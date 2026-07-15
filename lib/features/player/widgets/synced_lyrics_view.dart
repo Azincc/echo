@@ -1,24 +1,22 @@
 import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
-import 'package:echoes/providers/player_provider.dart';
-import 'package:echoes/data/models/structured_lyrics.dart';
+
+import '../../../core/design/echo_design.dart';
+import '../../../data/models/structured_lyrics.dart';
+import '../../../providers/player_provider.dart';
 
 class _LyricsRenderParts {
+  const _LyricsRenderParts(this.primary, [this.secondary]);
+
   final String primary;
   final String? secondary;
-
-  const _LyricsRenderParts(this.primary, [this.secondary]);
 }
 
-class SyncedLyricsView extends ConsumerStatefulWidget {
-  final StructuredLyrics lyrics;
-  final Color? activePrimaryColor;
-  final Color? activeSecondaryColor;
-  final Color? inactivePrimaryColor;
-  final Color? inactiveSecondaryColor;
-
+class SyncedLyricsView extends ConsumerWidget {
   const SyncedLyricsView({
     super.key,
     required this.lyrics,
@@ -28,11 +26,56 @@ class SyncedLyricsView extends ConsumerStatefulWidget {
     this.inactiveSecondaryColor,
   });
 
+  final StructuredLyrics lyrics;
+  final Color? activePrimaryColor;
+  final Color? activeSecondaryColor;
+  final Color? inactivePrimaryColor;
+  final Color? inactiveSecondaryColor;
+
   @override
-  ConsumerState<SyncedLyricsView> createState() => _SyncedLyricsViewState();
+  Widget build(BuildContext context, WidgetRef ref) {
+    final position = ref.watch(
+      playerProvider.select((state) => state.position),
+    );
+    return SyncedLyricsSurface(
+      lyrics: lyrics,
+      position: position,
+      activePrimaryColor: activePrimaryColor,
+      activeSecondaryColor: activeSecondaryColor,
+      inactivePrimaryColor: inactivePrimaryColor,
+      inactiveSecondaryColor: inactiveSecondaryColor,
+      onSeek: (target) => ref.read(playerProvider.notifier).seek(target),
+    );
+  }
 }
 
-class _SyncedLyricsViewState extends ConsumerState<SyncedLyricsView> {
+/// Provider-free lyric surface for deterministic position and motion tests.
+@visibleForTesting
+class SyncedLyricsSurface extends StatefulWidget {
+  const SyncedLyricsSurface({
+    super.key,
+    required this.lyrics,
+    required this.position,
+    required this.onSeek,
+    this.activePrimaryColor,
+    this.activeSecondaryColor,
+    this.inactivePrimaryColor,
+    this.inactiveSecondaryColor,
+  });
+
+  final StructuredLyrics lyrics;
+  final Duration position;
+  final Future<void> Function(Duration target) onSeek;
+  final Color? activePrimaryColor;
+  final Color? activeSecondaryColor;
+  final Color? inactivePrimaryColor;
+  final Color? inactiveSecondaryColor;
+
+  @override
+  State<SyncedLyricsSurface> createState() => _SyncedLyricsSurfaceState();
+}
+
+class _SyncedLyricsSurfaceState extends State<SyncedLyricsSurface> {
   static final RegExp _cjkRegExp = RegExp(r'[\u4e00-\u9fff]');
   static final RegExp _latinRegExp = RegExp(r'[A-Za-z]');
   static final RegExp _enZhBoundary = RegExp(
@@ -43,17 +86,14 @@ class _SyncedLyricsViewState extends ConsumerState<SyncedLyricsView> {
   );
 
   final ItemScrollController _itemScrollController = ItemScrollController();
-  final ItemPositionsListener _itemPositionsListener =
-      ItemPositionsListener.create();
   int _currentIndex = -1;
   bool _hasInitialAutoPositioned = false;
   bool _isUserScrolling = false;
   Timer? _userScrollTimer;
 
   @override
-  void didUpdateWidget(covariant SyncedLyricsView oldWidget) {
+  void didUpdateWidget(covariant SyncedLyricsSurface oldWidget) {
     super.didUpdateWidget(oldWidget);
-    // 歌词数据变化时重置状态
     if (oldWidget.lyrics != widget.lyrics) {
       _currentIndex = -1;
       _hasInitialAutoPositioned = false;
@@ -70,51 +110,53 @@ class _SyncedLyricsViewState extends ConsumerState<SyncedLyricsView> {
 
   double _alignmentForIndex(int index) {
     if (index < 0 || index >= widget.lyrics.lines.length) return 0.47;
-
-    final renderParts = _splitBilingualLine(widget.lyrics.lines[index].value);
-    final hasSecondary =
-        renderParts.secondary != null && renderParts.secondary!.isNotEmpty;
-    // scrollable_positioned_list 的 alignment 作用在“条目顶部”。
-    // 双行歌词需要把条目顶部再往上提一点，才能让第二行进入视觉焦点区。
-    return hasSecondary ? 0.44 : 0.47;
+    final parts = _splitBilingualLine(widget.lyrics.lines[index].value);
+    return parts.secondary?.isNotEmpty == true ? 0.44 : 0.47;
   }
 
   void _scrollToLine(int index, {bool animated = true}) {
-    if (_isUserScrolling) return;
-    if (!widget.lyrics.synced) return;
+    if (_isUserScrolling || !widget.lyrics.synced) return;
     if (index < 0 || index >= widget.lyrics.lines.length) return;
-    final alignment = _alignmentForIndex(index);
 
-    // 使用 scrollable_positioned_list 直接滚动到指定索引
+    final reduceMotion = context.echoReduceMotion;
     try {
-      if (animated) {
+      if (animated && !reduceMotion) {
         _itemScrollController.scrollTo(
           index: index,
-          duration: const Duration(milliseconds: 300),
-          curve: Curves.easeInOut,
-          alignment: alignment,
+          duration: context.echoMotion.resolve(
+            context,
+            context.echoMotion.scene,
+          ),
+          curve: context.echoMotion.easeOut,
+          alignment: _alignmentForIndex(index),
         );
       } else {
-        _itemScrollController.jumpTo(index: index, alignment: alignment);
+        _itemScrollController.jumpTo(
+          index: index,
+          alignment: _alignmentForIndex(index),
+        );
       }
-    } catch (e) {
-      // 忽略控制器未挂载等错误
+    } catch (_) {
+      // The list may be between attachment frames while lyrics are replaced.
     }
   }
 
   int _findCurrentLineIndex(int currentMs) {
     final lines = widget.lyrics.lines;
-    final offsetMs = widget.lyrics.offsetMs;
-
     if (!widget.lyrics.synced || lines.isEmpty) return 0;
 
-    int result = 0;
-    for (int i = 0; i < lines.length; i++) {
-      final lineStart = (lines[i].startMs ?? 0) + offsetMs;
-      if (currentMs >= lineStart) {
-        result = i;
+    final offset = widget.lyrics.offsetMs;
+    var low = 0;
+    var high = lines.length - 1;
+    var result = 0;
+    while (low <= high) {
+      final middle = (low + high) >> 1;
+      final start = (lines[middle].startMs ?? 0) + offset;
+      if (currentMs >= start) {
+        result = middle;
+        low = middle + 1;
       } else {
-        break;
+        high = middle - 1;
       }
     }
     return result;
@@ -123,10 +165,7 @@ class _SyncedLyricsViewState extends ConsumerState<SyncedLyricsView> {
   _LyricsRenderParts _splitBilingualLine(String raw) {
     final text = raw.trim();
     if (text.isEmpty) return const _LyricsRenderParts('');
-
-    final hasCjk = _cjkRegExp.hasMatch(text);
-    final hasLatin = _latinRegExp.hasMatch(text);
-    if (!hasCjk || !hasLatin) {
+    if (!_cjkRegExp.hasMatch(text) || !_latinRegExp.hasMatch(text)) {
       return _LyricsRenderParts(text);
     }
 
@@ -147,134 +186,156 @@ class _SyncedLyricsViewState extends ConsumerState<SyncedLyricsView> {
         return _LyricsRenderParts(first, second);
       }
     }
-
     return _LyricsRenderParts(text);
   }
 
   @override
   Widget build(BuildContext context) {
-    // 只监听播放位置，不监听整个 PlayerState
-    final position = ref.watch(playerProvider.select((s) => s.position));
-    final currentMs = position.inMilliseconds;
-
     final lines = widget.lyrics.lines;
-    final offsetMs = widget.lyrics.offsetMs;
-    if (lines.isEmpty) {
-      return const SizedBox.shrink();
-    }
+    if (lines.isEmpty) return const SizedBox.shrink();
 
-    final colorScheme = Theme.of(context).colorScheme;
-    final onSurface = colorScheme.onSurface;
-    final activePrimaryColor = widget.activePrimaryColor ?? colorScheme.primary;
+    final colors = context.echoColors;
+    final activePrimaryColor = widget.activePrimaryColor ?? colors.accent;
     final activeSecondaryColor =
-        widget.activeSecondaryColor ??
-        colorScheme.primary.withValues(alpha: 0.75);
-    final inactivePrimaryColor =
-        widget.inactivePrimaryColor ?? onSurface.withValues(alpha: 0.5);
+        widget.activeSecondaryColor ?? activePrimaryColor;
+    final inactivePrimaryColor = widget.inactivePrimaryColor ?? colors.muted;
     final inactiveSecondaryColor =
-        widget.inactiveSecondaryColor ?? onSurface.withValues(alpha: 0.38);
+        widget.inactiveSecondaryColor ?? colors.muted;
+    final newIndex = _findCurrentLineIndex(widget.position.inMilliseconds);
+    final initialIndex = newIndex.clamp(0, lines.length - 1).toInt();
 
-    // 计算当前歌词行
-    final newIndex = _findCurrentLineIndex(currentMs);
-    final initialScrollIndex = newIndex.clamp(0, lines.length - 1);
-    final initialAlignment = _alignmentForIndex(initialScrollIndex);
-
-    // 索引变化时触发滚动 + setState 以更新高亮
     if (newIndex != _currentIndex) {
       final shouldAnimate = _hasInitialAutoPositioned;
       _currentIndex = newIndex;
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) {
-          _scrollToLine(newIndex, animated: shouldAnimate);
-          _hasInitialAutoPositioned = true;
-          setState(() {});
-        }
+        if (!mounted) return;
+        _scrollToLine(newIndex, animated: shouldAnimate);
+        _hasInitialAutoPositioned = true;
       });
     }
 
-    return NotificationListener<ScrollNotification>(
-      onNotification: (notification) {
-        final isUserDragStart =
-            notification is ScrollStartNotification &&
-            notification.dragDetails != null;
-        final isUserDragUpdate =
-            notification is ScrollUpdateNotification &&
-            notification.dragDetails != null;
-        final isScrollEnd = notification is ScrollEndNotification;
-
-        if (isUserDragStart || isUserDragUpdate) {
-          _isUserScrolling = true;
-          _userScrollTimer?.cancel();
-        } else if (isScrollEnd && _isUserScrolling) {
-          // 用户停止滚动后 3 秒恢复自动滚动
-          _userScrollTimer?.cancel();
-          _userScrollTimer = Timer(const Duration(seconds: 3), () {
-            if (mounted) {
-              setState(() {
-                _isUserScrolling = false;
-              });
+    return Semantics(
+      container: true,
+      label: widget.lyrics.synced ? '同步歌词' : '歌词',
+      child: NotificationListener<ScrollNotification>(
+        onNotification: (notification) {
+          final userStarted =
+              notification is ScrollStartNotification &&
+              notification.dragDetails != null;
+          final userUpdated =
+              notification is ScrollUpdateNotification &&
+              notification.dragDetails != null;
+          if (userStarted || userUpdated) {
+            _isUserScrolling = true;
+            _userScrollTimer?.cancel();
+          } else if (notification is ScrollEndNotification &&
+              _isUserScrolling) {
+            _userScrollTimer?.cancel();
+            _userScrollTimer = Timer(const Duration(seconds: 3), () {
+              if (!mounted) return;
+              _isUserScrolling = false;
               _scrollToLine(_currentIndex);
-            }
-          });
-        }
-        return false;
-      },
-      child: ScrollablePositionedList.builder(
-        itemScrollController: _itemScrollController,
-        itemPositionsListener: _itemPositionsListener,
-        initialScrollIndex: initialScrollIndex,
-        initialAlignment: initialAlignment,
-        padding: const EdgeInsets.symmetric(vertical: 100, horizontal: 24),
-        itemCount: lines.length,
-        itemBuilder: (context, index) {
-          final line = lines[index];
-          final isCurrent = widget.lyrics.synced && index == _currentIndex;
-          final renderParts = _splitBilingualLine(line.value);
-          final secondary = renderParts.secondary;
-
-          return GestureDetector(
-            onTap: () {
-              if (widget.lyrics.synced && line.startMs != null) {
-                ref
-                    .read(playerProvider.notifier)
-                    .seek(Duration(milliseconds: line.startMs! + offsetMs));
-              }
-            },
-            child: Container(
-              padding: const EdgeInsets.symmetric(vertical: 8),
-              child: Column(
-                children: [
-                  Text(
-                    renderParts.primary,
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w400,
-                      color: isCurrent
-                          ? activePrimaryColor
-                          : inactivePrimaryColor,
-                    ),
-                    textAlign: TextAlign.center,
-                  ),
-                  if (secondary != null && secondary.isNotEmpty) ...[
-                    const SizedBox(height: 2),
+            });
+          }
+          return false;
+        },
+        child: ScrollablePositionedList.builder(
+          itemScrollController: _itemScrollController,
+          initialScrollIndex: initialIndex,
+          initialAlignment: _alignmentForIndex(initialIndex),
+          padding: EdgeInsets.symmetric(
+            vertical: context.echoSpacing.xxl * 2,
+            horizontal: context.echoSpacing.lg,
+          ),
+          itemCount: lines.length,
+          itemBuilder: (context, index) {
+            final line = lines[index];
+            final isCurrent = widget.lyrics.synced && index == newIndex;
+            final parts = _splitBilingualLine(line.value);
+            final secondary = parts.secondary;
+            final canSeek = widget.lyrics.synced && line.startMs != null;
+            final target = Duration(
+              milliseconds: ((line.startMs ?? 0) + widget.lyrics.offsetMs)
+                  .clamp(0, 1 << 53)
+                  .toInt(),
+            );
+            final timeLabel = _formatDuration(target);
+            final semanticLabel = <String>[
+              if (isCurrent) '当前歌词',
+              parts.primary,
+              if (secondary?.isNotEmpty == true) secondary!,
+              if (canSeek) '跳转到 $timeLabel',
+            ].join('，');
+            final lineContent = ConstrainedBox(
+              constraints: BoxConstraints(
+                minHeight: context.echoInteraction.minimumTouchTarget,
+              ),
+              child: Padding(
+                padding: EdgeInsets.symmetric(vertical: context.echoSpacing.xs),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: <Widget>[
                     Text(
-                      secondary,
-                      style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w400,
+                      parts.primary,
+                      style: context.echoTypography.title.copyWith(
+                        fontSize: 16,
+                        fontWeight: isCurrent
+                            ? FontWeight.w600
+                            : FontWeight.w400,
                         color: isCurrent
-                            ? activeSecondaryColor
-                            : inactiveSecondaryColor,
+                            ? activePrimaryColor
+                            : inactivePrimaryColor,
                       ),
                       textAlign: TextAlign.center,
                     ),
+                    if (secondary?.isNotEmpty == true) ...<Widget>[
+                      SizedBox(height: context.echoSpacing.xxs),
+                      Text(
+                        secondary!,
+                        style: context.echoTypography.metadata.copyWith(
+                          color: isCurrent
+                              ? activeSecondaryColor
+                              : inactiveSecondaryColor,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                    ],
                   ],
-                ],
+                ),
               ),
-            ),
-          );
-        },
+            );
+
+            if (!canSeek) {
+              return Semantics(
+                container: true,
+                selected: isCurrent,
+                label: semanticLabel,
+                child: ExcludeSemantics(child: lineContent),
+              );
+            }
+            return EchoPressable(
+              semanticLabel: semanticLabel,
+              selected: isCurrent,
+              onPressed: () {
+                HapticFeedback.selectionClick();
+                unawaited(widget.onSeek(target));
+              },
+              minimumSize: Size(
+                double.infinity,
+                context.echoInteraction.minimumTouchTarget,
+              ),
+              child: lineContent,
+            );
+          },
+        ),
       ),
     );
+  }
+
+  static String _formatDuration(Duration duration) {
+    final safe = duration.isNegative ? Duration.zero : duration;
+    final minutes = safe.inMinutes;
+    final seconds = safe.inSeconds % 60;
+    return '$minutes:${seconds.toString().padLeft(2, '0')}';
   }
 }

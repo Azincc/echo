@@ -125,7 +125,7 @@ class _SyncedLyricsSurfaceState extends State<SyncedLyricsSurface> {
           index: index,
           duration: context.echoMotion.resolve(
             context,
-            context.echoMotion.scene,
+            context.echoMotion.state,
           ),
           curve: context.echoMotion.easeOut,
           alignment: _alignmentForIndex(index),
@@ -201,6 +201,10 @@ class _SyncedLyricsSurfaceState extends State<SyncedLyricsSurface> {
     final inactivePrimaryColor = widget.inactivePrimaryColor ?? colors.muted;
     final inactiveSecondaryColor =
         widget.inactiveSecondaryColor ?? colors.muted;
+    final stateDuration = context.echoMotion.resolve(
+      context,
+      context.echoMotion.state,
+    );
     final newIndex = _findCurrentLineIndex(widget.position.inMilliseconds);
     final initialIndex = newIndex.clamp(0, lines.length - 1).toInt();
 
@@ -245,7 +249,7 @@ class _SyncedLyricsSurfaceState extends State<SyncedLyricsSurface> {
           initialAlignment: _alignmentForIndex(initialIndex),
           padding: EdgeInsets.symmetric(
             vertical: context.echoSpacing.xxl * 2,
-            horizontal: context.echoSpacing.lg,
+            horizontal: context.echoSpacing.md,
           ),
           itemCount: lines.length,
           itemBuilder: (context, index) {
@@ -266,43 +270,17 @@ class _SyncedLyricsSurfaceState extends State<SyncedLyricsSurface> {
               if (secondary?.isNotEmpty == true) secondary!,
               if (canSeek) '跳转到 $timeLabel',
             ].join('，');
-            final lineContent = ConstrainedBox(
-              constraints: BoxConstraints(
-                minHeight: context.echoInteraction.minimumTouchTarget,
-              ),
-              child: Padding(
-                padding: EdgeInsets.symmetric(vertical: context.echoSpacing.xs),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: <Widget>[
-                    Text(
-                      parts.primary,
-                      style: context.echoTypography.title.copyWith(
-                        fontSize: 16,
-                        fontWeight: isCurrent
-                            ? FontWeight.w600
-                            : FontWeight.w400,
-                        color: isCurrent
-                            ? activePrimaryColor
-                            : inactivePrimaryColor,
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
-                    if (secondary?.isNotEmpty == true) ...<Widget>[
-                      SizedBox(height: context.echoSpacing.xxs),
-                      Text(
-                        secondary!,
-                        style: context.echoTypography.metadata.copyWith(
-                          color: isCurrent
-                              ? activeSecondaryColor
-                              : inactiveSecondaryColor,
-                        ),
-                        textAlign: TextAlign.center,
-                      ),
-                    ],
-                  ],
-                ),
-              ),
+            final lineContent = _SyncedLyricLineContent(
+              key: ValueKey<String>('lyrics-line-$index'),
+              index: index,
+              primary: parts.primary,
+              secondary: secondary,
+              isCurrent: isCurrent,
+              duration: stateDuration,
+              activePrimaryColor: activePrimaryColor,
+              activeSecondaryColor: activeSecondaryColor,
+              inactivePrimaryColor: inactivePrimaryColor,
+              inactiveSecondaryColor: inactiveSecondaryColor,
             );
 
             if (!canSeek) {
@@ -337,5 +315,123 @@ class _SyncedLyricsSurfaceState extends State<SyncedLyricsSurface> {
     final minutes = safe.inMinutes;
     final seconds = safe.inSeconds % 60;
     return '$minutes:${seconds.toString().padLeft(2, '0')}';
+  }
+}
+
+class _SyncedLyricLineContent extends StatelessWidget {
+  const _SyncedLyricLineContent({
+    super.key,
+    required this.index,
+    required this.primary,
+    required this.secondary,
+    required this.isCurrent,
+    required this.duration,
+    required this.activePrimaryColor,
+    required this.activeSecondaryColor,
+    required this.inactivePrimaryColor,
+    required this.inactiveSecondaryColor,
+  });
+
+  final int index;
+  final String primary;
+  final String? secondary;
+  final bool isCurrent;
+  final Duration duration;
+  final Color activePrimaryColor;
+  final Color activeSecondaryColor;
+  final Color inactivePrimaryColor;
+  final Color inactiveSecondaryColor;
+
+  @override
+  Widget build(BuildContext context) {
+    final typography = context.echoTypography;
+    final primaryStyle = (isCurrent ? typography.headline : typography.title)
+        .copyWith(
+          fontSize: isCurrent ? 22 : 17,
+          fontWeight: isCurrent ? FontWeight.w700 : FontWeight.w500,
+          height: isCurrent ? 1.20 : 1.30,
+          color: isCurrent ? activePrimaryColor : inactivePrimaryColor,
+        );
+    final secondaryStyle = (isCurrent ? typography.body : typography.metadata)
+        .copyWith(
+          fontSize: isCurrent ? 15 : 13,
+          fontWeight: isCurrent ? FontWeight.w500 : FontWeight.w400,
+          height: 1.35,
+          color: isCurrent ? activeSecondaryColor : inactiveSecondaryColor,
+        );
+
+    return ConstrainedBox(
+      constraints: BoxConstraints(
+        minHeight: context.echoInteraction.minimumTouchTarget,
+      ),
+      child: Padding(
+        padding: EdgeInsets.symmetric(vertical: context.echoSpacing.sm),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            Padding(
+              padding: const EdgeInsets.only(top: 2),
+              child: ExcludeSemantics(
+                child: SizedBox(
+                  width: 3,
+                  height: 28,
+                  child: AnimatedOpacity(
+                    key: ValueKey<String>('lyrics-line-marker-$index'),
+                    duration: duration,
+                    curve: context.echoMotion.easeOut,
+                    opacity: isCurrent ? 1 : 0,
+                    child: AnimatedScale(
+                      duration: duration,
+                      curve: context.echoMotion.easeOut,
+                      scale: isCurrent ? 1 : 0.72,
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          color: activePrimaryColor,
+                          borderRadius: context.echoRadii.pill,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            SizedBox(width: context.echoSpacing.sm),
+            Expanded(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  AnimatedDefaultTextStyle(
+                    key: ValueKey<String>('lyrics-primary-style-$index'),
+                    duration: duration,
+                    curve: context.echoMotion.easeOut,
+                    style: primaryStyle,
+                    child: Text(
+                      primary,
+                      key: ValueKey<String>('lyrics-primary-$index'),
+                      textAlign: TextAlign.start,
+                    ),
+                  ),
+                  if (secondary?.isNotEmpty == true) ...<Widget>[
+                    SizedBox(height: context.echoSpacing.xxs),
+                    AnimatedDefaultTextStyle(
+                      key: ValueKey<String>('lyrics-secondary-style-$index'),
+                      duration: duration,
+                      curve: context.echoMotion.easeOut,
+                      style: secondaryStyle,
+                      child: Text(
+                        secondary!,
+                        key: ValueKey<String>('lyrics-secondary-$index'),
+                        textAlign: TextAlign.start,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }

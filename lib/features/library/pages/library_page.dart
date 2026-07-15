@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import '../../../core/design/echo_design.dart';
 import '../../../core/utils/network_error_notifier.dart';
+import '../../../core/utils/toast_notifier.dart';
 import '../../../data/models/playlist.dart';
 import '../../../data/models/song.dart';
 import '../../../providers/api_provider.dart';
@@ -11,7 +14,6 @@ import '../../../providers/navigation_provider.dart';
 import '../../../providers/player_provider.dart';
 import '../../../providers/playlist_provider.dart';
 import '../../../widgets/main_scaffold.dart';
-import '../../../widgets/error_placeholder.dart';
 import '../../../widgets/visible_remote_retry_scope.dart';
 import 'album_list_page.dart';
 import 'artist_list_page.dart';
@@ -20,7 +22,6 @@ import 'song_list_page.dart';
 import 'starred_page.dart';
 import '../utils/library_sorting.dart';
 import '../widgets/playlist_manage_dialogs.dart';
-import '../../../widgets/skeleton_templates.dart';
 import '../widgets/playlist_options_sheet.dart';
 
 /// 我的页面 - Tab 2
@@ -67,9 +68,10 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
 
       ref.invalidate(playlistsProvider);
       if (context.mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('已创建歌单「${formResult.name}」')));
+        ToastNotifier.show(
+          '已创建歌单「${formResult.name}」',
+          kind: EchoMessageKind.success,
+        );
       }
     } catch (_) {
       NetworkErrorNotifier.show('网络异常，创建失败');
@@ -115,9 +117,10 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
       ref.invalidate(playlistsProvider);
       ref.invalidate(playlistDetailProvider(playlist.id));
       if (context.mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('已更新歌单「${formResult.name}」')));
+        ToastNotifier.show(
+          '已更新歌单「${formResult.name}」',
+          kind: EchoMessageKind.success,
+        );
       }
     } catch (_) {
       NetworkErrorNotifier.show('网络异常，修改失败');
@@ -147,9 +150,10 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
       ref.invalidate(playlistsProvider);
       ref.invalidate(playlistDetailProvider(playlist.id));
       if (context.mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('已删除歌单「${playlist.name}」')));
+        ToastNotifier.show(
+          '已删除歌单「${playlist.name}」',
+          kind: EchoMessageKind.success,
+        );
       }
     } catch (_) {
       NetworkErrorNotifier.show('网络异常，删除失败');
@@ -226,9 +230,10 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
         .read(downloadServiceProvider)
         .enqueueBatch(songs, libraryId: libraryId);
     if (context.mounted) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('已添加 ${songs.length} 首歌曲到下载队列')));
+      ToastNotifier.show(
+        '已添加 ${songs.length} 首歌曲到下载队列',
+        kind: EchoMessageKind.success,
+      );
     }
   }
 
@@ -242,9 +247,10 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
 
     ref.read(playerProvider.notifier).addAllToQueue(songs);
     if (context.mounted) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('已添加 ${songs.length} 首到播放列表')));
+      ToastNotifier.show(
+        '已添加 ${songs.length} 首到播放列表',
+        kind: EchoMessageKind.success,
+      );
     }
   }
 
@@ -270,236 +276,378 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
         ref.invalidate(playlistsProvider);
         ref.invalidate(starredProvider);
       },
-      child: Scaffold(
-        appBar: AppBar(
-          leading: IconButton(
-            icon: const Icon(Icons.menu),
+      child: EchoScaffold(
+        topBar: EchoTopBar(
+          title: '资料库',
+          subtitle: '收藏、歌单与完整曲库',
+          leading: EchoIconButton(
+            icon: AppIcons.menu,
+            label: '打开应用菜单',
             onPressed: openEchoAppDrawer,
           ),
-          title: const Text('我的'),
         ),
-        body: Align(
-          alignment: Alignment.topCenter,
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 1400),
-            child: ListView(
-              children: [
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-                  child: Text(
-                    '收藏夹',
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
+        body: EchoRefreshView(
+          onRefresh: () async {
+            ref.invalidate(playlistsProvider);
+            ref.invalidate(starredProvider);
+            await Future.wait<void>(<Future<void>>[
+              ref.read(playlistsProvider.future).then((_) {}),
+              ref.read(starredProvider.future).then((_) {}),
+            ]);
+          },
+          child: Align(
+            alignment: Alignment.topCenter,
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 960),
+              child: ListView(
+                padding: EdgeInsets.fromLTRB(
+                  context.echoSpacing.md,
+                  context.echoSpacing.sm,
+                  context.echoSpacing.md,
+                  context.echoSpacing.xxl,
                 ),
-                ListTile(
-                  leading: const Icon(Icons.favorite),
-                  title: const Text('收藏歌曲'),
-                  trailing: starredAsync.when(
-                    data: (starred) => Text('${starred.songs.length} 首'),
-                    loading: () => const SizedBox.shrink(),
-                    error: (error, stack) => const SizedBox.shrink(),
-                  ),
-                  onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) =>
+                children: <Widget>[
+                  const EchoSectionHeader(title: '收藏'),
+                  starredAsync.when(
+                    data: (starred) => Column(
+                      children: <Widget>[
+                        _LibraryDestinationRow(
+                          icon: AppIcons.heart,
+                          title: '收藏歌曲',
+                          detail: '${starred.songs.length} 首',
+                          onPressed: () => _push(
+                            context,
                             const StarredPage(initialTab: StarredTab.songs),
-                      ),
-                    );
-                  },
-                ),
-                ListTile(
-                  leading: const Icon(Icons.album),
-                  title: const Text('收藏专辑'),
-                  trailing: starredAsync.when(
-                    data: (starred) => Text('${starred.albums.length} 张'),
-                    loading: () => const SizedBox.shrink(),
-                    error: (error, stack) => const SizedBox.shrink(),
-                  ),
-                  onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) =>
+                          ),
+                        ),
+                        _LibraryDestinationRow(
+                          icon: AppIcons.album,
+                          title: '收藏专辑',
+                          detail: '${starred.albums.length} 张',
+                          onPressed: () => _push(
+                            context,
                             const StarredPage(initialTab: StarredTab.albums),
-                      ),
-                    );
-                  },
-                ),
-                ListTile(
-                  leading: const Icon(Icons.person),
-                  title: const Text('收藏歌手'),
-                  trailing: starredAsync.when(
-                    data: (starred) => Text('${starred.artists.length} 位'),
-                    loading: () => const SizedBox.shrink(),
-                    error: (error, stack) => const SizedBox.shrink(),
-                  ),
-                  onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) =>
+                          ),
+                        ),
+                        _LibraryDestinationRow(
+                          icon: AppIcons.profile,
+                          title: '收藏歌手',
+                          detail: '${starred.artists.length} 位',
+                          onPressed: () => _push(
+                            context,
                             const StarredPage(initialTab: StarredTab.artists),
-                      ),
-                    );
-                  },
-                ),
-                const Divider(),
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 16, 8, 0),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          '我的歌单',
-                          style: Theme.of(context).textTheme.titleMedium
-                              ?.copyWith(fontWeight: FontWeight.bold),
-                        ),
-                      ),
-                      PopupMenuButton<PlaylistSortOption>(
-                        tooltip: '歌单排序：${_playlistSortOption.label}',
-                        icon: const Icon(Icons.sort),
-                        initialValue: _playlistSortOption,
-                        onSelected: (option) {
-                          if (option == _playlistSortOption) return;
-                          setState(() {
-                            _playlistSortOption = option;
-                          });
-                        },
-                        itemBuilder: (context) => selectablePlaylistSortOptions
-                            .map(
-                              (option) =>
-                                  CheckedPopupMenuItem<PlaylistSortOption>(
-                                    value: option,
-                                    checked: option == _playlistSortOption,
-                                    child: Text(option.label),
-                                  ),
-                            )
-                            .toList(),
-                      ),
-                      IconButton(
-                        onPressed: () => _createPlaylist(context, ref),
-                        icon: const Icon(Icons.add),
-                        tooltip: '新建歌单',
-                      ),
-                    ],
-                  ),
-                ),
-                playlistsAsync.when(
-                  data: (playlists) {
-                    if (playlists.isEmpty) {
-                      return Padding(
-                        padding: const EdgeInsets.all(24),
-                        child: Center(
-                          child: Text(
-                            playlistsLoadFailed ? '网络异常，歌单加载失败' : '暂无歌单',
                           ),
                         ),
-                      );
-                    }
-                    final sortedPlaylists = sortPlaylists(
-                      playlists,
-                      _playlistSortOption,
-                    );
-                    return Column(
-                      children: sortedPlaylists.map((playlist) {
-                        return ListTile(
-                          leading: const Icon(Icons.playlist_play),
-                          title: Text(playlist.name),
-                          subtitle: Text('${playlist.songCount} 首'),
-                          trailing: IconButton(
-                            tooltip: '歌单操作',
-                            icon: const Icon(Icons.more_horiz),
-                            onPressed: () async {
-                              final action = await showPlaylistOptionsSheet(
-                                context: context,
-                                playlist: playlist,
-                                canDownload: hasActiveLibrary,
-                                hasSongs: playlist.songCount > 0,
-                              );
-                              if (action == null || !context.mounted) return;
-                              await _onPlaylistMenuSelected(
-                                context,
-                                ref,
-                                playlist,
-                                action,
-                              );
-                            },
-                          ),
-                          onTap: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (context) =>
-                                    PlaylistDetailPage(playlistId: playlist.id),
-                              ),
-                            );
-                          },
-                        );
-                      }).toList(),
-                    );
-                  },
-                  loading: () =>
-                      const ListTileSkeleton(count: 3, hasIcon: true),
-                  error: (error, stack) => const Padding(
-                    padding: EdgeInsets.all(24),
-                    child: ErrorPlaceholder(message: '歌单加载失败，请检查网络后重试'),
-                  ),
-                ),
-                const Divider(),
-                Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Text(
-                    '音乐库浏览',
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.bold,
+                      ],
+                    ),
+                    loading: () => const _LibraryRowsSkeleton(count: 3),
+                    error: (_, _) => EchoErrorState(
+                      title: '收藏加载失败',
+                      description: '无法读取收藏内容，请检查网络后重试。',
+                      actionLabel: '重试',
+                      onAction: () => ref.invalidate(starredProvider),
+                      padding: const EdgeInsets.all(24),
                     ),
                   ),
-                ),
-                ListTile(
-                  leading: const Icon(Icons.music_note),
-                  title: const Text('全部歌曲'),
-                  trailing: const Icon(Icons.chevron_right),
-                  onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => const SongListPage(),
-                      ),
-                    );
-                  },
-                ),
-                ListTile(
-                  leading: const Icon(Icons.album),
-                  title: const Text('按专辑浏览'),
-                  trailing: const Icon(Icons.chevron_right),
-                  onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => const AlbumListPage(),
-                      ),
-                    );
-                  },
-                ),
-                ListTile(
-                  leading: const Icon(Icons.person),
-                  title: const Text('按歌手浏览'),
-                  trailing: const Icon(Icons.chevron_right),
-                  onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => const ArtistListPage(),
-                      ),
-                    );
-                  },
-                ),
-              ],
+                  SizedBox(height: context.echoSpacing.lg),
+                  EchoSectionHeader(
+                    title: '我的歌单',
+                    actionLabel: _playlistSortOption.label,
+                    onAction: () => _showPlaylistSortSheet(context),
+                  ),
+                  Align(
+                    alignment: AlignmentDirectional.centerEnd,
+                    child: EchoButton.ghost(
+                      label: '新建歌单',
+                      leadingIcon: AppIcons.add,
+                      onPressed: () => _createPlaylist(context, ref),
+                    ),
+                  ),
+                  SizedBox(height: context.echoSpacing.xs),
+                  playlistsAsync.when(
+                    data: (playlists) {
+                      if (playlists.isEmpty) {
+                        return EchoEmptyState(
+                          title: playlistsLoadFailed ? '歌单暂时不可用' : '还没有歌单',
+                          description: playlistsLoadFailed
+                              ? '网络连接恢复后重试。'
+                              : '创建歌单，把想连续听的音乐整理在一起。',
+                          icon: playlistsLoadFailed
+                              ? AppIcons.cloudOff
+                              : AppIcons.playlist,
+                          actionLabel: playlistsLoadFailed ? '重试' : '新建歌单',
+                          onAction: playlistsLoadFailed
+                              ? () => ref.invalidate(playlistsProvider)
+                              : () => _createPlaylist(context, ref),
+                          padding: const EdgeInsets.all(24),
+                        );
+                      }
+
+                      final sortedPlaylists = sortPlaylists(
+                        playlists,
+                        _playlistSortOption,
+                      );
+                      return Column(
+                        children: <Widget>[
+                          for (final playlist in sortedPlaylists)
+                            _PlaylistRow(
+                              playlist: playlist,
+                              onPressed: () => _push(
+                                context,
+                                PlaylistDetailPage(playlistId: playlist.id),
+                              ),
+                              onMore: () async {
+                                final action = await showPlaylistOptionsSheet(
+                                  context: context,
+                                  playlist: playlist,
+                                  canDownload: hasActiveLibrary,
+                                  hasSongs: playlist.songCount > 0,
+                                );
+                                if (action == null || !context.mounted) return;
+                                await _onPlaylistMenuSelected(
+                                  context,
+                                  ref,
+                                  playlist,
+                                  action,
+                                );
+                              },
+                            ),
+                        ],
+                      );
+                    },
+                    loading: () => const _LibraryRowsSkeleton(count: 3),
+                    error: (_, _) => EchoErrorState(
+                      title: '歌单加载失败',
+                      description: '无法读取歌单，请检查网络后重试。',
+                      actionLabel: '重试',
+                      onAction: () => ref.invalidate(playlistsProvider),
+                      padding: const EdgeInsets.all(24),
+                    ),
+                  ),
+                  SizedBox(height: context.echoSpacing.xl),
+                  const EchoSectionHeader(title: '浏览完整曲库'),
+                  _LibraryDestinationRow(
+                    icon: AppIcons.music,
+                    title: '全部歌曲',
+                    detail: '按标题、歌手或专辑排序',
+                    onPressed: () => _push(context, const SongListPage()),
+                  ),
+                  _LibraryDestinationRow(
+                    icon: AppIcons.albumOutline,
+                    title: '按专辑浏览',
+                    detail: '查看封面与发行信息',
+                    onPressed: () => _push(context, const AlbumListPage()),
+                  ),
+                  _LibraryDestinationRow(
+                    icon: AppIcons.profile,
+                    title: '按歌手浏览',
+                    detail: '从歌手进入专辑与热门曲目',
+                    onPressed: () => _push(context, const ArtistListPage()),
+                  ),
+                ],
+              ),
             ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _push(BuildContext context, Widget page) {
+    Navigator.of(
+      context,
+    ).push<void>(EchoPageRoute<void>(context: context, builder: (_) => page));
+  }
+
+  Future<void> _showPlaylistSortSheet(BuildContext context) async {
+    final selected = await showEchoBottomSheet<PlaylistSortOption>(
+      context: context,
+      useRootNavigator: true,
+      builder: (sheetContext) => EchoBottomSheet(
+        title: '歌单排序',
+        subtitle: '当前：${_playlistSortOption.label}',
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            for (final option in selectablePlaylistSortOptions)
+              EchoActionRow(
+                icon: option == _playlistSortOption
+                    ? AppIcons.radioSelected
+                    : AppIcons.radio,
+                title: option.label,
+                selected: option == _playlistSortOption,
+                onPressed: () => Navigator.of(sheetContext).pop(option),
+              ),
+          ],
+        ),
+      ),
+    );
+    if (selected == null || selected == _playlistSortOption || !mounted) {
+      return;
+    }
+    setState(() => _playlistSortOption = selected);
+  }
+}
+
+class _LibraryDestinationRow extends StatelessWidget {
+  const _LibraryDestinationRow({
+    required this.icon,
+    required this.title,
+    required this.detail,
+    required this.onPressed,
+  });
+
+  final IconData icon;
+  final String title;
+  final String detail;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return EchoPressable(
+      semanticLabel: '$title，$detail',
+      onPressed: onPressed,
+      minimumSize: const Size(double.infinity, 72),
+      child: Padding(
+        padding: EdgeInsets.symmetric(
+          horizontal: context.echoSpacing.xs,
+          vertical: context.echoSpacing.xs,
+        ),
+        child: Row(
+          children: <Widget>[
+            SizedBox.square(
+              dimension: context.echoInteraction.minimumTouchTarget,
+              child: Center(
+                child: Icon(icon, size: 24, color: context.echoColors.accent),
+              ),
+            ),
+            SizedBox(width: context.echoSpacing.sm),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Text(title, style: context.echoTypography.title),
+                  SizedBox(height: context.echoSpacing.xxs),
+                  Text(
+                    detail,
+                    style: context.echoTypography.body.copyWith(
+                      color: context.echoColors.muted,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            SizedBox(width: context.echoSpacing.xs),
+            Icon(
+              AppIcons.chevronRight,
+              size: 20,
+              color: context.echoColors.muted,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _PlaylistRow extends StatelessWidget {
+  const _PlaylistRow({
+    required this.playlist,
+    required this.onPressed,
+    required this.onMore,
+  });
+
+  final Playlist playlist;
+  final VoidCallback onPressed;
+  final VoidCallback onMore;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: <Widget>[
+        Expanded(
+          child: EchoPressable(
+            semanticLabel: '${playlist.name}，${playlist.songCount} 首',
+            onPressed: onPressed,
+            minimumSize: const Size(double.infinity, 72),
+            child: Padding(
+              padding: EdgeInsets.symmetric(
+                horizontal: context.echoSpacing.xs,
+                vertical: context.echoSpacing.xs,
+              ),
+              child: Row(
+                children: <Widget>[
+                  SizedBox.square(
+                    dimension: context.echoInteraction.minimumTouchTarget,
+                    child: Center(
+                      child: Icon(
+                        AppIcons.playlist,
+                        size: 24,
+                        color: context.echoColors.accent,
+                      ),
+                    ),
+                  ),
+                  SizedBox(width: context.echoSpacing.sm),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: <Widget>[
+                        Text(
+                          playlist.name,
+                          style: context.echoTypography.title,
+                        ),
+                        SizedBox(height: context.echoSpacing.xxs),
+                        Text(
+                          '${playlist.songCount} 首 · ${playlist.durationString}',
+                          style: context.echoTypography.metadata.copyWith(
+                            color: context.echoColors.muted,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+        EchoIconButton(
+          icon: AppIcons.more,
+          label: '${playlist.name} 的歌单操作',
+          onPressed: onMore,
+        ),
+      ],
+    );
+  }
+}
+
+class _LibraryRowsSkeleton extends StatelessWidget {
+  const _LibraryRowsSkeleton({required this.count});
+
+  final int count;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: List<Widget>.generate(
+        count,
+        (index) => Padding(
+          padding: EdgeInsets.symmetric(vertical: context.echoSpacing.xs),
+          child: Row(
+            children: <Widget>[
+              const EchoSkeleton.circle(size: 48),
+              SizedBox(width: context.echoSpacing.sm),
+              const Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    EchoSkeleton.line(width: 180),
+                    SizedBox(height: 8),
+                    EchoSkeleton.line(width: 96, height: 10),
+                  ],
+                ),
+              ),
+            ],
           ),
         ),
       ),

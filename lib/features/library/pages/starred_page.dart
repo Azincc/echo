@@ -1,27 +1,25 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/design/echo_design.dart';
 import '../../../data/repositories/music_repository.dart';
 import '../../../providers/music_provider.dart';
 import '../../../providers/navigation_provider.dart';
 import '../../../providers/player_provider.dart';
-import '../../../widgets/cover_art_image.dart';
+import '../../../widgets/song_list_item.dart';
+import '../../../widgets/visible_remote_retry_scope.dart';
 import '../../player/widgets/song_options_sheet.dart';
 import '../widgets/album_options_sheet.dart';
+import '../widgets/library_collection_components.dart';
 import 'album_detail_page.dart';
 import 'artist_detail_page.dart';
-import '../../../widgets/error_placeholder.dart';
-import '../../../widgets/song_list_item.dart';
-import '../../../widgets/skeleton_templates.dart';
-import '../../../widgets/visible_remote_retry_scope.dart';
 
 enum StarredTab { songs, albums, artists }
 
-/// 收藏夹页面
 class StarredPage extends ConsumerWidget {
-  final StarredTab initialTab;
-
   const StarredPage({super.key, this.initialTab = StarredTab.songs});
+
+  final StarredTab initialTab;
 
   Future<void> _refresh(WidgetRef ref) async {
     ref.invalidate(starredProvider);
@@ -32,6 +30,10 @@ class StarredPage extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final starredAsync = ref.watch(starredProvider);
     final loadFailed = ref.watch(starredLoadFailedProvider);
+    final value = starredAsync.valueOrNull;
+    final total = value == null
+        ? null
+        : value.songs.length + value.albums.length + value.artists.length;
 
     return VisibleRemoteRetryScope(
       branchIndex: libraryBranchIndex,
@@ -39,39 +41,63 @@ class StarredPage extends ConsumerWidget {
       shouldRetry: (ref) => loadFailed || starredAsync.hasError,
       onRetry: (ref) => ref.invalidate(starredProvider),
       child: DefaultTabController(
-        length: 3,
+        length: StarredTab.values.length,
         initialIndex: initialTab.index,
-        child: Scaffold(
-          appBar: AppBar(
-            title: const Text('收藏夹'),
-            bottom: const TabBar(
-              tabs: [
-                Tab(text: '歌曲'),
-                Tab(text: '专辑'),
-                Tab(text: '歌手'),
-              ],
-            ),
-          ),
-          body: starredAsync.when(
-            data: (starred) => Align(
-              alignment: Alignment.topCenter,
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 1400),
-                child: TabBarView(
-                  children: [
-                    _buildSongsTab(context, ref, starred),
-                    _buildAlbumsTab(context, ref, starred),
-                    _buildArtistsTab(context, ref, starred),
-                  ],
+        child: Builder(
+          builder: (tabContext) {
+            final controller = DefaultTabController.of(tabContext);
+            return EchoScaffold(
+              topBar: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: <Widget>[
+                  EchoTopBar.back(
+                    context: tabContext,
+                    title: '收藏夹',
+                    subtitle: total == null ? null : '$total 项收藏',
+                  ),
+                  _StarredTabStrip(controller: controller),
+                  const EchoDivider(),
+                ],
+              ),
+              body: starredAsync.when(
+                data: (starred) {
+                  final empty =
+                      starred.songs.isEmpty &&
+                      starred.albums.isEmpty &&
+                      starred.artists.isEmpty;
+                  if (loadFailed && empty) {
+                    return EchoErrorState(
+                      title: '收藏加载失败',
+                      description: '请检查网络或服务器状态后重试。',
+                      actionLabel: '重试',
+                      onAction: () => ref.invalidate(starredProvider),
+                    );
+                  }
+                  return Align(
+                    alignment: Alignment.topCenter,
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 1400),
+                      child: TabBarView(
+                        controller: controller,
+                        children: <Widget>[
+                          _buildSongsTab(tabContext, ref, starred),
+                          _buildAlbumsTab(tabContext, ref, starred),
+                          _buildArtistsTab(tabContext, ref, starred),
+                        ],
+                      ),
+                    ),
+                  );
+                },
+                loading: () => const EchoMediaListSkeleton(count: 7),
+                error: (error, stackTrace) => EchoErrorState(
+                  title: '收藏加载失败',
+                  description: '请检查网络或服务器状态后重试。',
+                  actionLabel: '重试',
+                  onAction: () => ref.invalidate(starredProvider),
                 ),
               ),
-            ),
-            loading: () => const ListTileSkeleton(count: 6),
-            error: (error, stack) => ErrorPlaceholder(
-              message: '收藏加载失败，请检查网络后重试',
-              onRetry: () => ref.invalidate(starredProvider),
-            ),
-          ),
+            );
+          },
         ),
       ),
     );
@@ -84,60 +110,66 @@ class StarredPage extends ConsumerWidget {
   ) {
     final songs = starred.songs;
     if (songs.isEmpty) {
-      return RefreshIndicator(
-        onRefresh: () => _refresh(ref),
-        child: _buildEmptyScrollable(
-          icon: Icons.favorite_border,
-          text: '暂无收藏歌曲',
-        ),
+      return _refreshableEmpty(
+        ref: ref,
+        title: '暂无收藏歌曲',
+        description: '在歌曲操作中点亮红心后，会显示在这里。',
+        icon: AppIcons.heartOutline,
       );
     }
 
-    return RefreshIndicator(
+    return EchoRefreshView(
       onRefresh: () => _refresh(ref),
-      child: ListView(
+      child: ListView.builder(
         physics: const AlwaysScrollableScrollPhysics(),
-        children: [
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: Row(
-              children: [
-                const Icon(Icons.music_note),
-                const SizedBox(width: 8),
-                Text(
-                  '歌曲 (${songs.length})',
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.bold,
+        itemCount: songs.length + 1,
+        itemBuilder: (context, listIndex) {
+          if (listIndex == 0) {
+            return Padding(
+              padding: EdgeInsets.fromLTRB(
+                context.echoPageHorizontalPadding,
+                context.echoSpacing.sm,
+                context.echoPageHorizontalPadding,
+                context.echoSpacing.xs,
+              ),
+              child: Wrap(
+                alignment: WrapAlignment.spaceBetween,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                spacing: context.echoSpacing.sm,
+                runSpacing: context.echoSpacing.xs,
+                children: <Widget>[
+                  Text(
+                    '歌曲 (${songs.length})',
+                    style: context.echoTypography.headline,
                   ),
-                ),
-                const Spacer(),
-                TextButton.icon(
-                  onPressed: () =>
-                      ref.read(playerProvider.notifier).playQueue(songs),
-                  icon: const Icon(Icons.play_arrow),
-                  label: const Text('播放全部'),
-                ),
-              ],
-            ),
-          ),
-          ...songs.asMap().entries.map((entry) {
-            final index = entry.key;
-            final song = entry.value;
-            return SongListItem(
-              song: song,
-              index: index,
-              variant: SongListItemVariant.standard,
-              onTap: () {
-                ref
-                    .read(playerProvider.notifier)
-                    .playQueue(songs, startIndex: index);
-              },
-              onLongPress: () {
-                showSongOptionsSheet(context: context, song: song);
-              },
+                  EchoButton.ghost(
+                    label: '播放全部',
+                    leadingIcon: AppIcons.play,
+                    onPressed: () =>
+                        ref.read(playerProvider.notifier).playQueue(songs),
+                  ),
+                ],
+              ),
             );
-          }),
-        ],
+          }
+
+          final index = listIndex - 1;
+          final song = songs[index];
+          return SongListItem(
+            song: song,
+            index: index,
+            variant: SongListItemVariant.standard,
+            contentPadding: EdgeInsets.symmetric(
+              horizontal: context.echoPageHorizontalPadding,
+              vertical: context.echoSpacing.xs,
+            ),
+            onTap: () => ref
+                .read(playerProvider.notifier)
+                .playQueue(songs, startIndex: index),
+            onLongPress: () =>
+                showSongOptionsSheet(context: context, song: song),
+          );
+        },
       ),
     );
   }
@@ -149,97 +181,63 @@ class StarredPage extends ConsumerWidget {
   ) {
     final albums = starred.albums;
     if (albums.isEmpty) {
-      return RefreshIndicator(
-        onRefresh: () => _refresh(ref),
-        child: _buildEmptyScrollable(
-          icon: Icons.album_outlined,
-          text: '暂无收藏专辑',
-        ),
+      return _refreshableEmpty(
+        ref: ref,
+        title: '暂无收藏专辑',
+        description: '长按专辑并点亮收藏后，会显示在这里。',
+        icon: AppIcons.albumOutline,
       );
     }
 
-    return RefreshIndicator(
-      onRefresh: () => _refresh(ref),
-      child: GridView.builder(
-        physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
-        gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-          maxCrossAxisExtent: 180,
-          childAspectRatio: 0.75,
-          crossAxisSpacing: 12,
-          mainAxisSpacing: 12,
-        ),
-        itemCount: albums.length,
-        itemBuilder: (context, index) {
-          final album = albums[index];
-          return InkWell(
-            onTap: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => AlbumDetailPage(albumId: album.id),
+    final textScale = MediaQuery.textScalerOf(context).scale(1);
+    final largeText = textScale >= 1.6;
+    final content = largeText
+        ? ListView.builder(
+            physics: const AlwaysScrollableScrollPhysics(),
+            itemCount: albums.length,
+            itemBuilder: (context, index) {
+              final album = albums[index];
+              return EchoAlbumRow(
+                album: album,
+                onPressed: () => _openAlbum(context, album.id),
+                onLongPress: () => showAlbumOptionsSheet(
+                  context: context,
+                  ref: ref,
+                  album: album,
                 ),
               );
             },
-            onLongPress: () {
-              showAlbumOptionsSheet(context: context, ref: ref, album: album);
-            },
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                AspectRatio(
-                  aspectRatio: 1.0,
-                  child: Stack(
-                    children: [
-                      Positioned.fill(
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(8),
-                          child: CoverArtImage(
-                            coverArtId: album.coverArt,
-                            fit: BoxFit.cover,
-                          ),
-                        ),
-                      ),
-                      if (album.starred)
-                        Positioned(
-                          left: 6,
-                          bottom: 6,
-                          child: Container(
-                            padding: const EdgeInsets.all(4),
-                            decoration: BoxDecoration(
-                              color: Colors.black.withValues(alpha: 0.35),
-                              borderRadius: BorderRadius.circular(10),
-                            ),
-                            child: const Icon(
-                              Icons.favorite,
-                              size: 14,
-                              color: Colors.red,
-                            ),
-                          ),
-                        ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  album.name,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontWeight: FontWeight.w500),
-                ),
-                if (album.artist != null)
-                  Text(
-                    album.artist!,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.bodySmall,
-                  ),
-              ],
+          )
+        : GridView.builder(
+            physics: const AlwaysScrollableScrollPhysics(),
+            padding: EdgeInsets.fromLTRB(
+              context.echoPageHorizontalPadding,
+              context.echoSpacing.md,
+              context.echoPageHorizontalPadding,
+              context.echoSpacing.lg,
             ),
+            gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(
+              maxCrossAxisExtent: 200,
+              mainAxisExtent: 220 + 76 * textScale,
+              crossAxisSpacing: context.echoSpacing.sm,
+              mainAxisSpacing: context.echoSpacing.md,
+            ),
+            itemCount: albums.length,
+            itemBuilder: (context, index) {
+              final album = albums[index];
+              return EchoAlbumTile(
+                album: album,
+                onPressed: () => _openAlbum(context, album.id),
+                onLongPress: () => showAlbumOptionsSheet(
+                  context: context,
+                  ref: ref,
+                  album: album,
+                ),
+              );
+            },
           );
-        },
-      ),
-    );
+
+    return EchoRefreshView(onRefresh: () => _refresh(ref), child: content);
   }
 
   Widget _buildArtistsTab(
@@ -249,58 +247,166 @@ class StarredPage extends ConsumerWidget {
   ) {
     final artists = starred.artists;
     if (artists.isEmpty) {
-      return RefreshIndicator(
-        onRefresh: () => _refresh(ref),
-        child: _buildEmptyScrollable(
-          icon: Icons.person_outline,
-          text: '暂无收藏歌手',
-        ),
+      return _refreshableEmpty(
+        ref: ref,
+        title: '暂无收藏歌手',
+        description: '收藏的歌手会集中显示在这里。',
+        icon: AppIcons.profile,
       );
     }
 
-    return RefreshIndicator(
+    return EchoRefreshView(
       onRefresh: () => _refresh(ref),
       child: ListView.builder(
         physics: const AlwaysScrollableScrollPhysics(),
         itemCount: artists.length,
         itemBuilder: (context, index) {
           final artist = artists[index];
-          return ListTile(
-            leading: CircleAvatar(
-              child: artist.coverArt != null
-                  ? ClipOval(
-                      child: CoverArtImage(
-                        coverArtId: artist.coverArt,
-                        size: 40,
-                      ),
-                    )
-                  : const Icon(Icons.person),
+          return EchoArtistRow(
+            artist: artist,
+            onPressed: () => Navigator.of(context).push<void>(
+              EchoPageRoute<void>(
+                context: context,
+                builder: (_) => ArtistDetailPage(artistId: artist.id),
+              ),
             ),
-            title: Text(artist.name),
-            subtitle: Text('${artist.albumCount} 张专辑'),
-            onTap: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => ArtistDetailPage(artistId: artist.id),
-                ),
-              );
-            },
           );
         },
       ),
     );
   }
 
-  Widget _buildEmptyScrollable({required IconData icon, required String text}) {
-    return ListView(
-      physics: const AlwaysScrollableScrollPhysics(),
-      children: [
-        const SizedBox(height: 160),
-        Icon(icon, size: 64, color: Colors.grey),
-        const SizedBox(height: 16),
-        Center(child: Text(text)),
-      ],
+  Widget _refreshableEmpty({
+    required WidgetRef ref,
+    required String title,
+    required String description,
+    required IconData icon,
+  }) {
+    return EchoRefreshView(
+      onRefresh: () => _refresh(ref),
+      child: CustomScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        slivers: <Widget>[
+          SliverFillRemaining(
+            hasScrollBody: false,
+            child: EchoEmptyState(
+              title: title,
+              description: description,
+              icon: icon,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _openAlbum(BuildContext context, String albumId) {
+    Navigator.of(context).push<void>(
+      EchoPageRoute<void>(
+        context: context,
+        builder: (_) => AlbumDetailPage(albumId: albumId),
+      ),
+    );
+  }
+}
+
+class _StarredTabStrip extends StatefulWidget {
+  const _StarredTabStrip({required this.controller});
+
+  final TabController controller;
+
+  @override
+  State<_StarredTabStrip> createState() => _StarredTabStripState();
+}
+
+class _StarredTabStripState extends State<_StarredTabStrip> {
+  @override
+  void initState() {
+    super.initState();
+    widget.controller.addListener(_handleControllerChanged);
+  }
+
+  @override
+  void didUpdateWidget(covariant _StarredTabStrip oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.controller == widget.controller) return;
+    oldWidget.controller.removeListener(_handleControllerChanged);
+    widget.controller.addListener(_handleControllerChanged);
+  }
+
+  @override
+  void dispose() {
+    widget.controller.removeListener(_handleControllerChanged);
+    super.dispose();
+  }
+
+  void _handleControllerChanged() {
+    if (mounted) setState(() {});
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    const labels = <String>['歌曲', '专辑', '歌手'];
+    return Padding(
+      padding: EdgeInsets.fromLTRB(
+        context.echoPageHorizontalPadding,
+        0,
+        context.echoPageHorizontalPadding,
+        context.echoSpacing.sm,
+      ),
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: context.echoColors.raised,
+          borderRadius: context.echoRadii.control,
+        ),
+        child: Row(
+          children: <Widget>[
+            for (var index = 0; index < labels.length; index++)
+              Expanded(
+                child: EchoPressable(
+                  semanticLabel: '${labels[index]}收藏',
+                  selected: widget.controller.index == index,
+                  onPressed: () => widget.controller.animateTo(
+                    index,
+                    duration: context.echoMotion.resolve(
+                      context,
+                      context.echoMotion.state,
+                    ),
+                    curve: context.echoMotion.easeOut,
+                  ),
+                  minimumSize: Size(
+                    double.infinity,
+                    context.echoInteraction.minimumTouchTarget,
+                  ),
+                  borderRadius: context.echoRadii.control,
+                  child: Ink(
+                    decoration: BoxDecoration(
+                      color: widget.controller.index == index
+                          ? context.echoColors.accent.withValues(alpha: 0.14)
+                          : Colors.transparent,
+                      borderRadius: context.echoRadii.control,
+                    ),
+                    child: Center(
+                      child: Padding(
+                        padding: EdgeInsets.symmetric(
+                          horizontal: context.echoSpacing.xs,
+                        ),
+                        child: Text(
+                          labels[index],
+                          style: context.echoTypography.label.copyWith(
+                            color: widget.controller.index == index
+                                ? context.echoColors.accent
+                                : context.echoColors.muted,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
     );
   }
 }

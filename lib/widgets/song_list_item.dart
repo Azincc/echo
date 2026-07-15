@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../core/design/echo_design.dart';
 import '../data/models/song.dart';
 import 'cover_art_image.dart';
 
@@ -33,50 +34,57 @@ class SongListItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
     final artist = song.artist?.trim();
     final artistText = artist != null && artist.isNotEmpty ? artist : '-';
+    final semanticLabel = <String>[
+      song.title,
+      artistText,
+      song.durationString,
+    ].join('，');
 
-    return InkWell(
-      onTap: onTap,
+    return EchoPressable(
+      semanticLabel: semanticLabel,
+      onPressed: onTap,
       onLongPress: onLongPress,
+      minimumSize: const Size(double.infinity, 64),
+      borderRadius: context.echoRadii.control,
       child: Padding(
         padding: contentPadding,
         child: Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
           children: [
             _buildLeading(context),
-            const SizedBox(width: 12),
+            SizedBox(width: context.echoSpacing.sm),
             Expanded(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    song.title,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: theme.textTheme.bodyLarge?.copyWith(
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    artistText,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: theme.textTheme.bodyMedium?.copyWith(
-                      color: colorScheme.onSurfaceVariant,
-                    ),
+                  Text(song.title, style: context.echoTypography.title),
+                  SizedBox(height: context.echoSpacing.xxs),
+                  Wrap(
+                    spacing: context.echoSpacing.xs,
+                    runSpacing: context.echoSpacing.xxs,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    children: <Widget>[
+                      Text(
+                        artistText,
+                        style: context.echoTypography.body.copyWith(
+                          color: context.echoColors.muted,
+                        ),
+                      ),
+                      Text(
+                        song.durationString,
+                        style: context.echoTypography.metadata.copyWith(
+                          color: context.echoColors.muted,
+                          fontFeatures: const <FontFeature>[
+                            FontFeature.tabularFigures(),
+                          ],
+                        ),
+                      ),
+                    ],
                   ),
                 ],
-              ),
-            ),
-            const SizedBox(width: 12),
-            Text(
-              song.durationString,
-              style: theme.textTheme.bodyMedium?.copyWith(
-                color: colorScheme.onSurfaceVariant,
               ),
             ),
           ],
@@ -94,19 +102,20 @@ class SongListItem extends StatelessWidget {
           child: Text(
             '$trackNumber',
             textAlign: TextAlign.center,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            style: context.echoTypography.metadata.copyWith(
+              color: context.echoColors.muted,
+              fontFeatures: const <FontFeature>[FontFeature.tabularFigures()],
             ),
           ),
         );
       case SongListItemVariant.standard:
         return ClipRRect(
-          borderRadius: BorderRadius.circular(6),
+          borderRadius: context.echoRadii.detail,
           child: CoverArtImage(
             coverArtId: coverArtId ?? song.coverArt,
             size: _coverSize,
+            requestSize: 192,
+            semanticLabel: '${song.title} 封面',
           ),
         );
     }

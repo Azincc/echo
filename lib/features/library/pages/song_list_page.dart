@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 
+import '../../../core/design/echo_design.dart';
 import '../../../data/models/song.dart';
 import '../../../providers/music_provider.dart';
 import '../../../providers/navigation_provider.dart';
@@ -13,10 +14,9 @@ import '../../../providers/player_provider.dart';
 import '../../../utils/az_item.dart';
 import '../../../utils/pinyin_helper.dart';
 import '../utils/library_sorting.dart';
+import '../widgets/library_collection_components.dart';
 import '../../player/widgets/song_options_sheet.dart';
-import '../../../widgets/error_placeholder.dart';
 import '../../../widgets/song_list_item.dart';
-import '../../../widgets/skeleton_templates.dart';
 import '../../../widgets/visible_remote_retry_scope.dart';
 
 class SongListPage extends ConsumerStatefulWidget {
@@ -167,48 +167,84 @@ class _SongListPageState extends ConsumerState<SongListPage> {
     _songsSignature = signature;
   }
 
+  Future<void> _showSortSheet() async {
+    final selected = await showEchoBottomSheet<SongSortOption>(
+      context: context,
+      useRootNavigator: true,
+      isScrollControlled: true,
+      builder: (sheetContext) => EchoBottomSheet(
+        title: '歌曲排序',
+        subtitle: '当前：${_sortOption.label}',
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+            maxHeight: MediaQuery.sizeOf(sheetContext).height * 0.62,
+          ),
+          child: ListView.builder(
+            shrinkWrap: true,
+            itemCount: selectableSongSortOptionsWithoutDefault.length,
+            itemBuilder: (context, index) {
+              final option = selectableSongSortOptionsWithoutDefault[index];
+              return EchoActionRow(
+                icon: option == _sortOption ? AppIcons.check : AppIcons.sort,
+                title: option.label,
+                selected: option == _sortOption,
+                onPressed: () => Navigator.of(sheetContext).pop(option),
+              );
+            },
+          ),
+        ),
+      ),
+    );
+    if (!mounted || selected == null || selected == _sortOption) return;
+    _indexBarHideTimer?.cancel();
+    setState(() {
+      _sortOption = selected;
+      _showIndexBar = false;
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final songsAsync = ref.watch(allSongsProvider);
     final loadFailed = ref.watch(allSongsLoadFailedProvider);
+    final songCount = songsAsync.valueOrNull?.length;
 
     return VisibleRemoteRetryScope(
       branchIndex: libraryBranchIndex,
       debugLabel: 'song_list_page',
       shouldRetry: (ref) => loadFailed || songsAsync.hasError,
       onRetry: (ref) => ref.invalidate(allSongsProvider),
-      child: Scaffold(
-        appBar: AppBar(
-          title: const Text('所有歌曲'),
-          actions: [
-            PopupMenuButton<SongSortOption>(
-              tooltip: '歌曲排序：${_sortOption.label}',
-              icon: const Icon(Icons.sort),
-              initialValue: _sortOption,
-              onSelected: (option) {
-                if (option == _sortOption) return;
-                _indexBarHideTimer?.cancel();
-                setState(() {
-                  _sortOption = option;
-                  _showIndexBar = false;
-                });
-              },
-              itemBuilder: (context) => selectableSongSortOptionsWithoutDefault
-                  .map(
-                    (option) => CheckedPopupMenuItem<SongSortOption>(
-                      value: option,
-                      checked: option == _sortOption,
-                      child: Text(option.label),
-                    ),
-                  )
-                  .toList(),
+      child: EchoScaffold(
+        topBar: EchoTopBar.back(
+          context: context,
+          title: '所有歌曲',
+          subtitle: songCount == null
+              ? _sortOption.label
+              : '$songCount 首 · ${_sortOption.label}',
+          actions: <Widget>[
+            EchoIconButton(
+              icon: AppIcons.sort,
+              label: '歌曲排序：${_sortOption.label}',
+              onPressed: () => unawaited(_showSortSheet()),
             ),
           ],
         ),
         body: songsAsync.when(
           data: (songs) {
             if (songs.isEmpty) {
-              return Center(child: Text(loadFailed ? '网络异常，歌曲加载失败' : '暂无歌曲'));
+              if (loadFailed) {
+                return EchoErrorState(
+                  title: '歌曲加载失败',
+                  description: '请检查网络或服务器状态后重试。',
+                  actionLabel: '重试',
+                  onAction: () => ref.invalidate(allSongsProvider),
+                );
+              }
+              return const EchoEmptyState(
+                title: '暂无歌曲',
+                description: '同步音乐库后，歌曲会显示在这里。',
+                icon: AppIcons.music,
+              );
             }
 
             final signature = _buildSongsSignature(songs);
@@ -220,131 +256,128 @@ class _SongListPageState extends ConsumerState<SongListPage> {
               _processSongs(songs, signature);
             }
 
-            return Align(
-              alignment: Alignment.topCenter,
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 1400),
-                child: _sortOption.usesAlphabeticalIndexBar
-                    ? LayoutBuilder(
-                        builder: (context, constraints) {
-                          return Listener(
-                            onPointerDown: (event) =>
-                                _handleIndexBarPointerDown(
-                                  event,
-                                  constraints.maxWidth,
-                                ),
-                            onPointerUp: (_) => _handleIndexBarPointerEnd(),
-                            onPointerCancel: (_) => _handleIndexBarPointerEnd(),
-                            child: NotificationListener<ScrollNotification>(
-                              onNotification: (notification) {
-                                if (notification is ScrollStartNotification ||
-                                    notification is ScrollUpdateNotification ||
-                                    notification is UserScrollNotification) {
-                                  _showIndexBarTemporarily();
-                                }
-                                return false;
-                              },
-                              child: TweenAnimationBuilder<double>(
-                                tween: Tween<double>(
-                                  end: _showIndexBar ? 1.0 : 0.0,
-                                ),
-                                duration: const Duration(milliseconds: 180),
-                                curve: Curves.easeOutCubic,
-                                builder: (context, opacity, child) {
-                                  final isVisible = opacity > 0.01;
-                                  return AzListView(
-                                    data: _azSongs,
-                                    itemCount: _azSongs.length,
-                                    itemPositionsListener:
-                                        _itemPositionsListener,
-                                    itemBuilder: (context, index) =>
-                                        _buildSongListItem(index),
-                                    indexBarData:
-                                        SuspensionUtil.getTagIndexList(
-                                          _azSongs,
-                                        ),
-                                    indexBarWidth: isVisible ? 22 : 0,
-                                    indexBarHeight: isVisible ? null : 0,
-                                    indexBarMargin: EdgeInsets.only(
-                                      right: isVisible ? 4 : 0,
-                                    ),
-                                    indexBarOptions: IndexBarOptions(
-                                      needRebuild: true,
-                                      ignoreDragCancel: true,
-                                      decoration: BoxDecoration(
-                                        color: Colors.black.withValues(
-                                          alpha: 0.58 * opacity,
-                                        ),
-                                        borderRadius: BorderRadius.circular(11),
-                                      ),
-                                      downDecoration: BoxDecoration(
-                                        color: Colors.black.withValues(
-                                          alpha: 0.72 * opacity,
-                                        ),
-                                        borderRadius: BorderRadius.circular(11),
-                                      ),
-                                      textStyle: TextStyle(
-                                        fontSize: 11,
-                                        height: 1,
-                                        fontWeight: FontWeight.w600,
-                                        color: Colors.white.withValues(
-                                          alpha: opacity,
-                                        ),
-                                      ),
-                                      downTextStyle: TextStyle(
-                                        fontSize: 11,
-                                        height: 1,
-                                        fontWeight: FontWeight.w700,
-                                        color: Colors.white.withValues(
-                                          alpha: opacity,
-                                        ),
-                                      ),
-                                      downItemDecoration: BoxDecoration(
-                                        shape: BoxShape.circle,
-                                        color: Colors.white.withValues(
-                                          alpha: 0.24 * opacity,
-                                        ),
-                                      ),
-                                      indexHintWidth: 120 / 2,
-                                      indexHintHeight: 100 / 2,
-                                      indexHintDecoration: BoxDecoration(
-                                        image: null,
-                                        color: Colors.black.withValues(
-                                          alpha: 0.78,
-                                        ),
-                                        shape: BoxShape.rectangle,
-                                        borderRadius: BorderRadius.circular(
-                                          12.0,
-                                        ),
-                                      ),
-                                      indexHintAlignment: Alignment.centerRight,
-                                      indexHintChildAlignment: const Alignment(
-                                        -0.25,
-                                        0.0,
-                                      ),
-                                      indexHintOffset: const Offset(-20, 0),
-                                    ),
-                                  );
-                                },
-                              ),
-                            ),
-                          );
-                        },
-                      )
-                    : ScrollablePositionedList.builder(
-                        itemCount: _displaySongs.length,
-                        itemPositionsListener: _itemPositionsListener,
-                        itemBuilder: (context, index) =>
-                            _buildSongListItem(index),
-                      ),
-              ),
-            );
+            return _buildSongCollection();
           },
-          loading: () => const ListTileSkeleton(count: 10),
-          error: (err, stack) =>
-              const ErrorPlaceholder(message: '歌曲加载失败，请检查网络后重试'),
+          loading: () => const EchoMediaListSkeleton(count: 10),
+          error: (error, stackTrace) => EchoErrorState(
+            title: '歌曲加载失败',
+            description: '请检查网络或服务器状态后重试。',
+            actionLabel: '重试',
+            onAction: () => ref.invalidate(allSongsProvider),
+          ),
         ),
       ),
+    );
+  }
+
+  Widget _buildSongCollection() {
+    return Align(
+      alignment: Alignment.topCenter,
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 1400),
+        child: _sortOption.usesAlphabeticalIndexBar
+            ? LayoutBuilder(
+                builder: (context, constraints) {
+                  return Listener(
+                    onPointerDown: (event) =>
+                        _handleIndexBarPointerDown(event, constraints.maxWidth),
+                    onPointerUp: (_) => _handleIndexBarPointerEnd(),
+                    onPointerCancel: (_) => _handleIndexBarPointerEnd(),
+                    child: NotificationListener<ScrollNotification>(
+                      onNotification: (notification) {
+                        if (notification is ScrollStartNotification ||
+                            notification is ScrollUpdateNotification ||
+                            notification is UserScrollNotification) {
+                          _showIndexBarTemporarily();
+                        }
+                        return false;
+                      },
+                      child: TweenAnimationBuilder<double>(
+                        tween: Tween<double>(end: _showIndexBar ? 1 : 0),
+                        duration: context.echoMotion.resolve(
+                          context,
+                          context.echoMotion.feedback,
+                        ),
+                        curve: context.echoMotion.easeOut,
+                        builder: (context, opacity, child) {
+                          final visible = opacity > 0.01;
+                          return AzListView(
+                            data: _azSongs,
+                            itemCount: _azSongs.length,
+                            itemPositionsListener: _itemPositionsListener,
+                            itemBuilder: (context, index) =>
+                                _buildSongListItem(index),
+                            indexBarData: SuspensionUtil.getTagIndexList(
+                              _azSongs,
+                            ),
+                            indexBarWidth: visible ? 22 : 0,
+                            indexBarHeight: visible ? null : 0,
+                            indexBarMargin: EdgeInsetsDirectional.only(
+                              end: visible ? context.echoSpacing.xxs : 0,
+                            ),
+                            indexBarOptions: _songIndexBarOptions(opacity),
+                          );
+                        },
+                      ),
+                    ),
+                  );
+                },
+              )
+            : ScrollablePositionedList.builder(
+                itemCount: _displaySongs.length,
+                itemPositionsListener: _itemPositionsListener,
+                itemBuilder: (context, index) => _buildSongListItem(index),
+              ),
+      ),
+    );
+  }
+
+  IndexBarOptions _songIndexBarOptions(double opacity) {
+    final colors = context.echoColors;
+    final textScale = MediaQuery.textScalerOf(context).scale(1);
+    final metadataSize =
+        (context.echoTypography.metadata.fontSize ?? 13) / textScale;
+    final hintSize =
+        (context.echoTypography.headline.fontSize ?? 24) / textScale;
+    return IndexBarOptions(
+      needRebuild: true,
+      ignoreDragCancel: true,
+      decoration: BoxDecoration(
+        color: colors.ink.withValues(alpha: 0.58 * opacity),
+        borderRadius: context.echoRadii.pill,
+      ),
+      downDecoration: BoxDecoration(
+        color: colors.ink.withValues(alpha: 0.72 * opacity),
+        borderRadius: context.echoRadii.pill,
+      ),
+      textStyle: context.echoTypography.metadata.copyWith(
+        fontSize: metadataSize,
+        height: 1,
+        color: colors.canvas.withValues(alpha: opacity),
+      ),
+      downTextStyle: context.echoTypography.metadata.copyWith(
+        fontSize: metadataSize,
+        height: 1,
+        fontWeight: FontWeight.w700,
+        color: colors.canvas.withValues(alpha: opacity),
+      ),
+      downItemDecoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: colors.canvas.withValues(alpha: 0.24 * opacity),
+      ),
+      indexHintWidth: 60,
+      indexHintHeight: 50,
+      indexHintDecoration: BoxDecoration(
+        color: colors.ink.withValues(alpha: 0.88),
+        borderRadius: context.echoRadii.control,
+      ),
+      indexHintTextStyle: context.echoTypography.headline.copyWith(
+        fontSize: hintSize,
+        color: colors.canvas,
+      ),
+      indexHintAlignment: Alignment.centerRight,
+      indexHintChildAlignment: const Alignment(-0.25, 0),
+      indexHintOffset: const Offset(-20, 0),
     );
   }
 
@@ -357,6 +390,14 @@ class _SongListPageState extends ConsumerState<SongListPage> {
       index: index,
       variant: SongListItemVariant.standard,
       coverArtId: shouldLoadCover ? song.coverArt : null,
+      contentPadding: EdgeInsetsDirectional.fromSTEB(
+        context.echoPageHorizontalPadding,
+        context.echoSpacing.xs,
+        _sortOption.usesAlphabeticalIndexBar
+            ? 44
+            : context.echoPageHorizontalPadding,
+        context.echoSpacing.xs,
+      ),
       onTap: () {
         ref
             .read(playerProvider.notifier)

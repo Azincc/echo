@@ -2,18 +2,17 @@ import 'package:azlistview/azlistview.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/design/echo_design.dart';
 import '../../../data/models/artist.dart';
 import '../../../providers/music_provider.dart';
 import '../../../providers/navigation_provider.dart';
 import '../../../utils/az_item.dart';
 import '../../../utils/pinyin_helper.dart';
-import '../../../widgets/cover_art_image.dart';
-import 'artist_detail_page.dart';
-import '../../../widgets/error_placeholder.dart';
-import '../../../widgets/skeleton_templates.dart';
 import '../../../widgets/visible_remote_retry_scope.dart';
+import '../widgets/library_collection_components.dart';
+import 'artist_detail_page.dart';
 
-/// 歌手列表页 - A-Z 排序
+/// Alphabetical artist collection with stable A-Z navigation.
 class ArtistListPage extends ConsumerStatefulWidget {
   const ArtistListPage({super.key});
 
@@ -22,46 +21,78 @@ class ArtistListPage extends ConsumerStatefulWidget {
 }
 
 class _ArtistListPageState extends ConsumerState<ArtistListPage> {
-  List<AzItem<Artist>> _azArtists = [];
-  bool _isLoaded = false;
+  List<AzItem<Artist>> _azArtists = const <AzItem<Artist>>[];
+  int _artistsSignature = 0;
 
-  void _processArtists(List<Artist> artists) {
-    if (_isLoaded) return;
+  int _buildSignature(List<Artist> artists) {
+    return Object.hashAll(
+      artists.map(
+        (artist) => Object.hash(
+          artist.id,
+          artist.name,
+          artist.coverArt,
+          artist.albumCount,
+          artist.starred,
+        ),
+      ),
+    );
+  }
 
-    _azArtists = artists.map((artist) {
-      String tag = PinyinUtils.getFirstChar(artist.name);
-      String pinyin = PinyinUtils.getPinyin(artist.name);
-      return AzItem(data: artist, tag: tag, namePinyin: pinyin);
-    }).toList();
-
-    SuspensionUtil.sortListBySuspensionTag(_azArtists);
-    SuspensionUtil.setShowSuspensionStatus(_azArtists);
-
-    setState(() {
-      _isLoaded = true;
-    });
+  void _processArtists(List<Artist> artists, int signature) {
+    final items = artists
+        .map((artist) {
+          return AzItem<Artist>(
+            data: artist,
+            tag: PinyinUtils.getFirstChar(artist.name),
+            namePinyin: PinyinUtils.getPinyin(artist.name),
+          );
+        })
+        .toList(growable: false);
+    SuspensionUtil.sortListBySuspensionTag(items);
+    SuspensionUtil.setShowSuspensionStatus(items);
+    _azArtists = items;
+    _artistsSignature = signature;
   }
 
   @override
   Widget build(BuildContext context) {
     final artistsAsync = ref.watch(allArtistsProvider);
     final loadFailed = ref.watch(allArtistsLoadFailedProvider);
+    final artistCount = artistsAsync.valueOrNull?.length;
 
     return VisibleRemoteRetryScope(
       branchIndex: libraryBranchIndex,
       debugLabel: 'artist_list_page',
       shouldRetry: (ref) => loadFailed || artistsAsync.hasError,
       onRetry: (ref) => ref.invalidate(allArtistsProvider),
-      child: Scaffold(
-        appBar: AppBar(title: const Text('所有歌手')),
+      child: EchoScaffold(
+        topBar: EchoTopBar.back(
+          context: context,
+          title: '所有歌手',
+          subtitle: artistCount == null ? null : '$artistCount 位歌手',
+        ),
         body: artistsAsync.when(
           data: (artists) {
             if (artists.isEmpty) {
-              return Center(child: Text(loadFailed ? '网络异常，歌手列表加载失败' : '暂无歌手'));
+              if (loadFailed) {
+                return EchoErrorState(
+                  title: '歌手列表加载失败',
+                  description: '请检查网络或服务器状态后重试。',
+                  actionLabel: '重试',
+                  onAction: () => ref.invalidate(allArtistsProvider),
+                );
+              }
+              return const EchoEmptyState(
+                title: '暂无歌手',
+                description: '同步音乐库后，歌手会按名称分组显示在这里。',
+                icon: AppIcons.profile,
+              );
             }
 
-            if (!_isLoaded || _azArtists.length != artists.length) {
-              _processArtists(artists);
+            final signature = _buildSignature(artists);
+            if (signature != _artistsSignature ||
+                _azArtists.length != artists.length) {
+              _processArtists(artists, signature);
             }
 
             return Align(
@@ -74,84 +105,45 @@ class _ArtistListPageState extends ConsumerState<ArtistListPage> {
                   itemBuilder: (context, index) {
                     final item = _azArtists[index];
                     final artist = item.data;
-
-                    // Suspension Header (Sticky Header) not explicitly needed if valid tags automatically show up?
-                    // AzListView usually handles it if we provide suspensionWidget.
-                    // But default item builder is just the item.
-                    // If we want the section header, we should provide it.
-
                     return Column(
-                      children: [
-                        // Optional: Section Header if isShowSuspension is true
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: <Widget>[
                         if (item.isShowSuspension)
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 16,
-                              vertical: 8,
-                            ),
-                            color: Theme.of(
-                              context,
-                            ).colorScheme.surfaceContainerHighest,
-                            alignment: Alignment.centerLeft,
-                            child: Text(
-                              item.getSuspensionTag(),
-                              style: Theme.of(context).textTheme.labelLarge,
+                          EchoLibrarySectionLabel(
+                            label: item.getSuspensionTag(),
+                          ),
+                        EchoArtistRow(
+                          artist: artist,
+                          contentPadding: EdgeInsetsDirectional.fromSTEB(
+                            context.echoPageHorizontalPadding,
+                            context.echoSpacing.xs,
+                            44,
+                            context.echoSpacing.xs,
+                          ),
+                          onPressed: () => Navigator.of(context).push<void>(
+                            EchoPageRoute<void>(
+                              context: context,
+                              builder: (_) =>
+                                  ArtistDetailPage(artistId: artist.id),
                             ),
                           ),
-                        ListTile(
-                          leading: CircleAvatar(
-                            child: CoverArtImage(
-                              coverArtId: artist.coverArt,
-                              size: 40,
-                            ),
-                          ),
-                          title: Text(artist.name),
-                          subtitle: artist.albumCount != null
-                              ? Text('${artist.albumCount} 张专辑')
-                              : null,
-                          trailing: const Icon(Icons.chevron_right),
-                          onTap: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (context) =>
-                                    ArtistDetailPage(artistId: artist.id),
-                              ),
-                            );
-                          },
                         ),
                       ],
                     );
                   },
-                  // Index Bar setup
                   indexBarData: SuspensionUtil.getTagIndexList(_azArtists),
-                  indexBarOptions: IndexBarOptions(
-                    needRebuild: true,
-                    ignoreDragCancel: true,
-                    downTextStyle: TextStyle(fontSize: 12, color: Colors.white),
-                    downItemDecoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: Colors.green,
-                    ),
-                    indexHintWidth: 120 / 2,
-                    indexHintHeight: 100 / 2,
-                    indexHintDecoration: BoxDecoration(
-                      image: null,
-                      color: Colors.grey[700],
-                      shape: BoxShape.rectangle,
-                      borderRadius: BorderRadius.circular(5.0),
-                    ),
-                    indexHintAlignment: Alignment.centerRight,
-                    indexHintChildAlignment: Alignment(-0.25, 0.0),
-                    indexHintOffset: Offset(-20, 0),
-                  ),
+                  indexBarOptions: echoIndexBarOptions(context),
                 ),
               ),
             );
           },
-          loading: () => const ListTileSkeleton(count: 8, isCircleAvatar: true),
-          error: (error, stack) =>
-              const ErrorPlaceholder(message: '歌手列表加载失败，请检查网络后重试'),
+          loading: () => const EchoMediaListSkeleton(circle: true),
+          error: (error, stackTrace) => EchoErrorState(
+            title: '歌手列表加载失败',
+            description: '请检查网络或服务器状态后重试。',
+            actionLabel: '重试',
+            onAction: () => ref.invalidate(allArtistsProvider),
+          ),
         ),
       ),
     );

@@ -1,20 +1,22 @@
-import 'package:echoes/data/models/music_library.dart';
-import 'package:echoes/data/models/server_address.dart';
-import 'package:echoes/data/models/embed_service_config.dart';
-import 'package:echoes/features/library/widgets/address_dialog.dart';
-import 'package:echoes/providers/library_provider.dart';
-import 'package:echoes/providers/offline_download_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:echoes/providers/api_provider.dart';
-import 'package:echoes/providers/auth_provider.dart';
-import 'package:echoes/providers/player_provider.dart';
 import 'package:go_router/go_router.dart';
 
-class EditLibraryPage extends ConsumerStatefulWidget {
-  final String libraryId;
+import '../../../core/design/echo_design.dart';
+import '../../../data/models/embed_service_config.dart';
+import '../../../data/models/music_library.dart';
+import '../../../data/models/server_address.dart';
+import '../../../providers/api_provider.dart';
+import '../../../providers/auth_provider.dart';
+import '../../../providers/library_provider.dart';
+import '../../../providers/offline_download_provider.dart';
+import '../../../providers/player_provider.dart';
+import '../widgets/address_dialog.dart';
 
+class EditLibraryPage extends ConsumerStatefulWidget {
   const EditLibraryPage({super.key, required this.libraryId});
+
+  final String libraryId;
 
   @override
   ConsumerState<EditLibraryPage> createState() => _EditLibraryPageState();
@@ -22,23 +24,21 @@ class EditLibraryPage extends ConsumerStatefulWidget {
 
 class _EditLibraryPageState extends ConsumerState<EditLibraryPage> {
   final _formKey = GlobalKey<FormState>();
-  late TextEditingController _nameController;
-  late TextEditingController _usernameController;
-  late TextEditingController _passwordController;
-  late TextEditingController _apiKeyController; // Assuming API key support
-  late TextEditingController _embedBaseUrlController;
-  late TextEditingController _embedApiKeyController;
-  late TextEditingController _embedLibraryIdController;
+  late final TextEditingController _nameController;
+  late final TextEditingController _usernameController;
+  late final TextEditingController _passwordController;
+  late final TextEditingController _apiKeyController;
+  late final TextEditingController _embedBaseUrlController;
+  late final TextEditingController _embedApiKeyController;
+  late final TextEditingController _embedLibraryIdController;
+
   bool _embedEnabled = false;
   bool _isTestingEmbed = false;
+  bool _initialized = false;
 
   @override
   void initState() {
     super.initState();
-    // Initialize with empty, will populate in build or use a separate provider for form state
-    // But since we need to edit, we should load initial data.
-    // Using simple approach: read initial data in build if not set, or use a "loaded" flag.
-    // Better: use a provider that fetches the specific library.
     _nameController = TextEditingController();
     _usernameController = TextEditingController();
     _passwordController = TextEditingController();
@@ -47,8 +47,6 @@ class _EditLibraryPageState extends ConsumerState<EditLibraryPage> {
     _embedApiKeyController = TextEditingController();
     _embedLibraryIdController = TextEditingController();
   }
-
-  bool _initialized = false;
 
   @override
   void dispose() {
@@ -65,301 +63,268 @@ class _EditLibraryPageState extends ConsumerState<EditLibraryPage> {
   @override
   Widget build(BuildContext context) {
     final librariesAsync = ref.watch(librariesProvider);
-
     return librariesAsync.when(
       data: (libraries) {
         final library = libraries.cast<MusicLibrary?>().firstWhere(
-          (l) => l!.id == widget.libraryId,
+          (item) => item?.id == widget.libraryId,
           orElse: () => null,
         );
-
-        // 库已被删除，等待导航跳转
         if (library == null) {
-          return const Scaffold(
-            body: Center(child: CircularProgressIndicator()),
+          return const _LibraryLoadingPage(
+            title: '编辑音乐库',
+            message: '正在更新音乐库列表',
           );
         }
 
-        if (!_initialized) {
-          _nameController.text = library.name;
-          _usernameController.text = library.username ?? '';
-          _passwordController.text =
-              library.password ?? ''; // Be careful showing password
-          _apiKeyController.text = library.apiKey ?? '';
-          final embedConfig = EmbedServiceConfig.fromLibraryExtensions(
-            library.extensions,
-          );
-          _embedEnabled = embedConfig.enabled;
-          _embedBaseUrlController.text = embedConfig.baseUrl;
-          _embedApiKeyController.text = embedConfig.apiKey;
-          _embedLibraryIdController.text = embedConfig.libraryId;
-          _initialized = true;
-        }
-
-        return Scaffold(
-          appBar: AppBar(
-            title: const Text('编辑音乐库'),
-            actions: [
-              IconButton(
-                icon: const Icon(Icons.check),
+        _initializeForm(library);
+        return EchoScaffold(
+          topBar: EchoTopBar.back(
+            context: context,
+            title: '编辑音乐库',
+            subtitle: library.name,
+            actions: <Widget>[
+              EchoIconButton(
+                icon: AppIcons.save,
+                label: '保存音乐库',
                 onPressed: () => _saveLibrary(library),
               ),
             ],
           ),
-          body: SingleChildScrollView(
-            padding: const EdgeInsets.all(16.0),
-            child: Form(
-              key: _formKey,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _buildBasicInfoSection(context),
-                  const SizedBox(height: 24),
-                  _buildAria2Section(context),
-                  const SizedBox(height: 24),
-                  _buildAddressesSection(context, library),
-                  const SizedBox(height: 24),
-                  _buildDeleteSection(context, library),
-                ],
+          body: SafeArea(
+            top: false,
+            child: Align(
+              alignment: Alignment.topCenter,
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 920),
+                child: SingleChildScrollView(
+                  keyboardDismissBehavior:
+                      ScrollViewKeyboardDismissBehavior.onDrag,
+                  padding: EdgeInsets.fromLTRB(
+                    context.echoPageHorizontalPadding,
+                    context.echoSpacing.sm,
+                    context.echoPageHorizontalPadding,
+                    MediaQuery.viewInsetsOf(context).bottom +
+                        context.echoSpacing.xxl,
+                  ),
+                  child: Form(
+                    key: _formKey,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: <Widget>[
+                        _buildBasicInfoSection(),
+                        SizedBox(height: context.echoSpacing.xl),
+                        const EchoDivider(),
+                        SizedBox(height: context.echoSpacing.xl),
+                        _buildEmbedServiceSection(),
+                        SizedBox(height: context.echoSpacing.xl),
+                        const EchoDivider(),
+                        SizedBox(height: context.echoSpacing.xl),
+                        _buildAddressesSection(library),
+                        SizedBox(height: context.echoSpacing.xl),
+                        const EchoDivider(),
+                        SizedBox(height: context.echoSpacing.xl),
+                        _buildDeleteSection(library),
+                      ],
+                    ),
+                  ),
+                ),
               ),
             ),
           ),
         );
       },
       loading: () =>
-          const Scaffold(body: Center(child: CircularProgressIndicator())),
-      error: (err, stack) => Scaffold(body: Center(child: Text('Error: $err'))),
+          const _LibraryLoadingPage(title: '编辑音乐库', message: '正在读取音乐库配置'),
+      error: (error, stackTrace) => EchoScaffold(
+        topBar: EchoTopBar.back(context: context, title: '编辑音乐库'),
+        body: EchoErrorState(
+          title: '无法读取音乐库',
+          description: '音乐库配置暂时不可用，请重试。',
+          actionLabel: '重试',
+          onAction: () => ref.invalidate(librariesProvider),
+        ),
+      ),
     );
   }
 
-  Widget _buildBasicInfoSection(BuildContext context) {
+  void _initializeForm(MusicLibrary library) {
+    if (_initialized) return;
+    _nameController.text = library.name;
+    _usernameController.text = library.username ?? '';
+    _passwordController.text = library.password ?? '';
+    _apiKeyController.text = library.apiKey ?? '';
+    final embedConfig = EmbedServiceConfig.fromLibraryExtensions(
+      library.extensions,
+    );
+    _embedEnabled = embedConfig.enabled;
+    _embedBaseUrlController.text = embedConfig.baseUrl;
+    _embedApiKeyController.text = embedConfig.apiKey;
+    _embedLibraryIdController.text = embedConfig.libraryId;
+    _initialized = true;
+  }
+
+  Widget _buildBasicInfoSection() {
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          '基本信息',
-          style: Theme.of(context).textTheme.titleMedium?.copyWith(
-            fontWeight: FontWeight.bold,
-            color: Theme.of(context).colorScheme.primary,
-          ),
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: <Widget>[
+        const EchoSectionHeader(
+          title: '基本信息',
+          description: '这个名称只用于在 Echo 中区分不同的音乐库。',
         ),
-        const SizedBox(height: 16),
-        TextFormField(
+        SizedBox(height: context.echoSpacing.md),
+        EchoTextField(
           controller: _nameController,
-          decoration: const InputDecoration(
-            labelText: '库名称',
-            border: OutlineInputBorder(),
-          ),
-          validator: (value) => value?.isEmpty ?? true ? '请输入名称' : null,
+          label: '库名称',
+          hintText: '例如：家庭音乐库',
+          leadingIcon: AppIcons.library,
+          textInputAction: TextInputAction.done,
+          validator: (value) {
+            if (value == null || value.trim().isEmpty) return '请输入名称';
+            return null;
+          },
         ),
-        // Auth fields (Generic for now, ideally depends on AuthType)
-        /* 
-        const SizedBox(height: 16),
-        TextFormField(
-           controller: _usernameController,
-           decoration: const InputDecoration(labelText: '用户名'),
-        ),
-        */
-        // Hide sensitive info for now or allow changing password only
       ],
     );
   }
 
-  Widget _buildAddressesSection(BuildContext context, MusicLibrary library) {
-    // Sort addresses by priority
-    final sortedAddresses = List<ServerAddress>.from(library.addresses)
-      ..sort((a, b) => a.priority.compareTo(b.priority));
-
+  Widget _buildEmbedServiceSection() {
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Row(
-              children: [
-                Text(
-                  '服务器地址',
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.bold,
-                    color: Theme.of(context).colorScheme.primary,
-                  ),
-                ),
-                if (library.isActive)
-                  IconButton(
-                    icon: const Icon(Icons.refresh, size: 20),
-                    tooltip: '检测延迟',
-                    onPressed: () async {
-                      await ref.read(addressPoolProvider).probeAll();
-                      if (!mounted) return;
-                      ref.invalidate(librariesProvider);
-                    },
-                  ),
-              ],
-            ),
-            IconButton(
-              icon: const Icon(Icons.add_circle_outline),
-              onPressed: () => _showAddressDialog(context),
-            ),
-          ],
-        ),
-        const SizedBox(height: 4),
-        Text(
-          '长按拖拽调整优先级顺序，排在前面的地址优先使用',
-          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-            color: Theme.of(context).colorScheme.onSurfaceVariant,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: <Widget>[
+        EchoSectionHeader(
+          title: 'Embed Service 离线下载',
+          description: '启用后，可将远程试听歌曲加入当前音乐库的离线下载队列。',
+          trailing: _EchoToggle(
+            value: _embedEnabled,
+            label: _embedEnabled ? '已启用' : '未启用',
+            onChanged: (value) => setState(() => _embedEnabled = value),
           ),
         ),
-        const SizedBox(height: 8),
+        if (_embedEnabled) ...<Widget>[
+          SizedBox(height: context.echoSpacing.md),
+          EchoTextField(
+            controller: _embedBaseUrlController,
+            label: 'Embed Service URL',
+            hintText: 'http://localhost:8080',
+            leadingIcon: AppIcons.cloud,
+            keyboardType: TextInputType.url,
+            textInputAction: TextInputAction.next,
+            validator: (value) {
+              if (!_embedEnabled) return null;
+              if (value == null || value.trim().isEmpty) {
+                return '请输入 Embed Service URL';
+              }
+              return null;
+            },
+          ),
+          SizedBox(height: context.echoSpacing.md),
+          EchoTextField(
+            controller: _embedApiKeyController,
+            label: 'API Key',
+            hintText: 'your-api-key',
+            leadingIcon: AppIcons.key,
+            obscureText: true,
+            textInputAction: TextInputAction.next,
+            validator: (value) {
+              if (!_embedEnabled) return null;
+              if (value == null || value.trim().isEmpty) return '请输入 API Key';
+              return null;
+            },
+          ),
+          SizedBox(height: context.echoSpacing.md),
+          EchoTextField(
+            controller: _embedLibraryIdController,
+            label: 'Library ID',
+            hintText: 'default',
+            leadingIcon: AppIcons.folderOpen,
+            textInputAction: TextInputAction.done,
+          ),
+          SizedBox(height: context.echoSpacing.md),
+          EchoButton.secondary(
+            label: _isTestingEmbed ? '正在测试…' : '测试连接',
+            leadingIcon: AppIcons.signalTower,
+            onPressed: _isTestingEmbed ? null : _testEmbedConnection,
+          ),
+          if (_isTestingEmbed) ...<Widget>[
+            SizedBox(height: context.echoSpacing.sm),
+            const _InlineBusyStatus(label: '正在连接 Embed Service'),
+          ],
+        ],
+      ],
+    );
+  }
+
+  Widget _buildAddressesSection(MusicLibrary library) {
+    final sortedAddresses = List<ServerAddress>.from(library.addresses)
+      ..sort((first, second) => first.priority.compareTo(second.priority));
+
+    final actions = <Widget>[
+      if (library.isActive)
+        EchoIconButton(
+          icon: AppIcons.refresh,
+          label: '检测全部线路延迟',
+          onPressed: () async {
+            await ref.read(addressPoolProvider).probeAll();
+            if (mounted) ref.invalidate(librariesProvider);
+          },
+        ),
+      EchoIconButton(
+        icon: AppIcons.addCircle,
+        label: '添加服务器地址',
+        onPressed: () => _showAddressSheet(),
+      ),
+    ];
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: <Widget>[
+        EchoSectionHeader(
+          title: '服务器地址',
+          description: '长按拖动手柄调整优先级；排在前面的线路优先使用。',
+          trailing: Wrap(
+            spacing: context.echoSpacing.xxs,
+            runSpacing: context.echoSpacing.xxs,
+            children: actions,
+          ),
+        ),
+        SizedBox(height: context.echoSpacing.sm),
         if (sortedAddresses.isEmpty)
-          const Text('暂无地址，请添加服务器地址。')
+          _InlineFormState(
+            icon: AppIcons.route,
+            title: '还没有服务器地址',
+            description: '至少添加一条线路后才能连接这个音乐库。',
+            actionLabel: '添加地址',
+            onAction: _showAddressSheet,
+          )
         else
           ReorderableListView.builder(
             shrinkWrap: true,
             physics: const NeverScrollableScrollPhysics(),
+            buildDefaultDragHandles: false,
             itemCount: sortedAddresses.length,
             onReorder: (oldIndex, newIndex) =>
                 _onReorderAddresses(sortedAddresses, oldIndex, newIndex),
-            itemBuilder: (context, index) {
-              final address = sortedAddresses[index];
-              return Material(
-                key: ValueKey(address.id),
-                child: ListTile(
-                  title: Text(address.label),
-                  subtitle: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(address.url),
-                      Row(
-                        children: [
-                          Container(
-                            width: 8,
-                            height: 8,
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              color: _getStatusColor(address.status),
-                            ),
-                          ),
-                          const SizedBox(width: 4),
-                          Text(
-                            '${address.status.name} ${address.lastLatencyMs != null ? '(${address.lastLatencyMs}ms)' : ''}',
-                            style: Theme.of(context).textTheme.bodySmall,
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                  trailing: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      IconButton(
-                        icon: const Icon(Icons.edit, size: 20),
-                        onPressed: () =>
-                            _showAddressDialog(context, address: address),
-                      ),
-                      IconButton(
-                        icon: const Icon(
-                          Icons.delete,
-                          size: 20,
-                          color: Colors.red,
-                        ),
-                        onPressed: () => _deleteAddress(address),
-                      ),
-                      const Icon(Icons.drag_handle),
-                    ],
-                  ),
+            proxyDecorator: (child, index, animation) {
+              return AnimatedBuilder(
+                animation: animation,
+                builder: (context, _) => EchoSurface(
+                  level: EchoSurfaceLevel.floating,
+                  borderColor: context.echoColors.controlBoundary,
+                  child: child,
                 ),
               );
             },
-          ),
-      ],
-    );
-  }
-
-  Widget _buildAria2Section(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            Text(
-              'Embed Service 离线下载',
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.bold,
-                color: Theme.of(context).colorScheme.primary,
-              ),
-            ),
-            const Spacer(),
-            Switch(
-              value: _embedEnabled,
-              onChanged: (value) {
-                setState(() {
-                  _embedEnabled = value;
-                });
-              },
-            ),
-          ],
-        ),
-        if (_embedEnabled) ...[
-          const SizedBox(height: 8),
-          TextFormField(
-            controller: _embedBaseUrlController,
-            decoration: const InputDecoration(
-              labelText: 'Embed Service URL',
-              hintText: 'http://localhost:8080',
-              border: OutlineInputBorder(),
-              prefixIcon: Icon(Icons.cloud),
-            ),
-            validator: (value) {
-              if (!_embedEnabled) return null;
-              return value == null || value.trim().isEmpty
-                  ? '请输入 Embed Service URL'
-                  : null;
+            itemBuilder: (context, index) {
+              final address = sortedAddresses[index];
+              return _AddressRow(
+                key: ValueKey(address.id),
+                address: address,
+                index: index,
+                onEdit: () => _showAddressSheet(address: address),
+                onDelete: () => _deleteAddress(address),
+              );
             },
           ),
-          const SizedBox(height: 12),
-          TextFormField(
-            controller: _embedApiKeyController,
-            obscureText: true,
-            decoration: const InputDecoration(
-              labelText: 'API Key',
-              hintText: 'your-api-key',
-              border: OutlineInputBorder(),
-              prefixIcon: Icon(Icons.key),
-            ),
-            validator: (value) {
-              if (!_embedEnabled) return null;
-              return value == null || value.trim().isEmpty
-                  ? '请输入 API Key'
-                  : null;
-            },
-          ),
-          const SizedBox(height: 12),
-          TextFormField(
-            controller: _embedLibraryIdController,
-            decoration: const InputDecoration(
-              labelText: 'Library ID',
-              hintText: 'default',
-              border: OutlineInputBorder(),
-              prefixIcon: Icon(Icons.library_music),
-            ),
-          ),
-          const SizedBox(height: 12),
-          Align(
-            alignment: Alignment.centerLeft,
-            child: OutlinedButton.icon(
-              onPressed: _isTestingEmbed ? null : _testEmbedConnection,
-              icon: _isTestingEmbed
-                  ? const SizedBox(
-                      width: 16,
-                      height: 16,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Icon(Icons.wifi_tethering),
-              label: Text(_isTestingEmbed ? '测试中...' : '测试连接'),
-            ),
-          ),
-        ],
       ],
     );
   }
@@ -375,42 +340,35 @@ class _EditLibraryPageState extends ConsumerState<EditLibraryPage> {
 
   Future<void> _testEmbedConnection() async {
     if (!_embedEnabled) {
-      ScaffoldMessenger.of(
+      showEchoMessage(
         context,
-      ).showSnackBar(const SnackBar(content: Text('请先启用 Embed Service 配置')));
+        '请先启用 Embed Service 配置',
+        kind: EchoMessageKind.warning,
+      );
       return;
     }
 
     final config = _currentEmbedServiceConfig();
     if (!config.isConfigured) {
-      ScaffoldMessenger.of(
+      showEchoMessage(
         context,
-      ).showSnackBar(const SnackBar(content: Text('请先填写 URL 和 API Key')));
+        '请先填写 URL 和 API Key',
+        kind: EchoMessageKind.warning,
+      );
       return;
     }
 
-    setState(() {
-      _isTestingEmbed = true;
-    });
-
+    setState(() => _isTestingEmbed = true);
     try {
       final service = ref.read(offlineDownloadServiceProvider);
       await service.testConnection(config);
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('连接成功！')));
-    } catch (e) {
+      showEchoMessage(context, '连接成功', kind: EchoMessageKind.success);
+    } catch (error) {
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('连接失败: $e')));
+      showEchoMessage(context, '连接失败: $error', kind: EchoMessageKind.error);
     } finally {
-      if (mounted) {
-        setState(() {
-          _isTestingEmbed = false;
-        });
-      }
+      if (mounted) setState(() => _isTestingEmbed = false);
     }
   }
 
@@ -423,220 +381,549 @@ class _EditLibraryPageState extends ConsumerState<EditLibraryPage> {
     final item = addresses.removeAt(oldIndex);
     addresses.insert(newIndex, item);
 
-    // 更新所有地址的优先级为列表位置
-    final repo = ref.read(libraryRepositoryProvider);
-    for (int i = 0; i < addresses.length; i++) {
-      final updated = addresses[i].copyWith(priority: i);
-      await repo.updateAddress(updated);
+    final repository = ref.read(libraryRepositoryProvider);
+    for (var index = 0; index < addresses.length; index++) {
+      await repository.updateAddress(
+        addresses[index].copyWith(priority: index),
+      );
     }
     ref.invalidate(librariesProvider);
   }
 
-  Color _getStatusColor(ServerAddressStatus status) {
-    switch (status) {
-      case ServerAddressStatus.ok:
-        return Colors.green;
-      case ServerAddressStatus.failed:
-        return Colors.red;
-      case ServerAddressStatus.unknown:
-        return Colors.grey;
-    }
-  }
-
-  Widget _buildDeleteSection(BuildContext context, MusicLibrary library) {
-    return Center(
-      child: TextButton.icon(
-        onPressed: () => _confirmDelete(library),
-        icon: const Icon(Icons.delete, color: Colors.red),
-        label: const Text('删除此音乐库', style: TextStyle(color: Colors.red)),
-      ),
+  Widget _buildDeleteSection(MusicLibrary library) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: <Widget>[
+        const EchoSectionHeader(
+          title: '危险操作',
+          description: '删除音乐库会移除本机保存的连接信息，且无法恢复。',
+        ),
+        SizedBox(height: context.echoSpacing.md),
+        Align(
+          alignment: AlignmentDirectional.centerStart,
+          child: EchoButton.destructive(
+            label: '删除此音乐库',
+            leadingIcon: AppIcons.delete,
+            onPressed: () => _confirmDelete(library),
+          ),
+        ),
+      ],
     );
   }
 
-  Future<void> _showAddressDialog(
-    BuildContext context, {
-    ServerAddress? address,
-  }) async {
-    final result = await showDialog<ServerAddress>(
+  Future<void> _showAddressSheet({ServerAddress? address}) async {
+    final result = await showEchoBottomSheet<ServerAddress>(
       context: context,
+      useRootNavigator: true,
+      isScrollControlled: true,
       builder: (context) =>
           AddressDialog(libraryId: widget.libraryId, initialAddress: address),
     );
+    if (result == null) return;
 
-    if (result != null) {
-      final libraries = await ref.read(librariesProvider.future);
+    final libraries = await ref.read(librariesProvider.future);
+    if (!mounted) return;
+    final library = libraries.firstWhere((item) => item.id == widget.libraryId);
+
+    if (address == null || address.url != result.url) {
+      showEchoMessage(
+        context,
+        '正在验证服务器一致性…',
+        duration: const Duration(seconds: 1),
+      );
+      final isValid = await ref
+          .read(authRepositoryProvider)
+          .verifyServerIdentity(result, library);
       if (!mounted) return;
-      final library = libraries.firstWhere((l) => l.id == widget.libraryId);
-
-      // Verify server identity if it's a new address or URL changed
-      if (address == null || address.url != result.url) {
-        // Show loading indicator?
-        if (mounted) {
-          // ignore: use_build_context_synchronously
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('正在验证服务器一致性...'),
-              duration: Duration(seconds: 1),
-            ),
-          );
-        }
-
-        final isValid = await ref
-            .read(authRepositoryProvider)
-            .verifyServerIdentity(result, library);
-
-        if (!mounted) return;
-
-        if (!isValid) {
-          if (mounted) {
-            await showDialog(
-              // ignore: use_build_context_synchronously
-              context: context,
-              builder: (context) => AlertDialog(
-                title: const Text('验证失败'),
-                content: const Text(
-                  '新地址似乎指向了不同的服务器或验证失败。\n即添加的线路必须属于同一个服务器（相同的音乐库内容）。',
-                ),
-                actions: [
-                  TextButton(
-                    onPressed: () => Navigator.pop(context),
-                    child: const Text('确定'),
-                  ),
-                ],
-              ),
-            );
-          }
-          return;
-        }
+      if (!isValid) {
+        await _showVerificationFailure();
+        return;
       }
-
-      final repo = ref.read(libraryRepositoryProvider);
-      if (address != null) {
-        await repo.updateAddress(result);
-      } else {
-        await repo.addAddress(result);
-      }
-
-      // Force refresh of library data
-      ref.invalidate(librariesProvider);
-      // Wait for libraries to update
-      await Future.delayed(const Duration(milliseconds: 100));
-      // Invalidate active library logic to pick up new addresses if needed
-      ref.invalidate(activeLibraryProvider);
-      // Trigger probe immediately by invalidating address pool or synchronizer?
-      // Actually activeLibrarySynchronizerProvider watches activeLibraryProvider and calls setAddresses.
-      // So once activeLibraryProvider updates, addressPool should update.
-      // But we might want to manually trigger a probe on the pool.
-      final pool = ref.read(addressPoolProvider);
-      // pool.probeAll(); // The synchronizer does this if active address is null.
-      // If we just added an address, we might want to probe it.
-      // Let's force a probe.
-      pool.probeAll();
     }
+
+    final repository = ref.read(libraryRepositoryProvider);
+    if (address != null) {
+      await repository.updateAddress(result);
+    } else {
+      await repository.addAddress(result);
+    }
+
+    ref.invalidate(librariesProvider);
+    await Future<void>.delayed(const Duration(milliseconds: 100));
+    ref.invalidate(activeLibraryProvider);
+    ref.read(addressPoolProvider).probeAll();
+  }
+
+  Future<void> _showVerificationFailure() async {
+    await showEchoBottomSheet<void>(
+      context: context,
+      useRootNavigator: true,
+      builder: (sheetContext) => EchoBottomSheet(
+        title: '验证失败',
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: <Widget>[
+            Text(
+              '新地址似乎指向了不同的服务器或验证失败。添加的线路必须属于同一个服务器，并提供相同的音乐库内容。',
+              style: context.echoTypography.body.copyWith(
+                color: context.echoColors.muted,
+              ),
+            ),
+            SizedBox(height: context.echoSpacing.lg),
+            EchoButton.primary(
+              label: '知道了',
+              expand: true,
+              onPressed: () => Navigator.of(sheetContext).pop(),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   Future<void> _deleteAddress(ServerAddress address) async {
-    final confirm = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('删除地址'),
-        content: Text('确定要删除地址 "${address.label}" 吗？'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('取消'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('删除'),
-          ),
-        ],
-      ),
+    final confirmed = await _confirmDestructiveAction(
+      title: '删除地址',
+      description: '确定要删除地址“${address.label}”吗？',
+      confirmLabel: '删除地址',
     );
+    if (!confirmed) return;
 
-    if (confirm == true) {
-      // 如果删除的是当前使用的线路，停止音乐
-      final activeAddress = ref.read(activeAddressProvider);
-      if (activeAddress?.id == address.id) {
-        ref.invalidate(playerProvider);
-      }
+    final activeAddress = ref.read(activeAddressProvider);
+    if (activeAddress?.id == address.id) ref.invalidate(playerProvider);
 
-      final repo = ref.read(libraryRepositoryProvider);
-      await repo.deleteAddress(address.id);
-      ref.invalidate(librariesProvider); // 刷新 UI
-    }
+    final repository = ref.read(libraryRepositoryProvider);
+    await repository.deleteAddress(address.id);
+    ref.invalidate(librariesProvider);
   }
 
   Future<void> _saveLibrary(MusicLibrary original) async {
-    if (_formKey.currentState!.validate()) {
-      final repo = ref.read(libraryRepositoryProvider);
-      final extensions = Map<String, dynamic>.from(original.extensions);
-      extensions.remove('aria2'); // 删除旧的 Aria2 配置
-      extensions['embedService'] = _currentEmbedServiceConfig().toJson();
-      final updated = original.copyWith(
-        name: _nameController.text,
-        extensions: extensions,
-        // Update other fields as needed
-        updatedAt: DateTime.now(),
-      );
-      await repo.updateLibrary(updated);
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('保存成功')));
-        context.pop();
-      }
-    }
+    if (!(_formKey.currentState?.validate() ?? false)) return;
+
+    final repository = ref.read(libraryRepositoryProvider);
+    final extensions = Map<String, dynamic>.from(original.extensions);
+    extensions.remove('aria2');
+    extensions['embedService'] = _currentEmbedServiceConfig().toJson();
+    final updated = original.copyWith(
+      name: _nameController.text,
+      extensions: extensions,
+      updatedAt: DateTime.now(),
+    );
+    await repository.updateLibrary(updated);
+    if (!mounted) return;
+    showEchoMessage(context, '保存成功', kind: EchoMessageKind.success);
+    context.pop();
   }
 
   Future<void> _confirmDelete(MusicLibrary library) async {
-    final confirm = await showDialog<bool>(
+    final confirmed = await _confirmDestructiveAction(
+      title: '删除音乐库',
+      description: '确定要删除音乐库“${library.name}”吗？此操作不可恢复。',
+      confirmLabel: '删除音乐库',
+    );
+    if (!confirmed) return;
+
+    final repository = ref.read(libraryRepositoryProvider);
+    if (library.isActive) ref.invalidate(playerProvider);
+
+    final allLibraries = await ref.read(librariesProvider.future);
+    final remaining = allLibraries
+        .where((item) => item.id != library.id)
+        .toList();
+    await repository.deleteLibrary(library.id);
+    if (!mounted) return;
+
+    if (remaining.isEmpty) {
+      await ref.read(authStateProvider.notifier).logout();
+      if (mounted) context.go('/login');
+      return;
+    }
+
+    final next = remaining.first;
+    await repository.setActiveLibrary(next.id);
+    ref.read(authStateProvider.notifier).switchLibrary(next);
+    if (mounted) context.go('/home');
+  }
+
+  Future<bool> _confirmDestructiveAction({
+    required String title,
+    required String description,
+    required String confirmLabel,
+  }) async {
+    final result = await showEchoBottomSheet<bool>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('删除音乐库'),
-        content: Text('确定要删除音乐库 "${library.name}" 吗？此操作不可恢复。'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('取消'),
+      useRootNavigator: true,
+      builder: (sheetContext) => EchoBottomSheet(
+        title: title,
+        subtitle: description,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: <Widget>[
+            EchoButton.destructive(
+              label: confirmLabel,
+              expand: true,
+              onPressed: () => Navigator.of(sheetContext).pop(true),
+            ),
+            SizedBox(height: context.echoSpacing.xs),
+            EchoButton.ghost(
+              label: '取消',
+              expand: true,
+              onPressed: () => Navigator.of(sheetContext).pop(false),
+            ),
+          ],
+        ),
+      ),
+    );
+    return result == true;
+  }
+}
+
+class _AddressRow extends StatelessWidget {
+  const _AddressRow({
+    super.key,
+    required this.address,
+    required this.index,
+    required this.onEdit,
+    required this.onDelete,
+  });
+
+  final ServerAddress address;
+  final int index;
+  final VoidCallback onEdit;
+  final VoidCallback onDelete;
+
+  @override
+  Widget build(BuildContext context) {
+    final status = _AddressStatusPresentation.from(context, address.status);
+    final latency = address.lastLatencyMs == null
+        ? '延迟未知'
+        : '延迟 ${address.lastLatencyMs}ms';
+    final scale = MediaQuery.textScalerOf(context).scale(1);
+    final stackActions = scale > 1.3 || MediaQuery.sizeOf(context).width < 380;
+
+    final actions = Wrap(
+      spacing: context.echoSpacing.xxs,
+      runSpacing: context.echoSpacing.xxs,
+      children: <Widget>[
+        EchoIconButton(
+          icon: AppIcons.edit,
+          label: '编辑 ${address.label}',
+          onPressed: onEdit,
+        ),
+        EchoIconButton(
+          icon: AppIcons.delete,
+          label: '删除 ${address.label}',
+          foregroundColor: context.echoColors.error,
+          onPressed: onDelete,
+        ),
+        ReorderableDelayedDragStartListener(
+          index: index,
+          child: Semantics(
+            button: true,
+            label: '长按拖动 ${address.label} 调整优先级',
+            child: SizedBox.square(
+              dimension: context.echoInteraction.minimumTouchTarget,
+              child: Center(
+                child: Icon(
+                  AppIcons.dragHandle,
+                  size: context.echoInteraction.iconSize,
+                  color: context.echoColors.muted,
+                ),
+              ),
+            ),
           ),
-          FilledButton(
-            onPressed: () => Navigator.pop(context, true),
-            style: FilledButton.styleFrom(backgroundColor: Colors.red),
-            child: const Text('删除'),
+        ),
+      ],
+    );
+
+    return Padding(
+      padding: EdgeInsets.only(bottom: context.echoSpacing.xs),
+      child: EchoSurface(
+        level: EchoSurfaceLevel.surface,
+        borderColor: context.echoColors.divider,
+        padding: EdgeInsets.all(context.echoSpacing.sm),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: <Widget>[
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                SizedBox.square(
+                  dimension: context.echoInteraction.minimumTouchTarget,
+                  child: Center(
+                    child: Icon(status.icon, size: 22, color: status.color),
+                  ),
+                ),
+                SizedBox(width: context.echoSpacing.xs),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: <Widget>[
+                      Text(address.label, style: context.echoTypography.title),
+                      SizedBox(height: context.echoSpacing.xxs),
+                      SelectableText(
+                        address.url,
+                        style: context.echoTypography.body.copyWith(
+                          color: context.echoColors.muted,
+                        ),
+                      ),
+                      SizedBox(height: context.echoSpacing.xs),
+                      Wrap(
+                        spacing: context.echoSpacing.xs,
+                        runSpacing: context.echoSpacing.xxs,
+                        children: <Widget>[
+                          Text(
+                            status.label,
+                            style: context.echoTypography.metadata.copyWith(
+                              color: status.color,
+                            ),
+                          ),
+                          Text(
+                            latency,
+                            style: context.echoTypography.metadata.copyWith(
+                              color: context.echoColors.muted,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+                if (!stackActions) ...<Widget>[
+                  SizedBox(width: context.echoSpacing.xs),
+                  actions,
+                ],
+              ],
+            ),
+            if (stackActions) ...<Widget>[
+              SizedBox(height: context.echoSpacing.xs),
+              Align(alignment: AlignmentDirectional.centerEnd, child: actions),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _AddressStatusPresentation {
+  const _AddressStatusPresentation({
+    required this.label,
+    required this.icon,
+    required this.color,
+  });
+
+  final String label;
+  final IconData icon;
+  final Color color;
+
+  factory _AddressStatusPresentation.from(
+    BuildContext context,
+    ServerAddressStatus status,
+  ) {
+    return switch (status) {
+      ServerAddressStatus.ok => _AddressStatusPresentation(
+        label: '连接正常',
+        icon: AppIcons.checkCircle,
+        color: context.echoColors.accent,
+      ),
+      ServerAddressStatus.failed => _AddressStatusPresentation(
+        label: '连接失败',
+        icon: AppIcons.error,
+        color: context.echoColors.error,
+      ),
+      ServerAddressStatus.unknown => _AddressStatusPresentation(
+        label: '尚未检测',
+        icon: AppIcons.info,
+        color: context.echoColors.muted,
+      ),
+    };
+  }
+}
+
+class _EchoToggle extends StatelessWidget {
+  const _EchoToggle({
+    required this.value,
+    required this.label,
+    required this.onChanged,
+  });
+
+  final bool value;
+  final String label;
+  final ValueChanged<bool> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.echoColors;
+    return EchoPressable(
+      semanticLabel: label,
+      selected: value,
+      onPressed: () => onChanged(!value),
+      minimumSize: Size(
+        context.echoInteraction.minimumTouchTarget,
+        context.echoInteraction.minimumTouchTarget,
+      ),
+      borderRadius: context.echoRadii.control,
+      child: Ink(
+        decoration: BoxDecoration(
+          color: value ? colors.accent.withValues(alpha: 0.12) : colors.raised,
+          borderRadius: context.echoRadii.control,
+          border: Border.all(
+            color: value ? colors.accent : colors.controlBoundary,
+          ),
+        ),
+        child: Padding(
+          padding: EdgeInsets.symmetric(horizontal: context.echoSpacing.sm),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              Icon(
+                value ? AppIcons.checkCircle : AppIcons.radio,
+                size: 20,
+                color: value ? colors.accent : colors.muted,
+              ),
+              SizedBox(width: context.echoSpacing.xs),
+              Text(
+                label,
+                style: context.echoTypography.label.copyWith(
+                  color: value ? colors.accent : colors.ink,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _InlineBusyStatus extends StatelessWidget {
+  const _InlineBusyStatus({required this.label});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      liveRegion: true,
+      label: label,
+      child: ExcludeSemantics(
+        child: Row(
+          children: <Widget>[
+            const EchoSkeleton.circle(size: 24),
+            SizedBox(width: context.echoSpacing.xs),
+            Expanded(
+              child: Text(
+                label,
+                style: context.echoTypography.body.copyWith(
+                  color: context.echoColors.muted,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _InlineFormState extends StatelessWidget {
+  const _InlineFormState({
+    required this.icon,
+    required this.title,
+    required this.description,
+    required this.actionLabel,
+    required this.onAction,
+  });
+
+  final IconData icon;
+  final String title;
+  final String description;
+  final String actionLabel;
+  final VoidCallback onAction;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.symmetric(vertical: context.echoSpacing.md),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          SizedBox.square(
+            dimension: context.echoInteraction.minimumTouchTarget,
+            child: Center(
+              child: Icon(icon, size: 24, color: context.echoColors.muted),
+            ),
+          ),
+          SizedBox(width: context.echoSpacing.sm),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Text(title, style: context.echoTypography.title),
+                SizedBox(height: context.echoSpacing.xxs),
+                Text(
+                  description,
+                  style: context.echoTypography.body.copyWith(
+                    color: context.echoColors.muted,
+                  ),
+                ),
+                SizedBox(height: context.echoSpacing.xs),
+                EchoButton.secondary(
+                  label: actionLabel,
+                  leadingIcon: AppIcons.add,
+                  onPressed: onAction,
+                ),
+              ],
+            ),
           ),
         ],
       ),
     );
+  }
+}
 
-    if (confirm == true) {
-      final repo = ref.read(libraryRepositoryProvider);
+class _LibraryLoadingPage extends StatelessWidget {
+  const _LibraryLoadingPage({required this.title, required this.message});
 
-      // 删除当前库时停止音乐
-      if (library.isActive) {
-        ref.invalidate(playerProvider);
-      }
+  final String title;
+  final String message;
 
-      // 先查剩余库，再删除，避免删除后 stream 更新导致 build 异常
-      final allLibraries = await ref.read(librariesProvider.future);
-      final remaining = allLibraries.where((l) => l.id != library.id).toList();
-
-      await repo.deleteLibrary(library.id);
-      if (!mounted) return;
-
-      if (remaining.isEmpty) {
-        // 最后一个库被删除，清除认证状态后跳转到初始化页面
-        await ref.read(authStateProvider.notifier).logout();
-        if (!mounted) return;
-        context.go('/login');
-      } else {
-        // 还有其他库，切换到第一个
-        final next = remaining.first;
-        await repo.setActiveLibrary(next.id);
-        ref.read(authStateProvider.notifier).switchLibrary(next);
-        if (!mounted) return;
-        context.go('/home');
-      }
-    }
+  @override
+  Widget build(BuildContext context) {
+    return EchoScaffold(
+      topBar: EchoTopBar.back(context: context, title: title),
+      body: Center(
+        child: Semantics(
+          liveRegion: true,
+          label: message,
+          child: ExcludeSemantics(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 320),
+              child: Padding(
+                padding: EdgeInsets.all(context.echoSpacing.lg),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: <Widget>[
+                    const EchoSkeleton.circle(size: 48),
+                    SizedBox(height: context.echoSpacing.md),
+                    Text(
+                      message,
+                      textAlign: TextAlign.center,
+                      style: context.echoTypography.body.copyWith(
+                        color: context.echoColors.muted,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
   }
 }

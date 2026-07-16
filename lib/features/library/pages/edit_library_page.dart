@@ -97,6 +97,7 @@ class _EditLibraryPageState extends ConsumerState<EditLibraryPage> {
               child: ConstrainedBox(
                 constraints: const BoxConstraints(maxWidth: 920),
                 child: SingleChildScrollView(
+                  key: const ValueKey<String>('edit-library-scroll'),
                   keyboardDismissBehavior:
                       ScrollViewKeyboardDismissBehavior.onDrag,
                   padding: EdgeInsets.fromLTRB(
@@ -104,7 +105,8 @@ class _EditLibraryPageState extends ConsumerState<EditLibraryPage> {
                     context.echoSpacing.sm,
                     context.echoPageHorizontalPadding,
                     MediaQuery.viewInsetsOf(context).bottom +
-                        context.echoSpacing.xxl,
+                        context.echoSpacing.xxl +
+                        context.echoShellBottomObstruction,
                   ),
                   child: Form(
                     key: _formKey,

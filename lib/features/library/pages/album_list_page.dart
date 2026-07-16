@@ -135,8 +135,14 @@ class _AlbumListPageState extends ConsumerState<AlbumListPage> {
               child: ConstrainedBox(
                 constraints: const BoxConstraints(maxWidth: 1400),
                 child: AzListView(
+                  key: const ValueKey<String>('album-list-scroll'),
                   data: rows,
                   itemCount: rows.length,
+                  padding: EdgeInsets.only(
+                    bottom:
+                        context.echoSpacing.xxl +
+                        context.echoShellBottomObstruction,
+                  ),
                   itemBuilder: (context, index) {
                     final item = rows[index];
                     return Column(

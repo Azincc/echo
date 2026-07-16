@@ -29,7 +29,7 @@ class AudioQualityPage extends ConsumerWidget {
               context.echoSpacing.md,
               context.echoSpacing.sm,
               context.echoSpacing.md,
-              context.echoSpacing.xxl,
+              context.echoSpacing.xxl + context.echoShellBottomObstruction,
             ),
             children: <Widget>[
               EchoSurface(

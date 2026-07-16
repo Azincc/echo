@@ -679,12 +679,13 @@ class _SongMetadataEditPageState extends ConsumerState<SongMetadataEditPage> {
     return SafeArea(
       top: false,
       child: SingleChildScrollView(
+        key: const ValueKey<String>('song-metadata-editor-scroll'),
         keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
         padding: EdgeInsets.fromLTRB(
           context.echoPageHorizontalPadding,
           context.echoSpacing.sm,
           context.echoPageHorizontalPadding,
-          context.echoSpacing.xxl,
+          context.echoSpacing.xxl + context.echoShellBottomObstruction,
         ),
         child: Align(
           alignment: Alignment.topCenter,

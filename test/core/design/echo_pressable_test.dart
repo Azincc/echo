@@ -1,8 +1,9 @@
-import 'dart:ui' show SemanticsAction, Tristate;
+import 'dart:ui' show PointerDeviceKind, SemanticsAction, Tristate;
 
 import 'package:echoes/core/design/echo_design.dart';
 import 'package:echoes/core/theme/app_theme.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -156,4 +157,187 @@ void main() {
       expect(node.flagsCollection.isEnabled, Tristate.isTrue);
     });
   });
+
+  group('EchoPressable focus feedback', () {
+    for (final pointerKind in <PointerDeviceKind>[
+      PointerDeviceKind.touch,
+      PointerDeviceKind.mouse,
+    ]) {
+      testWidgets('$pointerKind activation does not request focus', (
+        tester,
+      ) async {
+        final focusManager = FocusManager.instance;
+        final previousStrategy = focusManager.highlightStrategy;
+        focusManager.highlightStrategy =
+            FocusHighlightStrategy.alwaysTraditional;
+        addTearDown(() => focusManager.highlightStrategy = previousStrategy);
+        var activations = 0;
+
+        await tester.pumpWidget(
+          app(
+            EchoPressable(
+              semanticLabel: '音乐流',
+              selected: true,
+              onPressed: () => activations++,
+              child: const Text('音乐流'),
+            ),
+          ),
+        );
+
+        final pressable = find.byType(EchoPressable);
+        final focusNode = _pressableFocusNode(tester, pressable);
+        expect(focusNode.hasPrimaryFocus, isFalse);
+
+        await tester.tap(pressable, kind: pointerKind);
+        await tester.pump();
+
+        expect(activations, 1);
+        expect(focusNode.hasPrimaryFocus, isFalse);
+        expect(_focusBorderColor(tester, pressable), Colors.transparent);
+        expect(
+          tester
+              .getSemantics(find.bySemanticsLabel('音乐流'))
+              .flagsCollection
+              .isSelected,
+          Tristate.isTrue,
+        );
+      });
+    }
+
+    testWidgets('Tab focus shows a ring and keeps keyboard activation', (
+      tester,
+    ) async {
+      final focusManager = FocusManager.instance;
+      final previousStrategy = focusManager.highlightStrategy;
+      focusManager.highlightStrategy = FocusHighlightStrategy.alwaysTraditional;
+      addTearDown(() => focusManager.highlightStrategy = previousStrategy);
+      var activations = 0;
+
+      await tester.pumpWidget(
+        app(
+          EchoPressable(
+            semanticLabel: '播放',
+            onPressed: () => activations++,
+            child: const Text('播放'),
+          ),
+        ),
+      );
+
+      await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+      await tester.pump();
+
+      final pressable = find.byType(EchoPressable);
+      expect(_pressableFocusNode(tester, pressable).hasPrimaryFocus, isTrue);
+      expect(
+        _focusBorderColor(tester, pressable),
+        tester.element(pressable).echoColors.accent,
+      );
+
+      await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+      await tester.sendKeyEvent(LogicalKeyboardKey.space);
+      expect(activations, 2);
+    });
+
+    testWidgets('touch highlight mode hides the ring without clearing focus', (
+      tester,
+    ) async {
+      final focusManager = FocusManager.instance;
+      final previousStrategy = focusManager.highlightStrategy;
+      focusManager.highlightStrategy = FocusHighlightStrategy.alwaysTraditional;
+      addTearDown(() => focusManager.highlightStrategy = previousStrategy);
+
+      await tester.pumpWidget(
+        app(
+          EchoPressable(
+            semanticLabel: '队列',
+            autofocus: true,
+            onPressed: () {},
+            child: const Text('队列'),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      final pressable = find.byType(EchoPressable);
+      final focusNode = _pressableFocusNode(tester, pressable);
+      expect(focusNode.hasPrimaryFocus, isTrue);
+      expect(
+        _focusBorderColor(tester, pressable),
+        tester.element(pressable).echoColors.accent,
+      );
+
+      focusManager.highlightStrategy = FocusHighlightStrategy.alwaysTouch;
+      await tester.pump();
+
+      expect(focusNode.hasPrimaryFocus, isTrue);
+      expect(_focusBorderColor(tester, pressable), Colors.transparent);
+    });
+
+    testWidgets('a focused child control does not light the parent row', (
+      tester,
+    ) async {
+      final focusManager = FocusManager.instance;
+      final previousStrategy = focusManager.highlightStrategy;
+      focusManager.highlightStrategy = FocusHighlightStrategy.alwaysTraditional;
+      addTearDown(() => focusManager.highlightStrategy = previousStrategy);
+
+      await tester.pumpWidget(
+        app(
+          EchoPressable(
+            semanticLabel: '晨光，下载中',
+            semanticsMode: EchoPressableSemanticsMode.explicitChildren,
+            onPressed: () {},
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: <Widget>[
+                const ExcludeSemantics(child: Text('晨光，下载中')),
+                EchoIconButton(
+                  icon: Icons.pause,
+                  label: '暂停晨光',
+                  onPressed: () {},
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+
+      final pressable = find.byWidgetPredicate(
+        (widget) => widget is EchoPressable && widget.semanticLabel == '晨光，下载中',
+      );
+      final focusNode = _pressableFocusNode(tester, pressable);
+
+      await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+      await tester.pump();
+      expect(focusNode.hasPrimaryFocus, isTrue);
+      expect(
+        _focusBorderColor(tester, pressable),
+        tester.element(pressable).echoColors.accent,
+      );
+
+      await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+      await tester.pump();
+      expect(focusNode.hasPrimaryFocus, isFalse);
+      expect(focusNode.hasFocus, isTrue);
+      expect(_focusBorderColor(tester, pressable), Colors.transparent);
+      expect(FocusManager.instance.primaryFocus, isNot(focusNode));
+    });
+  });
+}
+
+FocusNode _pressableFocusNode(WidgetTester tester, Finder pressable) {
+  final container = find
+      .descendant(of: pressable, matching: find.byType(AnimatedContainer))
+      .first;
+  return Focus.of(tester.element(container));
+}
+
+Color _focusBorderColor(WidgetTester tester, Finder pressable) {
+  final container = tester.widget<AnimatedContainer>(
+    find
+        .descendant(of: pressable, matching: find.byType(AnimatedContainer))
+        .first,
+  );
+  final decoration = container.foregroundDecoration! as BoxDecoration;
+  return (decoration.border! as Border).top.color;
 }

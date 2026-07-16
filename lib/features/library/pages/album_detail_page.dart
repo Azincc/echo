@@ -160,7 +160,14 @@ class _AlbumDetailPageState extends ConsumerState<AlbumDetailPage> {
                         }, childCount: songs.length),
                       ),
                     SliverToBoxAdapter(
-                      child: SizedBox(height: context.echoSpacing.xxl),
+                      child: SizedBox(
+                        key: const ValueKey<String>(
+                          'album-detail-bottom-spacer',
+                        ),
+                        height:
+                            context.echoSpacing.xxl +
+                            context.echoShellBottomObstruction,
+                      ),
                     ),
                   ],
                 ),

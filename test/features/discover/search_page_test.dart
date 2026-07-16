@@ -332,6 +332,59 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('final search result clears the compact bottom overlay', (
+    tester,
+  ) async {
+    const bottomObstruction = 176.0;
+    final resultSongs = List<Song>.generate(
+      14,
+      (index) => Song(
+        id: 'overlay-song-$index',
+        title: '遮挡回归歌曲 ${index + 1}',
+        artist: '移动端测试歌手',
+        duration: 180 + index,
+      ),
+    );
+    final finalArtist = Artist(
+      id: 'overlay-artist',
+      name: '最后一位歌手',
+      albumCount: 3,
+    );
+
+    await _pumpSearchPage(
+      tester,
+      size: const Size(390, 760),
+      bottomObstruction: bottomObstruction,
+      player: _RecordingPlayerNotifier(PlayerState()),
+      onSearch: (ref, query) async =>
+          result(resultSongs: resultSongs, artists: <Artist>[finalArtist]),
+    );
+
+    await _submitQuery(tester, '遮挡回归');
+    await tester.pumpAndSettle();
+
+    final resultsList = find.byKey(
+      const ValueKey<String>('search_results_list'),
+    );
+    await tester.fling(resultsList, const Offset(0, -5000), 10000);
+    await tester.pumpAndSettle();
+
+    final artistRow = find.bySemanticsLabel('歌手 最后一位歌手，3 张专辑');
+    final overlay = find.byKey(
+      const ValueKey<String>('test-compact-bottom-overlay'),
+    );
+    expect(artistRow, findsOneWidget);
+    expect(overlay, findsOneWidget);
+    expect(
+      tester.getBottomLeft(artistRow).dy,
+      lessThanOrEqualTo(tester.getTopLeft(overlay).dy),
+    );
+
+    await tester.tap(artistRow);
+    await tester.pumpAndSettle();
+    expect(find.byType(ArtistDetailPage), findsOneWidget);
+  });
+
   testWidgets('plays the selected song and opens album and artist routes', (
     tester,
   ) async {
@@ -379,9 +432,35 @@ Future<void> _pumpSearchPage(
   required _RecordingPlayerNotifier player,
   Size size = const Size(430, 900),
   double textScale = 1,
+  double bottomObstruction = 0,
 }) async {
   await tester.binding.setSurfaceSize(size);
   addTearDown(() => tester.binding.setSurfaceSize(null));
+
+  final page = EchoShellObstructionScope(
+    bottom: bottomObstruction,
+    child: const SearchPage(),
+  );
+  final home = bottomObstruction == 0
+      ? page
+      : Stack(
+          fit: StackFit.expand,
+          children: <Widget>[
+            page,
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: 0,
+              height: bottomObstruction,
+              child: const AbsorbPointer(
+                child: ColoredBox(
+                  key: ValueKey<String>('test-compact-bottom-overlay'),
+                  color: Color(0x33000000),
+                ),
+              ),
+            ),
+          ],
+        );
 
   await tester.pumpWidget(
     ProviderScope(
@@ -401,7 +480,7 @@ Future<void> _pumpSearchPage(
             child: child!,
           );
         },
-        home: const SearchPage(),
+        home: home,
       ),
     ),
   );

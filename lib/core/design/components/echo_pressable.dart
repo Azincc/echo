@@ -117,70 +117,62 @@ class EchoPressable extends StatelessWidget {
               },
             ),
           },
-          child: Focus(
+          child: _EchoPressableFocus(
             canRequestFocus: interactive,
             autofocus: autofocus && interactive,
-            child: Builder(
-              builder: (focusContext) {
-                final focusNode = Focus.of(focusContext);
-                final focused = focusNode.hasFocus;
-                final focusColor = focused ? colors.accent : Colors.transparent;
+            builder: (focusContext, showFocusHighlight) {
+              final focusColor = showFocusHighlight
+                  ? colors.accent
+                  : Colors.transparent;
 
-                return AnimatedOpacity(
+              return AnimatedOpacity(
+                duration: motion.resolve(context, motion.feedback),
+                curve: motion.easeOut,
+                opacity: visuallyEnabled ? 1 : 0.5,
+                child: AnimatedContainer(
                   duration: motion.resolve(context, motion.feedback),
                   curve: motion.easeOut,
-                  opacity: visuallyEnabled ? 1 : 0.5,
-                  child: AnimatedContainer(
-                    duration: motion.resolve(context, motion.feedback),
-                    curve: motion.easeOut,
-                    foregroundDecoration: BoxDecoration(
-                      borderRadius: radius,
-                      border: Border.all(
-                        color: focusColor,
-                        width: interaction.focusRingWidth,
-                      ),
-                    ),
-                    child: Material(
-                      type: MaterialType.transparency,
-                      child: InkWell(
-                        onTap: onPressed == null
-                            ? null
-                            : () {
-                                focusNode.requestFocus();
-                                _invoke(onPressed!);
-                              },
-                        onLongPress: onLongPress == null
-                            ? null
-                            : () {
-                                focusNode.requestFocus();
-                                _invoke(onLongPress!);
-                              },
-                        canRequestFocus: false,
-                        excludeFromSemantics: true,
-                        borderRadius: radius,
-                        splashFactory: NoSplash.splashFactory,
-                        mouseCursor: interactive
-                            ? SystemMouseCursors.click
-                            : SystemMouseCursors.basic,
-                        overlayColor: WidgetStateProperty.resolveWith<Color?>((
-                          states,
-                        ) {
-                          if (!interactive) return Colors.transparent;
-                          if (states.contains(WidgetState.pressed)) {
-                            return colors.accent.withValues(alpha: 0.14);
-                          }
-                          if (states.contains(WidgetState.hovered)) {
-                            return colors.accent.withValues(alpha: 0.08);
-                          }
-                          return Colors.transparent;
-                        }),
-                        child: target,
-                      ),
+                  foregroundDecoration: BoxDecoration(
+                    borderRadius: radius,
+                    border: Border.all(
+                      color: focusColor,
+                      width: interaction.focusRingWidth,
                     ),
                   ),
-                );
-              },
-            ),
+                  child: Material(
+                    type: MaterialType.transparency,
+                    child: InkWell(
+                      onTap: onPressed == null
+                          ? null
+                          : () => _invoke(onPressed!),
+                      onLongPress: onLongPress == null
+                          ? null
+                          : () => _invoke(onLongPress!),
+                      canRequestFocus: false,
+                      excludeFromSemantics: true,
+                      borderRadius: radius,
+                      splashFactory: NoSplash.splashFactory,
+                      mouseCursor: interactive
+                          ? SystemMouseCursors.click
+                          : SystemMouseCursors.basic,
+                      overlayColor: WidgetStateProperty.resolveWith<Color?>((
+                        states,
+                      ) {
+                        if (!interactive) return Colors.transparent;
+                        if (states.contains(WidgetState.pressed)) {
+                          return colors.accent.withValues(alpha: 0.14);
+                        }
+                        if (states.contains(WidgetState.hovered)) {
+                          return colors.accent.withValues(alpha: 0.08);
+                        }
+                        return Colors.transparent;
+                      }),
+                      child: target,
+                    ),
+                  ),
+                ),
+              );
+            },
           ),
         ),
       ),
@@ -190,5 +182,88 @@ class EchoPressable extends StatelessWidget {
   void _invoke(VoidCallback action) {
     if (enableHaptics) HapticFeedback.selectionClick();
     action();
+  }
+}
+
+class _EchoPressableFocus extends StatefulWidget {
+  const _EchoPressableFocus({
+    required this.canRequestFocus,
+    required this.autofocus,
+    required this.builder,
+  });
+
+  final bool canRequestFocus;
+  final bool autofocus;
+  final Widget Function(BuildContext context, bool showFocusHighlight) builder;
+
+  @override
+  State<_EchoPressableFocus> createState() => _EchoPressableFocusState();
+}
+
+class _EchoPressableFocusState extends State<_EchoPressableFocus> {
+  late final FocusNode _focusNode;
+  late FocusHighlightMode _highlightMode;
+  bool _hasPrimaryFocus = false;
+  bool _listeningForHighlightMode = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _focusNode = FocusNode(debugLabel: 'EchoPressable')
+      ..addListener(_handleFocusNodeChange);
+    _highlightMode = FocusManager.instance.highlightMode;
+  }
+
+  @override
+  void dispose() {
+    if (_listeningForHighlightMode) {
+      FocusManager.instance.removeHighlightModeListener(
+        _handleHighlightModeChange,
+      );
+    }
+    _focusNode
+      ..removeListener(_handleFocusNodeChange)
+      ..dispose();
+    super.dispose();
+  }
+
+  void _handleFocusNodeChange() {
+    final hasPrimaryFocus = _focusNode.hasPrimaryFocus;
+    if (_hasPrimaryFocus == hasPrimaryFocus) return;
+
+    if (hasPrimaryFocus) {
+      _highlightMode = FocusManager.instance.highlightMode;
+      FocusManager.instance.addHighlightModeListener(
+        _handleHighlightModeChange,
+      );
+      _listeningForHighlightMode = true;
+    } else if (_listeningForHighlightMode) {
+      FocusManager.instance.removeHighlightModeListener(
+        _handleHighlightModeChange,
+      );
+      _listeningForHighlightMode = false;
+    }
+
+    setState(() => _hasPrimaryFocus = hasPrimaryFocus);
+  }
+
+  void _handleHighlightModeChange(FocusHighlightMode highlightMode) {
+    if (_highlightMode == highlightMode) return;
+    setState(() => _highlightMode = highlightMode);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Focus(
+      focusNode: _focusNode,
+      canRequestFocus: widget.canRequestFocus,
+      autofocus: widget.autofocus,
+      child: Builder(
+        builder: (focusContext) => widget.builder(
+          focusContext,
+          _hasPrimaryFocus && _highlightMode == FocusHighlightMode.traditional,
+        ),
+      ),
+    );
   }
 }

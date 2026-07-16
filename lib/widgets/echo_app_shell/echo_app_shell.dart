@@ -44,13 +44,13 @@ class EchoAppShell extends StatelessWidget {
     return Scaffold(
       key: scaffoldKey,
       backgroundColor: colors.canvas,
+      extendBody: windowClass == EchoWindowClass.compact,
       drawer: drawer,
       drawerScrimColor: colors.scrim,
       body: switch (windowClass) {
-        EchoWindowClass.compact => ColoredBox(
-          key: const ValueKey<String>('echo-shell-content'),
+        EchoWindowClass.compact => _CompactShellBody(
           color: colors.canvas,
-          child: body,
+          body: body,
         ),
         EchoWindowClass.medium || EchoWindowClass.expanded => _WideShellBody(
           windowClass: windowClass,
@@ -67,6 +67,7 @@ class EchoAppShell extends StatelessWidget {
       },
       bottomNavigationBar: windowClass == EchoWindowClass.compact
           ? Column(
+              key: const ValueKey<String>('echo-compact-bottom-chrome'),
               mainAxisSize: MainAxisSize.min,
               children: <Widget>[
                 networkStatusBar,
@@ -83,6 +84,29 @@ class EchoAppShell extends StatelessWidget {
               ],
             )
           : null,
+    );
+  }
+}
+
+class _CompactShellBody extends StatelessWidget {
+  const _CompactShellBody({required this.color, required this.body});
+
+  final Color color;
+  final Widget body;
+
+  @override
+  Widget build(BuildContext context) {
+    final mediaQuery = MediaQuery.of(context);
+    return EchoShellObstructionScope(
+      bottom: mediaQuery.padding.bottom,
+      child: MediaQuery(
+        data: mediaQuery.removePadding(removeBottom: true),
+        child: ColoredBox(
+          key: const ValueKey<String>('echo-shell-content'),
+          color: color,
+          child: body,
+        ),
+      ),
     );
   }
 }
@@ -113,8 +137,11 @@ class EchoMiniPlayerSlot extends StatelessWidget {
           duration: motion.resolve(context, motion.state),
           curve: motion.easeOut,
           child: visible
-              ? ColoredBox(
-                  color: context.echoColors.canvas,
+              ? Listener(
+                  key: const ValueKey<String>(
+                    'echo-mini-player-pointer-shield',
+                  ),
+                  behavior: HitTestBehavior.opaque,
                   child: SafeArea(
                     top: false,
                     bottom: includeBottomSafeArea,
@@ -185,7 +212,7 @@ class _WideShellBody extends StatelessWidget {
                 child: ColoredBox(
                   key: const ValueKey<String>('echo-shell-content'),
                   color: context.echoColors.canvas,
-                  child: body,
+                  child: EchoShellObstructionScope(bottom: 0, child: body),
                 ),
               ),
               networkStatusBar,

@@ -59,7 +59,8 @@ class PlaybackStatsPage extends ConsumerWidget {
                     context.echoSpacing.md,
                     context.echoSpacing.lg,
                     context.echoSpacing.md,
-                    context.echoSpacing.xxl,
+                    context.echoSpacing.xxl +
+                        context.echoShellBottomObstruction,
                   ),
                   children: <Widget>[
                     if (hasRemoteLoadFailed) ...<Widget>[
@@ -642,7 +643,12 @@ class _StatsLoadingView extends StatelessWidget {
   Widget build(BuildContext context) {
     return ListView(
       physics: const NeverScrollableScrollPhysics(),
-      padding: EdgeInsets.all(context.echoSpacing.md),
+      padding: EdgeInsets.fromLTRB(
+        context.echoSpacing.md,
+        context.echoSpacing.md,
+        context.echoSpacing.md,
+        context.echoSpacing.md + context.echoShellBottomObstruction,
+      ),
       children: <Widget>[
         const EchoSkeleton.line(width: 180, height: 28),
         SizedBox(height: context.echoSpacing.md),

@@ -557,10 +557,12 @@ class _ExplorePageState extends ConsumerState<ExplorePage> {
               ),
               Expanded(
                 child: query.isEmpty
-                    ? const EchoEmptyState(
-                        title: '输入关键词，探索音乐',
-                        description: '可以搜索当前音乐库，也可以切换远程来源试听并加入离线下载。',
-                        icon: AppIcons.discover,
+                    ? _withBottomObstruction(
+                        const EchoEmptyState(
+                          title: '输入关键词，探索音乐',
+                          description: '可以搜索当前音乐库，也可以切换远程来源试听并加入离线下载。',
+                          icon: AppIcons.discover,
+                        ),
                       )
                     : searchMode == ExploreSearchMode.local
                     ? _buildLocalResults(
@@ -573,16 +575,22 @@ class _ExplorePageState extends ConsumerState<ExplorePage> {
           ),
         ),
         bottomNavigationBar: _isSelectionMode
-            ? SafeArea(
-                top: false,
-                child: ExploreSelectionBar(
-                  selectedCount: _selectedSongIds.length,
-                  downloading: _isBatchDownloading,
-                  onCancel: () => setState(_selectedSongIds.clear),
-                  onDownload: () {
-                    final current = ref.read(exploreRemoteSearchProvider);
-                    _enqueueSelectedSongs(current.songs);
-                  },
+            ? Padding(
+                padding: EdgeInsets.only(
+                  bottom: context.echoShellBottomObstruction,
+                ),
+                child: SafeArea(
+                  top: false,
+                  bottom: context.echoShellBottomObstruction == 0,
+                  child: ExploreSelectionBar(
+                    selectedCount: _selectedSongIds.length,
+                    downloading: _isBatchDownloading,
+                    onCancel: () => setState(_selectedSongIds.clear),
+                    onDownload: () {
+                      final current = ref.read(exploreRemoteSearchProvider);
+                      _enqueueSelectedSongs(current.songs);
+                    },
+                  ),
                 ),
               )
             : null,
@@ -725,10 +733,12 @@ class _ExplorePageState extends ConsumerState<ExplorePage> {
     required bool loadFailed,
   }) {
     if (localSearchAsync == null) {
-      return const EchoEmptyState(
-        title: '音乐库暂无匹配歌曲',
-        description: '尝试更短的关键词，或切换到远程搜索。',
-        icon: AppIcons.fileSearch,
+      return _withBottomObstruction(
+        const EchoEmptyState(
+          title: '音乐库暂无匹配歌曲',
+          description: '尝试更短的关键词，或切换到远程搜索。',
+          icon: AppIcons.fileSearch,
+        ),
       );
     }
     return localSearchAsync.when(
@@ -737,17 +747,21 @@ class _ExplorePageState extends ConsumerState<ExplorePage> {
       data: (result) {
         if (result.songs.isEmpty) {
           if (loadFailed) {
-            return EchoErrorState(
-              title: '音乐库搜索失败',
-              description: '请检查网络或当前线路后重试。',
-              actionLabel: '重试',
-              onAction: () => ref.invalidate(searchProvider(_query)),
+            return _withBottomObstruction(
+              EchoErrorState(
+                title: '音乐库搜索失败',
+                description: '请检查网络或当前线路后重试。',
+                actionLabel: '重试',
+                onAction: () => ref.invalidate(searchProvider(_query)),
+              ),
             );
           }
-          return const EchoEmptyState(
-            title: '音乐库暂无匹配歌曲',
-            description: '尝试更短的关键词，或切换到远程搜索。',
-            icon: AppIcons.fileSearch,
+          return _withBottomObstruction(
+            const EchoEmptyState(
+              title: '音乐库暂无匹配歌曲',
+              description: '尝试更短的关键词，或切换到远程搜索。',
+              icon: AppIcons.fileSearch,
+            ),
           );
         }
         return Align(
@@ -759,7 +773,7 @@ class _ExplorePageState extends ConsumerState<ExplorePage> {
                 context.echoPageHorizontalPadding,
                 context.echoSpacing.xs,
                 context.echoPageHorizontalPadding,
-                context.echoSpacing.xxl,
+                context.echoSpacing.xxl + context.echoShellBottomObstruction,
               ),
               itemCount: result.songs.length,
               itemBuilder: (context, index) {
@@ -777,12 +791,15 @@ class _ExplorePageState extends ConsumerState<ExplorePage> {
           ),
         );
       },
-      loading: () => const ExploreResultsLoading(count: 5),
-      error: (error, stackTrace) => EchoErrorState(
-        title: '音乐库搜索失败',
-        description: '请检查网络或当前线路后重试。',
-        actionLabel: '重试',
-        onAction: () => ref.invalidate(searchProvider(_query)),
+      loading: () =>
+          _withBottomObstruction(const ExploreResultsLoading(count: 5)),
+      error: (error, stackTrace) => _withBottomObstruction(
+        EchoErrorState(
+          title: '音乐库搜索失败',
+          description: '请检查网络或当前线路后重试。',
+          actionLabel: '重试',
+          onAction: () => ref.invalidate(searchProvider(_query)),
+        ),
       ),
     );
   }
@@ -791,15 +808,17 @@ class _ExplorePageState extends ConsumerState<ExplorePage> {
     if (remoteState.songs.isEmpty &&
         remoteState.isLoading &&
         remoteState.error == null) {
-      return const ExploreResultsLoading();
+      return _withBottomObstruction(const ExploreResultsLoading());
     }
     if (remoteState.songs.isEmpty &&
         !remoteState.isLoading &&
         remoteState.error == null) {
-      return const EchoEmptyState(
-        title: '远程源暂无匹配歌曲',
-        description: '尝试更换关键词、搜索类型或远程来源。',
-        icon: AppIcons.cloudOff,
+      return _withBottomObstruction(
+        const EchoEmptyState(
+          title: '远程源暂无匹配歌曲',
+          description: '尝试更换关键词、搜索类型或远程来源。',
+          icon: AppIcons.cloudOff,
+        ),
       );
     }
 
@@ -835,7 +854,7 @@ class _ExplorePageState extends ConsumerState<ExplorePage> {
                   context.echoPageHorizontalPadding,
                   0,
                   context.echoPageHorizontalPadding,
-                  context.echoSpacing.xxl,
+                  context.echoSpacing.xxl + context.echoShellBottomObstruction,
                 ),
                 itemCount: itemCount,
                 itemBuilder: (context, index) {
@@ -874,6 +893,13 @@ class _ExplorePageState extends ConsumerState<ExplorePage> {
           ],
         ),
       ),
+    );
+  }
+
+  Widget _withBottomObstruction(Widget child) {
+    return Padding(
+      padding: EdgeInsets.only(bottom: context.echoShellBottomObstruction),
+      child: child,
     );
   }
 

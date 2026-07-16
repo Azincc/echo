@@ -100,7 +100,8 @@ class _DiscoverPageState extends ConsumerState<DiscoverPage> {
                           context.echoPageHorizontalPadding,
                           context.echoSpacing.xs,
                           context.echoPageHorizontalPadding,
-                          context.echoSpacing.xxl,
+                          context.echoSpacing.xxl +
+                              context.echoShellBottomObstruction,
                         ),
                         children: <Widget>[
                           const EchoSectionHeader(

@@ -166,7 +166,14 @@ class _PlaylistDetailPageState extends ConsumerState<PlaylistDetailPage> {
                         }, childCount: songs.length),
                       ),
                     SliverToBoxAdapter(
-                      child: SizedBox(height: context.echoSpacing.xxl),
+                      child: SizedBox(
+                        key: const ValueKey<String>(
+                          'playlist-detail-bottom-spacer',
+                        ),
+                        height:
+                            context.echoSpacing.xxl +
+                            context.echoShellBottomObstruction,
+                      ),
                     ),
                   ],
                 ),

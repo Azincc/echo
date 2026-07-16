@@ -149,7 +149,8 @@ class _OfflineDownloadStatusPageState
                         context.echoSpacing.md,
                         context.echoSpacing.sm,
                         context.echoSpacing.md,
-                        context.echoSpacing.xxl,
+                        context.echoSpacing.xxl +
+                            context.echoShellBottomObstruction,
                       ),
                       itemCount: jobs.length,
                       itemBuilder: (context, index) {
@@ -499,7 +500,12 @@ class _OfflineJobsSkeleton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ListView.separated(
-      padding: EdgeInsets.all(context.echoSpacing.md),
+      padding: EdgeInsets.fromLTRB(
+        context.echoSpacing.md,
+        context.echoSpacing.md,
+        context.echoSpacing.md,
+        context.echoSpacing.md + context.echoShellBottomObstruction,
+      ),
       itemCount: 5,
       separatorBuilder: (context, index) =>
           SizedBox(height: context.echoSpacing.md),

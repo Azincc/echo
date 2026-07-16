@@ -306,7 +306,7 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
                   context.echoSpacing.md,
                   context.echoSpacing.sm,
                   context.echoSpacing.md,
-                  context.echoSpacing.xxl,
+                  context.echoSpacing.xxl + context.echoShellBottomObstruction,
                 ),
                 children: <Widget>[
                   const EchoSectionHeader(title: '收藏'),

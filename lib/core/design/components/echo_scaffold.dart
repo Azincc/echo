@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../theme/app_icons.dart';
 import '../echo_context.dart';
+import '../layout/echo_shell_obstruction.dart';
 import 'echo_icon_button.dart';
 
 /// Stable page frame for Echo feature surfaces.
@@ -36,7 +37,14 @@ class EchoScaffold extends StatelessWidget {
           Expanded(child: body),
         ],
       ),
-      bottomNavigationBar: bottomBar,
+      bottomNavigationBar: bottomBar == null
+          ? null
+          : Padding(
+              padding: EdgeInsets.only(
+                bottom: context.echoShellBottomObstruction,
+              ),
+              child: bottomBar,
+            ),
       floatingActionButton: floatingAction,
     );
   }

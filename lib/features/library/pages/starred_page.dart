@@ -111,6 +111,7 @@ class StarredPage extends ConsumerWidget {
     final songs = starred.songs;
     if (songs.isEmpty) {
       return _refreshableEmpty(
+        context: context,
         ref: ref,
         title: '暂无收藏歌曲',
         description: '在歌曲操作中点亮红心后，会显示在这里。',
@@ -121,7 +122,11 @@ class StarredPage extends ConsumerWidget {
     return EchoRefreshView(
       onRefresh: () => _refresh(ref),
       child: ListView.builder(
+        key: const ValueKey<String>('starred-songs-scroll'),
         physics: const AlwaysScrollableScrollPhysics(),
+        padding: EdgeInsets.only(
+          bottom: context.echoSpacing.xxl + context.echoShellBottomObstruction,
+        ),
         itemCount: songs.length + 1,
         itemBuilder: (context, listIndex) {
           if (listIndex == 0) {
@@ -182,6 +187,7 @@ class StarredPage extends ConsumerWidget {
     final albums = starred.albums;
     if (albums.isEmpty) {
       return _refreshableEmpty(
+        context: context,
         ref: ref,
         title: '暂无收藏专辑',
         description: '长按专辑并点亮收藏后，会显示在这里。',
@@ -193,7 +199,12 @@ class StarredPage extends ConsumerWidget {
     final largeText = textScale >= 1.6;
     final content = largeText
         ? ListView.builder(
+            key: const ValueKey<String>('starred-albums-list-scroll'),
             physics: const AlwaysScrollableScrollPhysics(),
+            padding: EdgeInsets.only(
+              bottom:
+                  context.echoSpacing.xxl + context.echoShellBottomObstruction,
+            ),
             itemCount: albums.length,
             itemBuilder: (context, index) {
               final album = albums[index];
@@ -209,12 +220,13 @@ class StarredPage extends ConsumerWidget {
             },
           )
         : GridView.builder(
+            key: const ValueKey<String>('starred-albums-grid-scroll'),
             physics: const AlwaysScrollableScrollPhysics(),
             padding: EdgeInsets.fromLTRB(
               context.echoPageHorizontalPadding,
               context.echoSpacing.md,
               context.echoPageHorizontalPadding,
-              context.echoSpacing.lg,
+              context.echoSpacing.xxl + context.echoShellBottomObstruction,
             ),
             gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(
               maxCrossAxisExtent: 200,
@@ -248,6 +260,7 @@ class StarredPage extends ConsumerWidget {
     final artists = starred.artists;
     if (artists.isEmpty) {
       return _refreshableEmpty(
+        context: context,
         ref: ref,
         title: '暂无收藏歌手',
         description: '收藏的歌手会集中显示在这里。',
@@ -258,7 +271,11 @@ class StarredPage extends ConsumerWidget {
     return EchoRefreshView(
       onRefresh: () => _refresh(ref),
       child: ListView.builder(
+        key: const ValueKey<String>('starred-artists-scroll'),
         physics: const AlwaysScrollableScrollPhysics(),
+        padding: EdgeInsets.only(
+          bottom: context.echoSpacing.xxl + context.echoShellBottomObstruction,
+        ),
         itemCount: artists.length,
         itemBuilder: (context, index) {
           final artist = artists[index];
@@ -277,6 +294,7 @@ class StarredPage extends ConsumerWidget {
   }
 
   Widget _refreshableEmpty({
+    required BuildContext context,
     required WidgetRef ref,
     required String title,
     required String description,
@@ -285,14 +303,20 @@ class StarredPage extends ConsumerWidget {
     return EchoRefreshView(
       onRefresh: () => _refresh(ref),
       child: CustomScrollView(
+        key: const ValueKey<String>('starred-empty-scroll'),
         physics: const AlwaysScrollableScrollPhysics(),
         slivers: <Widget>[
-          SliverFillRemaining(
-            hasScrollBody: false,
-            child: EchoEmptyState(
-              title: title,
-              description: description,
-              icon: icon,
+          SliverPadding(
+            padding: EdgeInsets.only(
+              bottom: context.echoShellBottomObstruction,
+            ),
+            sliver: SliverFillRemaining(
+              hasScrollBody: false,
+              child: EchoEmptyState(
+                title: title,
+                description: description,
+                icon: icon,
+              ),
             ),
           ),
         ],

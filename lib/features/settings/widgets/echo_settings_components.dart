@@ -290,10 +290,7 @@ class EchoProviderSettingRow extends StatelessWidget {
               onPressed: () => onChanged(!enabled),
               minimumSize: const Size(60, 48),
               borderRadius: context.echoRadii.pill,
-              child: Padding(
-                padding: EdgeInsets.symmetric(horizontal: spacing.xxs),
-                child: _EchoToggle(value: enabled),
-              ),
+              child: Center(child: _EchoToggle(value: enabled)),
             );
             final textScale = MediaQuery.textScalerOf(context).scale(1);
             final stackActions = constraints.maxWidth < 420 || textScale >= 1.4;

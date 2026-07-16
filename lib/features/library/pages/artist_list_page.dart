@@ -100,8 +100,14 @@ class _ArtistListPageState extends ConsumerState<ArtistListPage> {
               child: ConstrainedBox(
                 constraints: const BoxConstraints(maxWidth: 1400),
                 child: AzListView(
+                  key: const ValueKey<String>('artist-list-scroll'),
                   data: _azArtists,
                   itemCount: _azArtists.length,
+                  padding: EdgeInsets.only(
+                    bottom:
+                        context.echoSpacing.xxl +
+                        context.echoShellBottomObstruction,
+                  ),
                   itemBuilder: (context, index) {
                     final item = _azArtists[index];
                     final artist = item.data;

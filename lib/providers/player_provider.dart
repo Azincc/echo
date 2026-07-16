@@ -32,6 +32,7 @@ export 'player/cache_manager_handler.dart';
 import 'player/player_state.dart';
 import 'player/favorite_scrobble_handler.dart';
 import 'player/cache_manager_handler.dart';
+import 'player/player_seek_policy.dart';
 
 const _playerLogTag = 'PLAYER';
 const _playDbgTag = 'PLAYDBG';
@@ -76,6 +77,7 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
   String? _currentStreamSongId;
   String? _currentStreamFormat;
   int? _currentStreamMaxBitRate;
+  String? _loadedSourceSongId;
   bool _seekByReloadStream = false;
   // 默认关闭：当前服务端对 timeOffset 支持不稳定，首跳可能先失败再回退，导致明显卡顿。
   bool _transcodeTimeOffsetSupported = false;
@@ -179,6 +181,17 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
     // 监听播放进度
     player.positionStream.listen((position) {
       if (!mounted) return;
+
+      // A queued seek is the user's latest intent. While the next source is
+      // still loading, just_audio may continue to report the previous source
+      // position; do not let that stale value make the scrubber jump back.
+      if (shouldPreservePendingSeekPosition(
+        pendingPosition: _pendingSeekPosition,
+        pendingSongId: _pendingSeekSongId,
+        currentSongId: state.currentSong?.id,
+      )) {
+        return;
+      }
 
       // 合成进度模式下，lock cache 的 positionStream 可能回传 0 或过时位置，
       // 会把 UI 进度回退。此时统一忽略，交给轮询器维护并在恢复后切回真实位置。
@@ -501,6 +514,7 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
       _clearPendingSeek();
       _usingLockCachingSource = false;
       _currentStreamUrl = null;
+      _loadedSourceSongId = null;
       _clearStreamContext();
       _clearForcedNext();
       _isHandlingCompletion = false;
@@ -552,6 +566,7 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
           'sid=$debugSession source=download setFilePath path=$downloadedPath',
         );
         await _audioPlayer?.setFilePath(downloadedPath);
+        _markLoadedSource(song.id);
         _usingLockCachingSource = false;
         _currentStreamUrl = null;
         _clearStreamContext();
@@ -589,6 +604,7 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
           'quality=${effectiveQuality.name}',
         );
         await _audioPlayer?.setFilePath(cachedPath);
+        _markLoadedSource(song.id);
         _usingLockCachingSource = false;
         _currentStreamUrl = null;
         _clearStreamContext();
@@ -728,6 +744,7 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
             'cachePath=$cacheFilePath',
           );
           await _audioPlayer?.setAudioSource(audioSource);
+          _markLoadedSource(song.id);
           _usingLockCachingSource = true;
           _currentStreamUrl = streamUrl;
           _setStreamContext(
@@ -793,6 +810,7 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
             'setUrl=${_summarizeStreamUrl(streamUrl)}',
           );
           await _audioPlayer?.setUrl(streamUrl);
+          _markLoadedSource(song.id);
           _usingLockCachingSource = false;
           _currentStreamUrl = streamUrl;
           _setStreamContext(
@@ -826,6 +844,7 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
             '${_summarizeStreamUrl(streamUrl)}',
           );
           await _audioPlayer?.setUrl(streamUrl);
+          _markLoadedSource(song.id);
           _usingLockCachingSource = false;
           _currentStreamUrl = streamUrl;
           _setStreamContext(
@@ -867,6 +886,7 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
             'setAudioSource cachePath=$cacheFilePath',
           );
           await _audioPlayer?.setAudioSource(audioSource);
+          _markLoadedSource(song.id);
           _usingLockCachingSource = true;
           _currentStreamUrl = streamUrl;
           _setStreamContext(
@@ -1022,6 +1042,7 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
           return;
         }
         await _audioPlayer?.setUrl(streamUrl);
+        _markLoadedSource(song.id);
         _usingLockCachingSource = false;
         _currentStreamUrl = streamUrl;
         _setStreamContext(
@@ -1062,6 +1083,7 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
           'cachePath=$cacheFilePath',
         );
         await _audioPlayer?.setAudioSource(audioSource);
+        _markLoadedSource(song.id);
         _usingLockCachingSource = true;
         _currentStreamUrl = streamUrl;
         _setStreamContext(
@@ -1533,6 +1555,7 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
     _clearPendingSeek();
     _usingLockCachingSource = false;
     _currentStreamUrl = null;
+    _loadedSourceSongId = null;
     _clearStreamContext();
     _clearForcedNext();
     _isHandlingCompletion = false;
@@ -1568,6 +1591,7 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
         'headers=${previewHeaders.keys.join(",")}',
       );
       await _audioPlayer?.setUrl(streamUrl, headers: previewHeaders);
+      _markLoadedSource(song.id);
       _usingLockCachingSource = false;
       _currentStreamUrl = streamUrl;
       _setStreamContext(
@@ -1787,13 +1811,16 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
     if (player == null || currentSongId == null) return;
 
     final target = _normalizeSeekPosition(position);
-    final canSeekNow =
-        player.processingState == ProcessingState.ready ||
-        player.processingState == ProcessingState.completed;
+    final canSeekNow = canSeekLoadedPlayerSource(
+      processingState: player.processingState,
+      loadedSourceSongId: _loadedSourceSongId,
+      currentSongId: currentSongId,
+    );
     _seekDbg(
       'seek request song=$currentSongId target=$target '
       'playerPos=${player.position} state=${player.processingState.name} '
-      'canSeekNow=$canSeekNow lockCache=$_usingLockCachingSource',
+      'canSeekNow=$canSeekNow loadedSource=$_loadedSourceSongId '
+      'lockCache=$_usingLockCachingSource',
     );
 
     if (!canSeekNow) {
@@ -2432,6 +2459,7 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
 
     await _audioPlayer?.stop();
     await _audioHandler?.stop();
+    _loadedSourceSongId = null;
     state = state.copyWith(
       currentSong: null,
       queue: const [],
@@ -2462,6 +2490,7 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
       // 停止播放
       _audioPlayer?.stop();
       _audioHandler?.stop();
+      _loadedSourceSongId = null;
       state = state.copyWith(
         queue: newQueue,
         currentSong: null,
@@ -2823,6 +2852,7 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
       cacheFile: fileForPath(cacheFilePath),
     );
     await player.setAudioSource(audioSource);
+    _markLoadedSource(songId);
     _usingLockCachingSource = true;
     _currentStreamUrl = reloadUrl;
     _setStreamContext(
@@ -2899,11 +2929,25 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
     _seekByReloadStream = false;
   }
 
+  void _markLoadedSource(String songId) {
+    if (_audioPlayer?.audioSource == null || state.currentSong?.id != songId) {
+      return;
+    }
+    _loadedSourceSongId = songId;
+  }
+
   void _startPositionPolling(AudioPlayer player) {
     _positionPollTimer?.cancel();
     _positionPollTimer = Timer.periodic(const Duration(milliseconds: 500), (_) {
       if (!mounted) return;
       if (state.currentSong == null) return;
+      if (shouldPreservePendingSeekPosition(
+        pendingPosition: _pendingSeekPosition,
+        pendingSongId: _pendingSeekSongId,
+        currentSongId: state.currentSong?.id,
+      )) {
+        return;
+      }
 
       final playerPos = player.position;
       final processing = player.processingState;

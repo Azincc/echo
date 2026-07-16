@@ -302,8 +302,16 @@ class _SongListPageState extends ConsumerState<SongListPage> {
                         builder: (context, opacity, child) {
                           final visible = opacity > 0.01;
                           return AzListView(
+                            key: const ValueKey<String>(
+                              'song-list-alphabetical-scroll',
+                            ),
                             data: _azSongs,
                             itemCount: _azSongs.length,
+                            padding: EdgeInsets.only(
+                              bottom:
+                                  context.echoSpacing.xxl +
+                                  context.echoShellBottomObstruction,
+                            ),
                             itemPositionsListener: _itemPositionsListener,
                             itemBuilder: (context, index) =>
                                 _buildSongListItem(index),
@@ -324,7 +332,13 @@ class _SongListPageState extends ConsumerState<SongListPage> {
                 },
               )
             : ScrollablePositionedList.builder(
+                key: const ValueKey<String>('song-list-sorted-scroll'),
                 itemCount: _displaySongs.length,
+                padding: EdgeInsets.only(
+                  bottom:
+                      context.echoSpacing.xxl +
+                      context.echoShellBottomObstruction,
+                ),
                 itemPositionsListener: _itemPositionsListener,
                 itemBuilder: (context, index) => _buildSongListItem(index),
               ),

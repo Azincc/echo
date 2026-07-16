@@ -127,17 +127,6 @@ class _PlayerBackdropSpec {
     EchoPlayerBackdropMode.stage => null,
   };
 
-  List<BoxShadow> get shadows => switch (mode) {
-    EchoPlayerBackdropMode.mini => <BoxShadow>[
-      BoxShadow(
-        color: const Color(0xFF04080C).withValues(alpha: 0.18),
-        offset: const Offset(0, 8),
-        blurRadius: 24,
-      ),
-    ],
-    EchoPlayerBackdropMode.stage => const <BoxShadow>[],
-  };
-
   BoxDecoration get decoration => BoxDecoration(
     gradient: LinearGradient(
       begin: Alignment.topCenter,
@@ -154,7 +143,7 @@ class _PlayerBackdropSpec {
     ),
     borderRadius: borderRadius,
     border: border,
-    boxShadow: shadows,
+    boxShadow: const <BoxShadow>[],
   );
 
   static BoxDecoration lerp(
@@ -188,7 +177,7 @@ class _PlayerBackdropSpec {
         progress,
       ),
       border: BoxBorder.lerp(from.border, to.border, progress),
-      boxShadow: BoxShadow.lerpList(from.shadows, to.shadows, progress),
+      boxShadow: const <BoxShadow>[],
     );
   }
 }

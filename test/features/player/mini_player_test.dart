@@ -104,28 +104,67 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('progress starts at the left edge and sits at the bottom', (
+  testWidgets(
+    'progress spans the surface, sits at the bottom, and shares its clip',
+    (tester) async {
+      await tester.pumpWidget(appFor(view(state: playerState())));
+      await tester.pump();
+
+      final surface = find.byKey(const Key('mini-player-surface'));
+      final progress = find.byKey(const Key('mini-player-progress'));
+      final surfaceRect = tester.getRect(surface);
+      final progressRect = tester.getRect(progress);
+      final progressBar = tester.widget<EchoProgressBar>(progress);
+      final fraction = tester.widget<AnimatedFractionallySizedBox>(
+        find.descendant(
+          of: progress,
+          matching: find.byType(AnimatedFractionallySizedBox),
+        ),
+      );
+      final surfaceClip = find.ancestor(
+        of: progress,
+        matching: find.byKey(const Key('mini-player-surface-clip')),
+      );
+      final clip = tester.widget<ClipRRect>(surfaceClip);
+
+      expect(progressRect.left, surfaceRect.left);
+      expect(progressRect.right, surfaceRect.right);
+      expect(progressRect.bottom, surfaceRect.bottom);
+      expect(surfaceClip, findsOneWidget);
+      expect(clip.borderRadius, tester.element(surface).echoRadii.surface);
+      expect(clip.clipBehavior, isNot(Clip.none));
+      expect(progressBar.trackColor, Colors.transparent);
+      expect(fraction.alignment, Alignment.centerLeft);
+      expect(fraction.widthFactor, closeTo(0.25, 0.001));
+    },
+  );
+
+  testWidgets('scrubber leaves the lower halves of both actions clickable', (
     tester,
   ) async {
-    await tester.pumpWidget(appFor(view(state: playerState())));
-    await tester.pump();
-
-    final surfaceRect = tester.getRect(
-      find.byKey(const Key('mini-player-surface')),
-    );
-    final progressRect = tester.getRect(
-      find.byKey(const Key('mini-player-progress')),
-    );
-    final fraction = tester.widget<AnimatedFractionallySizedBox>(
-      find.descendant(
-        of: find.byKey(const Key('mini-player-progress')),
-        matching: find.byType(AnimatedFractionallySizedBox),
+    var toggles = 0;
+    var actions = 0;
+    await tester.pumpWidget(
+      appFor(
+        view(
+          state: playerState(),
+          onToggle: () async => toggles += 1,
+          onActions: () => actions += 1,
+        ),
       ),
     );
+    await tester.pump();
 
-    expect(progressRect.bottom, surfaceRect.bottom);
-    expect(fraction.alignment, Alignment.centerLeft);
-    expect(fraction.widthFactor, closeTo(0.25, 0.001));
+    final playRect = tester.getRect(find.bySemanticsLabel('播放'));
+    final actionsRect = tester.getRect(find.bySemanticsLabel('更多播放操作'));
+
+    await tester.tapAt(Offset(playRect.center.dx, playRect.bottom - 2));
+    await tester.pump();
+    await tester.tapAt(Offset(actionsRect.center.dx, actionsRect.bottom - 2));
+    await tester.pump();
+
+    expect(toggles, 1);
+    expect(actions, 1);
   });
 
   testWidgets('bright and dark visuals drive local player tokens', (

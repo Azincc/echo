@@ -57,7 +57,7 @@ class _CoverProvidersPageState extends ConsumerState<CoverProvidersPage> {
         context.echoSpacing.md,
         context.echoSpacing.sm,
         context.echoSpacing.md,
-        context.echoSpacing.xxl,
+        context.echoSpacing.xxl + context.echoShellBottomObstruction,
       ),
       header: Padding(
         padding: EdgeInsets.only(bottom: context.echoSpacing.md),

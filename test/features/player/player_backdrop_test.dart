@@ -58,9 +58,7 @@ void main() {
     );
     expect(miniDecoration.border, isA<Border>());
     expect((miniDecoration.border! as Border).top.color, visuals.controlAccent);
-    expect(miniDecoration.boxShadow, hasLength(1));
-    expect(miniDecoration.boxShadow!.single.offset, const Offset(0, 8));
-    expect(miniDecoration.boxShadow!.single.blurRadius, 24);
+    expect(miniDecoration.boxShadow, isEmpty);
 
     final stageDecoration = _backdropDecoration(
       tester,
@@ -93,17 +91,13 @@ void main() {
         final radius = _radiusOf(decoration);
         expect(radius, lessThan(previousRadius));
         expect(radius, greaterThan(0));
+        expect(decoration.boxShadow, isEmpty);
         previousRadius = radius;
 
         if (step == 2) {
           final border = decoration.border! as Border;
           expect(border.top.width, greaterThan(0));
           expect(border.top.width, lessThan(1));
-          expect(decoration.boxShadow, hasLength(1));
-          expect(decoration.boxShadow!.single.offset.dy, greaterThan(0));
-          expect(decoration.boxShadow!.single.offset.dy, lessThan(8));
-          expect(decoration.boxShadow!.single.blurRadius, greaterThan(0));
-          expect(decoration.boxShadow!.single.blurRadius, lessThan(24));
         }
       }
 

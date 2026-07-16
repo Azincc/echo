@@ -170,13 +170,17 @@ class _SearchPageState extends ConsumerState<SearchPage> {
               ),
               Expanded(
                 child: _draftQuery.isEmpty
-                    ? const EchoEmptyState(
-                        title: '搜索你的音乐库',
-                        description: '输入歌曲、专辑或歌手名称，结果会自动出现。',
-                        icon: AppIcons.search,
+                    ? _withBottomObstruction(
+                        const EchoEmptyState(
+                          title: '搜索你的音乐库',
+                          description: '输入歌曲、专辑或歌手名称，结果会自动出现。',
+                          icon: AppIcons.search,
+                        ),
                       )
                     : !committedQueryIsVisible
-                    ? _SearchDraftState(query: _draftQuery)
+                    ? _withBottomObstruction(
+                        _SearchDraftState(query: _draftQuery),
+                      )
                     : _buildSearchResults(
                         searchResultAsync!,
                         searchLoadFailed: searchLoadFailed,
@@ -207,11 +211,13 @@ class _SearchPageState extends ConsumerState<SearchPage> {
                   statusKey: const ValueKey<String>('search_results_error'),
                   label: '“$_query”搜索失败',
                 ),
-                EchoErrorState(
-                  title: '搜索失败',
-                  description: '无法读取音乐库，请检查网络或当前线路后重试。',
-                  actionLabel: '重试',
-                  onAction: () => ref.invalidate(searchProvider(_query)),
+                _withBottomObstruction(
+                  EchoErrorState(
+                    title: '搜索失败',
+                    description: '无法读取音乐库，请检查网络或当前线路后重试。',
+                    actionLabel: '重试',
+                    onAction: () => ref.invalidate(searchProvider(_query)),
+                  ),
                 ),
               ],
             );
@@ -222,10 +228,12 @@ class _SearchPageState extends ConsumerState<SearchPage> {
                 statusKey: const ValueKey<String>('search_results_empty'),
                 label: '“$_query”搜索完成，没有找到相关结果',
               ),
-              EchoEmptyState(
-                title: '没有找到相关结果',
-                description: '“$_query”没有匹配的歌曲、专辑或歌手。可以尝试更短的关键词。',
-                icon: AppIcons.fileSearch,
+              _withBottomObstruction(
+                EchoEmptyState(
+                  title: '没有找到相关结果',
+                  description: '“$_query”没有匹配的歌曲、专辑或歌手。可以尝试更短的关键词。',
+                  icon: AppIcons.fileSearch,
+                ),
               ),
             ],
           );
@@ -244,7 +252,7 @@ class _SearchPageState extends ConsumerState<SearchPage> {
                 context.echoPageHorizontalPadding,
                 context.echoSpacing.xs,
                 context.echoPageHorizontalPadding,
-                context.echoSpacing.xxl,
+                context.echoSpacing.xxl + context.echoShellBottomObstruction,
               ),
               children: <Widget>[
                 Semantics(
@@ -372,14 +380,23 @@ class _SearchPageState extends ConsumerState<SearchPage> {
             statusKey: const ValueKey<String>('search_results_error'),
             label: '“$_query”搜索失败',
           ),
-          EchoErrorState(
-            title: '搜索失败',
-            description: '无法读取音乐库，请检查网络或当前线路后重试。',
-            actionLabel: '重试',
-            onAction: () => ref.invalidate(searchProvider(_query)),
+          _withBottomObstruction(
+            EchoErrorState(
+              title: '搜索失败',
+              description: '无法读取音乐库，请检查网络或当前线路后重试。',
+              actionLabel: '重试',
+              onAction: () => ref.invalidate(searchProvider(_query)),
+            ),
           ),
         ],
       ),
+    );
+  }
+
+  Widget _withBottomObstruction(Widget child) {
+    return Padding(
+      padding: EdgeInsets.only(bottom: context.echoShellBottomObstruction),
+      child: child,
     );
   }
 }
@@ -438,7 +455,7 @@ class _SearchResultsLoading extends StatelessWidget {
           context.echoPageHorizontalPadding,
           context.echoSpacing.xs,
           context.echoPageHorizontalPadding,
-          context.echoSpacing.xxl,
+          context.echoSpacing.xxl + context.echoShellBottomObstruction,
         ),
         children: <Widget>[
           const _SearchLoadingHeader(),

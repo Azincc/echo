@@ -145,7 +145,14 @@ class _ArtistDetailPageState extends ConsumerState<ArtistDetailPage> {
                     else
                       ..._buildAlbumSlivers(albums),
                     SliverToBoxAdapter(
-                      child: SizedBox(height: context.echoSpacing.xxl),
+                      child: SizedBox(
+                        key: const ValueKey<String>(
+                          'artist-detail-bottom-spacer',
+                        ),
+                        height:
+                            context.echoSpacing.xxl +
+                            context.echoShellBottomObstruction,
+                      ),
                     ),
                   ],
                 ),

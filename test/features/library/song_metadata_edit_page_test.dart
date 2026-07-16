@@ -88,6 +88,7 @@ MetadataCandidatesJobStatus _completedStatus(
 Future<void> _pumpPage(
   WidgetTester tester, {
   required EmbedServiceClient client,
+  double bottomObstruction = 0,
 }) async {
   tester.view.devicePixelRatio = 1;
   tester.view.physicalSize = const Size(800, 1200);
@@ -105,7 +106,10 @@ Future<void> _pumpPage(
       ],
       child: MaterialApp(
         theme: AppTheme.light(),
-        home: SongMetadataEditPage(song: _song),
+        home: EchoShellObstructionScope(
+          bottom: bottomObstruction,
+          child: SongMetadataEditPage(song: _song),
+        ),
       ),
     ),
   );
@@ -192,9 +196,9 @@ void main() {
       expect(find.text('当前文件元数据'), findsOneWidget);
       expect(find.text('候选来源'), findsOneWidget);
       expect(find.text('没有候选来源，当前文件值已保留在编辑表单中。'), findsOneWidget);
-    expect(find.text('Current title'), findsNWidgets(2));
-    expect(find.text('Current artist'), findsNWidgets(2));
-    expect(find.text('Current album'), findsNWidgets(2));
+      expect(find.text('Current title'), findsNWidgets(2));
+      expect(find.text('Current artist'), findsNWidgets(2));
+      expect(find.text('Current album'), findsNWidgets(2));
       expect(_controllerFor(tester, '标题').text, 'Current title');
       expect(_controllerFor(tester, '歌手').text, 'Current artist');
       expect(_controllerFor(tester, '曲号').text, '7');
@@ -205,6 +209,31 @@ void main() {
       expect(tester.takeException(), isNull);
     },
   );
+
+  testWidgets('editor bottom padding includes the shell obstruction', (
+    tester,
+  ) async {
+    final client = _FakeEmbedServiceClient(
+      candidateStatus: _completedStatus(
+        const MetadataCandidatesResponse(
+          current: EditableSongMetadata(
+            title: 'Current title',
+            artist: 'Current artist',
+          ),
+          candidates: <MetadataCandidate>[],
+        ),
+      ),
+    );
+
+    await _pumpPage(tester, client: client, bottomObstruction: 120);
+    await tester.pumpAndSettle();
+
+    final scrollView = tester.widget<SingleChildScrollView>(
+      find.byKey(const ValueKey<String>('song-metadata-editor-scroll')),
+    );
+    expect((scrollView.padding! as EdgeInsets).bottom, 168);
+    expect(tester.takeException(), isNull);
+  });
 
   testWidgets('rejects non-numeric metadata before applying it', (
     tester,

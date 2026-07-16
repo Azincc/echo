@@ -555,13 +555,17 @@ class _MiniPlayerViewState extends State<MiniPlayerView> {
                       ),
                     ),
                     Positioned.fill(
-                      child:
-                          widget.progressLayer ??
-                          _MiniPlayerProgressSurface(
-                            position: _playerState.position,
-                            duration: _playerState.duration,
-                            onSeek: widget.onSeek,
-                          ),
+                      child: ClipRRect(
+                        key: const Key('mini-player-surface-clip'),
+                        borderRadius: context.echoRadii.surface,
+                        child:
+                            widget.progressLayer ??
+                            _MiniPlayerProgressSurface(
+                              position: _playerState.position,
+                              duration: _playerState.duration,
+                              onSeek: widget.onSeek,
+                            ),
+                      ),
                     ),
                   ],
                 ),
@@ -714,7 +718,7 @@ class _MiniPlayerProgressSurfaceState
         ),
         PositionedDirectional(
           start: 0,
-          end: 112,
+          end: 0,
           bottom: 0,
           child: IgnorePointer(
             child: ExcludeSemantics(
@@ -723,7 +727,7 @@ class _MiniPlayerProgressSurfaceState
                 value: displayedProgress,
                 height: 3,
                 color: context.echoColors.accent,
-                trackColor: context.echoColors.divider.withValues(alpha: 0.72),
+                trackColor: Colors.transparent,
               ),
             ),
           ),

@@ -140,7 +140,164 @@ void main() {
   });
 
   group('EchoAppShell MiniPlayer slot', () {
-    testWidgets('network status reserves space instead of covering content', (
+    testWidgets(
+      'compact shell paints content behind a truly transparent MiniPlayer slot',
+      (tester) async {
+        for (final theme in <ThemeData>[AppTheme.light(), AppTheme.dark()]) {
+          final colors = theme.extension<EchoColors>()!;
+          await _pumpShell(
+            tester,
+            size: const Size(390, 800),
+            showMiniPlayer: true,
+            theme: theme,
+            body: const Scaffold(
+              body: SizedBox.expand(
+                key: ValueKey<String>('nested-scaffold-content'),
+              ),
+            ),
+          );
+
+          final scaffold = tester.widget<Scaffold>(
+            find.ancestor(of: _shellContent, matching: find.byType(Scaffold)),
+          );
+          final contentSurface = tester.widget<ColoredBox>(_shellContent);
+          final navigationSurface = tester.widget<ColoredBox>(
+            _compactNavigation,
+          );
+          final slotSurface = find.descendant(
+            of: _miniPlayerSlot,
+            matching: find.byWidgetPredicate(
+              (widget) =>
+                  widget is ColoredBox &&
+                  (widget.color == colors.canvas ||
+                      widget.color == colors.surface),
+            ),
+          );
+          final nestedContentRect = tester.getRect(
+            find.byKey(const ValueKey<String>('nested-scaffold-content')),
+          );
+          final slotRect = tester.getRect(_miniPlayerSlot);
+
+          expect(scaffold.backgroundColor, colors.canvas);
+          expect(scaffold.extendBody, isTrue);
+          expect(contentSurface.color, colors.canvas);
+          expect(navigationSurface.color, colors.surface);
+          expect(slotSurface, findsNothing);
+          expect(nestedContentRect.bottom, 800);
+          expect(nestedContentRect.bottom, greaterThan(slotRect.top));
+        }
+      },
+    );
+
+    testWidgets('wide chrome continues to resolve against the canvas', (
+      tester,
+    ) async {
+      for (final theme in <ThemeData>[AppTheme.light(), AppTheme.dark()]) {
+        final colors = theme.extension<EchoColors>()!;
+        var obstruction = -1.0;
+        await _pumpShell(
+          tester,
+          size: const Size(840, 960),
+          showMiniPlayer: true,
+          theme: theme,
+          body: Builder(
+            builder: (context) {
+              obstruction = context.echoShellBottomObstruction;
+              return const SizedBox.expand();
+            },
+          ),
+        );
+
+        final scaffold = tester.widget<Scaffold>(find.byType(Scaffold));
+        final contentSurface = tester.widget<ColoredBox>(_shellContent);
+        final slotCanvas = find.descendant(
+          of: _miniPlayerSlot,
+          matching: find.byWidgetPredicate(
+            (widget) => widget is ColoredBox && widget.color == colors.canvas,
+          ),
+        );
+
+        expect(scaffold.backgroundColor, colors.canvas);
+        expect(scaffold.extendBody, isFalse);
+        expect(contentSurface.color, colors.canvas);
+        expect(slotCanvas, findsNothing);
+        expect(obstruction, 0);
+      }
+    });
+
+    testWidgets(
+      'compact obstruction follows every measured bottom chrome configuration',
+      (tester) async {
+        var obstruction = -1.0;
+        final probe = Builder(
+          builder: (context) {
+            obstruction = context.echoShellBottomObstruction;
+            return const SizedBox.expand();
+          },
+        );
+
+        await _pumpShell(
+          tester,
+          size: const Size(390, 800),
+          showMiniPlayer: true,
+          bottomSafeArea: 24,
+          body: probe,
+        );
+        final withMiniPlayer = tester.getSize(_compactBottomChrome).height;
+        expect(obstruction, withMiniPlayer);
+
+        await _pumpShell(
+          tester,
+          size: const Size(390, 800),
+          showMiniPlayer: false,
+          bottomSafeArea: 24,
+          body: probe,
+        );
+        final navigationOnly = tester.getSize(_compactBottomChrome).height;
+        expect(obstruction, navigationOnly);
+        expect(navigationOnly, lessThan(withMiniPlayer));
+
+        await _pumpShell(
+          tester,
+          size: const Size(320, 800),
+          textScale: 2,
+          bottomSafeArea: 24,
+          showMiniPlayer: true,
+          networkStatus: EchoNetworkStatus.offline,
+          body: probe,
+        );
+        final offlineLargeText = tester.getSize(_compactBottomChrome).height;
+        expect(obstruction, offlineLargeText);
+        expect(offlineLargeText, greaterThan(withMiniPlayer));
+      },
+    );
+
+    testWidgets(
+      'nested EchoScaffold bottom bar clears the compact shell obstruction',
+      (tester) async {
+        await _pumpShell(
+          tester,
+          size: const Size(390, 800),
+          showMiniPlayer: true,
+          bottomSafeArea: 24,
+          body: const EchoScaffold(
+            body: SizedBox.expand(),
+            bottomBar: SizedBox(
+              key: ValueKey<String>('nested-bottom-bar'),
+              height: 40,
+            ),
+          ),
+        );
+
+        final nestedBottomBar = tester.getRect(
+          find.byKey(const ValueKey<String>('nested-bottom-bar')),
+        );
+        final compactChrome = tester.getRect(_compactBottomChrome);
+        expect(nestedBottomBar.bottom, compactChrome.top);
+      },
+    );
+
+    testWidgets('network status remains above MiniPlayer in overlay order', (
       tester,
     ) async {
       await _pumpShell(
@@ -153,11 +310,11 @@ void main() {
       final contentRect = tester.getRect(_content);
       final statusRect = tester.getRect(_networkStatusSlot);
       final playerRect = tester.getRect(_miniPlayer);
-      expect(contentRect.bottom, lessThanOrEqualTo(statusRect.top));
+      expect(contentRect.bottom, greaterThan(statusRect.top));
       expect(statusRect.bottom, lessThanOrEqualTo(playerRect.top));
     });
 
-    testWidgets('reserves measured MiniPlayer space without covering content', (
+    testWidgets('compact overlays while wide reserves measured player space', (
       tester,
     ) async {
       for (final size in const <Size>[Size(390, 800), Size(840, 960)]) {
@@ -170,19 +327,15 @@ void main() {
 
         final contentRect = tester.getRect(_content);
         final playerRect = tester.getRect(_miniPlayer);
-        expect(
-          contentRect.bottom,
-          lessThanOrEqualTo(playerRect.top),
-          reason: 'viewport: $size',
-        );
-
         if (size.width < EchoBreakpoints.standard.medium) {
           final navigationRect = tester.getRect(_compactNavigation);
+          expect(contentRect.bottom, greaterThan(playerRect.top));
           expect(playerRect.bottom, lessThanOrEqualTo(navigationRect.top));
           expect(playerRect.left, 12);
           expect(size.width - playerRect.right, 12);
           expect(navigationRect.top - playerRect.bottom, 4);
         } else {
+          expect(contentRect.bottom, lessThanOrEqualTo(playerRect.top));
           expect(playerRect.bottom, lessThanOrEqualTo(size.height - 24));
           expect(size.width - playerRect.right, 12);
         }
@@ -243,6 +396,44 @@ void main() {
       expect(progressRect.bottom, surfaceRect.bottom);
     });
 
+    testWidgets(
+      'transparent MiniPlayer gutter blocks page taps without blocking controls',
+      (tester) async {
+        var pageTaps = 0;
+        var playerTaps = 0;
+        await _pumpShell(
+          tester,
+          size: const Size(390, 800),
+          showMiniPlayer: true,
+          body: Scaffold(
+            body: GestureDetector(
+              key: const ValueKey<String>('page-tap-target'),
+              behavior: HitTestBehavior.opaque,
+              onTap: () => pageTaps += 1,
+              child: const SizedBox.expand(),
+            ),
+          ),
+          miniPlayer: GestureDetector(
+            key: const ValueKey<String>('test-mini-player'),
+            behavior: HitTestBehavior.opaque,
+            onTap: () => playerTaps += 1,
+            child: const SizedBox(height: 72),
+          ),
+        );
+
+        final playerRect = tester.getRect(_miniPlayer);
+        await tester.tapAt(Offset(4, playerRect.center.dy));
+        await tester.pump();
+        expect(pageTaps, 0);
+        expect(playerTaps, 0);
+
+        await tester.tap(_miniPlayer);
+        await tester.pump();
+        expect(pageTaps, 0);
+        expect(playerTaps, 1);
+      },
+    );
+
     testWidgets('hidden MiniPlayer releases its slot', (tester) async {
       await _pumpShell(
         tester,
@@ -257,7 +448,7 @@ void main() {
       expect(tester.getSize(_miniPlayerSlot).height, 0);
       expect(
         tester.getRect(_content).bottom,
-        tester.getRect(_compactNavigation).top,
+        greaterThan(tester.getRect(_compactNavigation).top),
       );
     });
 
@@ -290,6 +481,10 @@ Finder get _mediumNavigation =>
     find.byKey(const ValueKey<String>('echo-medium-navigation'));
 Finder get _expandedNavigation =>
     find.byKey(const ValueKey<String>('echo-expanded-navigation'));
+Finder get _compactBottomChrome =>
+    find.byKey(const ValueKey<String>('echo-compact-bottom-chrome'));
+Finder get _shellContent =>
+    find.byKey(const ValueKey<String>('echo-shell-content'));
 Finder get _content => find.byKey(const ValueKey<String>('test-content'));
 Finder get _miniPlayer =>
     find.byKey(const ValueKey<String>('test-mini-player'));
@@ -322,6 +517,8 @@ Future<void> _pumpShell(
   int selectedBranchIndex = 0,
   ValueChanged<int>? onDestinationSelected,
   Widget? miniPlayer,
+  Widget? body,
+  ThemeData? theme,
 }) async {
   tester.view.devicePixelRatio = 1;
   tester.view.physicalSize = size;
@@ -330,7 +527,7 @@ Future<void> _pumpShell(
   await tester.pumpWidget(
     ProviderScope(
       child: MaterialApp(
-        theme: AppTheme.light(),
+        theme: theme ?? AppTheme.light(),
         home: MediaQuery(
           data: MediaQueryData(
             size: size,
@@ -352,7 +549,9 @@ Future<void> _pumpShell(
                   key: ValueKey<String>('test-mini-player'),
                   height: 72,
                 ),
-            body: const SizedBox.expand(key: ValueKey<String>('test-content')),
+            body:
+                body ??
+                const SizedBox.expand(key: ValueKey<String>('test-content')),
           ),
         ),
       ),

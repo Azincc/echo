@@ -24,7 +24,7 @@ class CacheManagementPage extends StatelessWidget {
               context.echoSpacing.md,
               context.echoSpacing.lg,
               context.echoSpacing.md,
-              context.echoSpacing.xxl,
+              context.echoSpacing.xxl + context.echoShellBottomObstruction,
             ),
             children: <Widget>[
               const _AudioCacheSection(),

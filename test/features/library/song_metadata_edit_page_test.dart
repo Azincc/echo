@@ -32,24 +32,29 @@ class _FakeEmbedServiceClient extends EmbedServiceClient {
     this.createJobCompleter,
     this.createJobError,
     this.candidateStatus,
+    this.searchStatus,
   });
 
   final Completer<String>? createJobCompleter;
   final Object? createJobError;
   final MetadataCandidatesJobStatus? candidateStatus;
+  final MetadataCandidatesJobStatus? searchStatus;
 
   int createJobCalls = 0;
   int applyMetadataCalls = 0;
+  final List<MetadataSearchOptions?> searches = <MetadataSearchOptions?>[];
 
   @override
   Future<String> createMetadataCandidatesJob({
     required EmbedServiceConfig config,
     required Song song,
+    MetadataSearchOptions? search,
   }) async {
     createJobCalls += 1;
+    searches.add(search);
     if (createJobError != null) throw createJobError!;
     if (createJobCompleter != null) return createJobCompleter!.future;
-    return 'candidate-job';
+    return 'candidate-job-$createJobCalls';
   }
 
   @override
@@ -57,6 +62,9 @@ class _FakeEmbedServiceClient extends EmbedServiceClient {
     required EmbedServiceConfig config,
     required String jobId,
   }) async {
+    if (jobId == 'candidate-job-2' && searchStatus != null) {
+      return searchStatus!;
+    }
     return candidateStatus ??
         (throw StateError('candidateStatus is required for this test'));
   }
@@ -77,7 +85,7 @@ MetadataCandidatesJobStatus _completedStatus(
 ) {
   final timestamp = DateTime(2025, 1, 1);
   return MetadataCandidatesJobStatus(
-    jobId: 'candidate-job',
+    jobId: 'candidate-job-1',
     status: 'done',
     result: response,
     createdAt: timestamp,
@@ -128,7 +136,7 @@ TextEditingController _controllerFor(WidgetTester tester, String label) {
 
 void main() {
   testWidgets(
-    'shows a stable loading state while candidate lookup is pending',
+    'shows a stable loading state while current metadata is pending',
     (tester) async {
       final client = _FakeEmbedServiceClient(
         createJobCompleter: Completer<String>(),
@@ -138,15 +146,16 @@ void main() {
       await tester.pump();
 
       expect(find.text('正在读取元数据'), findsOneWidget);
-      expect(find.text('正在获取当前值与候选来源'), findsOneWidget);
-      expect(find.text('正在获取候选'), findsOneWidget);
+      expect(find.text('正在读取音频文件中的当前值'), findsOneWidget);
+      expect(find.text('正在读取当前值'), findsOneWidget);
       expect(find.text('应用到文件'), findsOneWidget);
       expect(client.createJobCalls, 1);
+      expect(client.searches.single?.dimensions, isEmpty);
       expect(tester.takeException(), isNull);
     },
   );
 
-  testWidgets('renders candidate lookup failures with a retry action', (
+  testWidgets('renders current metadata failures with a retry action', (
     tester,
   ) async {
     final client = _FakeEmbedServiceClient(
@@ -156,16 +165,16 @@ void main() {
     await _pumpPage(tester, client: client);
     await tester.pumpAndSettle();
 
-    expect(find.text('无法读取元数据候选'), findsOneWidget);
+    expect(find.text('无法读取当前元数据'), findsOneWidget);
     expect(find.text('Exception: 候选服务暂不可用'), findsOneWidget);
     expect(find.text('重试'), findsOneWidget);
-    expect(find.text('候选数据不可用，请重试'), findsOneWidget);
+    expect(find.text('当前元数据不可用，请重试'), findsOneWidget);
     expect(client.createJobCalls, 1);
     expect(tester.takeException(), isNull);
   });
 
   testWidgets(
-    'keeps current metadata visible and editable without candidates',
+    'opens with current metadata and explicit search controls without auto-searching',
     (tester) async {
       const current = EditableSongMetadata(
         title: 'Current title',
@@ -194,11 +203,12 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('当前文件元数据'), findsOneWidget);
-      expect(find.text('候选来源'), findsOneWidget);
-      expect(find.text('没有候选来源，当前文件值已保留在编辑表单中。'), findsOneWidget);
-      expect(find.text('Current title'), findsNWidgets(2));
-      expect(find.text('Current artist'), findsNWidgets(2));
-      expect(find.text('Current album'), findsNWidgets(2));
+      expect(find.text('搜索元数据'), findsOneWidget);
+      expect(find.text('搜索结果'), findsNothing);
+      expect(find.bySemanticsLabel('单曲名称搜索维度，已选择'), findsOneWidget);
+      expect(find.bySemanticsLabel('专辑名称搜索维度，未选择'), findsOneWidget);
+      expect(find.bySemanticsLabel('艺术家搜索维度，已选择'), findsOneWidget);
+      expect(find.text('将搜索：Current title - Current artist'), findsOneWidget);
       expect(_controllerFor(tester, '标题').text, 'Current title');
       expect(_controllerFor(tester, '歌手').text, 'Current artist');
       expect(_controllerFor(tester, '曲号').text, '7');
@@ -206,9 +216,131 @@ void main() {
       expect(_controllerFor(tester, '年份').text, '2024');
       expect(_controllerFor(tester, '歌词').text, 'Current lyrics');
       expect(find.text('可检查字段后写入音频文件'), findsOneWidget);
+      expect(client.createJobCalls, 1);
+      expect(client.searches.single?.dimensions, isEmpty);
       expect(tester.takeException(), isNull);
     },
   );
+
+  testWidgets(
+    'searches selected dimensions and keeps netease and kuwo results separate',
+    (tester) async {
+      const current = EditableSongMetadata(
+        title: 'Slow Down',
+        artist: '雷米克斯 / Settle一虾子',
+        album: 'Slow Down',
+        albumArtist: '雷米克斯 / Settle一虾子',
+      );
+      final client = _FakeEmbedServiceClient(
+        candidateStatus: _completedStatus(
+          const MetadataCandidatesResponse(
+            current: current,
+            candidates: <MetadataCandidate>[],
+          ),
+        ),
+        searchStatus: _completedStatus(
+          const MetadataCandidatesResponse(
+            current: current,
+            candidates: <MetadataCandidate>[
+              MetadataCandidate(
+                source: 'gdstudio_netease',
+                trackId: 'netease-1',
+                confidence: 0,
+                metadata: EditableSongMetadata(
+                  title: 'Slow Down (Official)',
+                  artist: "Keb' Mo'",
+                  album: 'Slow Down',
+                  albumArtist: "Keb' Mo'",
+                ),
+              ),
+              MetadataCandidate(
+                source: 'gdstudio_kuwo',
+                trackId: 'kuwo-1',
+                confidence: 0,
+                metadata: EditableSongMetadata(
+                  title: 'Slow Down (Live)',
+                  artist: "Keb' Mo'",
+                  album: 'Live Session',
+                  albumArtist: "Keb' Mo'",
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+
+      await _pumpPage(tester, client: client);
+      await tester.pumpAndSettle();
+
+      expect(find.text('将搜索：Slow Down - 雷米克斯, Settle一虾子'), findsOneWidget);
+      final searchButton = find.widgetWithText(EchoButton, '搜索');
+      await tester.ensureVisible(searchButton);
+      await tester.tap(searchButton);
+      await tester.pumpAndSettle();
+
+      expect(client.createJobCalls, 2);
+      final submittedSearch = client.searches.last!;
+      expect(submittedSearch.dimensions, <MetadataSearchDimension>{
+        MetadataSearchDimension.title,
+        MetadataSearchDimension.artist,
+      });
+      expect(submittedSearch.title, 'Slow Down');
+      expect(submittedSearch.artist, '雷米克斯, Settle一虾子');
+      expect(find.text('网易云音乐'), findsOneWidget);
+      expect(find.text('酷我音乐'), findsOneWidget);
+      expect(find.text('Slow Down (Official)'), findsOneWidget);
+      expect(find.text('Slow Down (Live)'), findsOneWidget);
+
+      final result = find.text('Slow Down (Official)');
+      await tester.ensureVisible(result);
+      await tester.tap(result);
+      await tester.pumpAndSettle();
+
+      expect(find.textContaining('曲目 ID netease-1'), findsOneWidget);
+      await tester.tap(find.text('应用 3 个字段'));
+      await tester.pumpAndSettle();
+
+      expect(_controllerFor(tester, '标题').text, 'Slow Down (Official)');
+      expect(_controllerFor(tester, '歌手').text, "Keb' Mo'");
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets('allows any search dimension combination', (tester) async {
+    const current = EditableSongMetadata(
+      title: 'Track title',
+      artist: 'Track artist',
+      album: 'Album title',
+    );
+    final client = _FakeEmbedServiceClient(
+      candidateStatus: _completedStatus(
+        const MetadataCandidatesResponse(
+          current: current,
+          candidates: <MetadataCandidate>[],
+        ),
+      ),
+    );
+
+    await _pumpPage(tester, client: client);
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.bySemanticsLabel('专辑名称搜索维度，未选择'));
+    await tester.pump();
+    await tester.tap(find.bySemanticsLabel('艺术家搜索维度，已选择'));
+    await tester.pump();
+
+    expect(find.text('将搜索：Track title - Album title'), findsOneWidget);
+    final searchButton = find.widgetWithText(EchoButton, '搜索');
+    await tester.ensureVisible(searchButton);
+    await tester.tap(searchButton);
+    await tester.pumpAndSettle();
+
+    expect(client.searches.last?.dimensions, <MetadataSearchDimension>{
+      MetadataSearchDimension.title,
+      MetadataSearchDimension.album,
+    });
+    expect(tester.takeException(), isNull);
+  });
 
   testWidgets('editor bottom padding includes the shell obstruction', (
     tester,

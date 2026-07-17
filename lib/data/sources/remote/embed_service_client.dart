@@ -209,13 +209,56 @@ class EditableSongMetadata {
   }
 }
 
+enum MetadataSearchDimension {
+  title('title'),
+  album('album'),
+  artist('artist');
+
+  const MetadataSearchDimension(this.jsonValue);
+
+  final String jsonValue;
+}
+
+class MetadataSearchOptions {
+  final Set<MetadataSearchDimension> dimensions;
+  final String title;
+  final String album;
+  final String artist;
+
+  const MetadataSearchOptions({
+    required this.dimensions,
+    required this.title,
+    required this.album,
+    required this.artist,
+  });
+
+  Map<String, dynamic> toJson() {
+    const order = <MetadataSearchDimension>[
+      MetadataSearchDimension.title,
+      MetadataSearchDimension.album,
+      MetadataSearchDimension.artist,
+    ];
+    return {
+      'dimensions': order
+          .where(dimensions.contains)
+          .map((dimension) => dimension.jsonValue)
+          .toList(),
+      'title': title.trim(),
+      'album': album.trim(),
+      'artist': artist.trim(),
+    };
+  }
+}
+
 class MetadataCandidate {
   final String source;
+  final String trackId;
   final double confidence;
   final EditableSongMetadata metadata;
 
   const MetadataCandidate({
     required this.source,
+    this.trackId = '',
     required this.confidence,
     required this.metadata,
   });
@@ -223,6 +266,7 @@ class MetadataCandidate {
   factory MetadataCandidate.fromJson(Map<String, dynamic> json) {
     return MetadataCandidate(
       source: (json['source'] as String? ?? '').trim(),
+      trackId: (json['track_id'] as String? ?? '').trim(),
       confidence: _toDouble(json['confidence']),
       metadata: EditableSongMetadata.fromJson(
         (json['metadata'] as Map?)?.cast<String, dynamic>(),
@@ -647,6 +691,7 @@ class EmbedServiceClient {
   Future<MetadataCandidatesResponse> getMetadataCandidates({
     required EmbedServiceConfig config,
     required Song song,
+    MetadataSearchOptions? search,
   }) async {
     if (!config.isConfigured) {
       throw Exception('Embed Service 未配置');
@@ -670,6 +715,7 @@ class EmbedServiceClient {
             'suffix': song.suffix,
             'libraryId': config.libraryId,
           },
+          if (search != null) 'search': search.toJson(),
         },
         options: Options(
           headers: {'X-API-Key': config.apiKey},
@@ -696,6 +742,7 @@ class EmbedServiceClient {
   Future<String> createMetadataCandidatesJob({
     required EmbedServiceConfig config,
     required Song song,
+    MetadataSearchOptions? search,
   }) async {
     if (!config.isConfigured) {
       throw Exception('Embed Service 未配置');
@@ -719,6 +766,7 @@ class EmbedServiceClient {
             'suffix': song.suffix,
             'libraryId': config.libraryId,
           },
+          if (search != null) 'search': search.toJson(),
         },
         options: Options(headers: {'X-API-Key': config.apiKey}),
       );

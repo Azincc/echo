@@ -69,14 +69,21 @@ class ExploreRemoteState {
 // ── Constants ──
 
 const exploreRemotePageSize = 30;
-const _maxRetries = 3;
+const _remoteSearchRetryTimeout = Duration(seconds: 15);
+const _remoteSearchInitialRetryDelay = Duration(milliseconds: 500);
 
 // ── StateNotifier ──
 
 class ExploreRemoteSearchNotifier extends StateNotifier<ExploreRemoteState> {
   final Ref _ref;
+  final Duration retryTimeout;
+  final Duration initialRetryDelay;
 
-  ExploreRemoteSearchNotifier(this._ref) : super(const ExploreRemoteState());
+  ExploreRemoteSearchNotifier(
+    this._ref, {
+    this.retryTimeout = _remoteSearchRetryTimeout,
+    this.initialRetryDelay = _remoteSearchInitialRetryDelay,
+  }) : super(const ExploreRemoteState());
 
   /// Start a new search, resetting all state.
   Future<void> search({
@@ -124,28 +131,20 @@ class ExploreRemoteSearchNotifier extends StateNotifier<ExploreRemoteState> {
 
   /// Fetch a single page with auto-retry on error.
   Future<void> _fetchPage(int page) async {
-    for (var attempt = 0; attempt <= _maxRetries; attempt++) {
-      if (!mounted) return;
-      try {
-        final client = _ref.read(gdMusicApiClientProvider);
-        List<Song> results;
+    final stopwatch = Stopwatch()..start();
+    Object? lastError;
+    var attempt = 0;
 
-        if (state.searchType == ExploreSearchType.playlist) {
-          // Playlist search: single request, no pagination
-          results = await client.searchPlaylist(playlistId: state.query);
-        } else {
-          final requestSource = state.searchType == ExploreSearchType.album
-              ? '${state.source}_album'
-              : state.source;
-          results = await client.searchSongs(
-            keyword: state.query,
-            source: requestSource,
-            count: exploreRemotePageSize,
-            page: page,
-          );
-        }
+    while (stopwatch.elapsed < retryTimeout) {
+      if (!mounted) return;
+      final remaining = retryTimeout - stopwatch.elapsed;
+      try {
+        final results = await _requestPage(page).timeout(remaining);
 
         if (!mounted) return;
+        if (results.isEmpty) {
+          throw const _EmptyGdStudioResponse();
+        }
 
         final isPlaylist = state.searchType == ExploreSearchType.playlist;
         state = state.copyWith(
@@ -159,25 +158,65 @@ class ExploreRemoteSearchNotifier extends StateNotifier<ExploreRemoteState> {
         );
         return;
       } catch (e) {
+        lastError = e;
         if (!mounted) return;
-        if (attempt < _maxRetries) {
-          // Exponential backoff: 1s, 2s, 4s
-          state = state.copyWith(
-            error: '加载失败，${attempt + 1}/$_maxRetries 次重试中...',
-            retryCount: attempt + 1,
-          );
-          await Future.delayed(Duration(seconds: 1 << attempt));
+        attempt += 1;
+        final retryRemaining = retryTimeout - stopwatch.elapsed;
+        if (retryRemaining <= Duration.zero) break;
+
+        state = state.copyWith(
+          error: e is _EmptyGdStudioResponse
+              ? '远程接口返回空结果，正在重试…'
+              : '远程请求失败，正在重试…',
+          retryCount: attempt,
+        );
+
+        final delay = _retryDelay(attempt, retryRemaining);
+        if (delay > Duration.zero) {
+          await Future.delayed(delay);
           if (!mounted) return;
-        } else {
-          state = state.copyWith(
-            isLoading: false,
-            error: '加载失败: $e',
-            retryCount: attempt + 1,
-          );
         }
       }
     }
+
+    if (!mounted) return;
+    state = state.copyWith(
+      isLoading: false,
+      error: lastError is _EmptyGdStudioResponse
+          ? '加载失败：远程接口持续返回空结果'
+          : '加载失败：远程接口请求超时',
+      retryCount: attempt,
+    );
   }
+
+  Future<List<Song>> _requestPage(int page) {
+    final client = _ref.read(gdMusicApiClientProvider);
+    if (state.searchType == ExploreSearchType.playlist) {
+      return client.searchPlaylist(playlistId: state.query);
+    }
+
+    final requestSource = state.searchType == ExploreSearchType.album
+        ? '${state.source}_album'
+        : state.source;
+    return client.searchSongs(
+      keyword: state.query,
+      source: requestSource,
+      count: exploreRemotePageSize,
+      page: page,
+    );
+  }
+
+  Duration _retryDelay(int attempt, Duration remaining) {
+    final shift = attempt > 3 ? 3 : attempt - 1;
+    final requested = Duration(
+      milliseconds: initialRetryDelay.inMilliseconds * (1 << shift),
+    );
+    return requested < remaining ? requested : remaining;
+  }
+}
+
+class _EmptyGdStudioResponse implements Exception {
+  const _EmptyGdStudioResponse();
 }
 
 // ── Providers ──

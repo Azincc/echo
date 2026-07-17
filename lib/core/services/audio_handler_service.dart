@@ -3,6 +3,8 @@ import 'package:just_audio/just_audio.dart';
 import '../utils/logger.dart';
 import '../theme/color_scheme.dart';
 
+const echoPlaybackSystemActions = <MediaAction>{MediaAction.seek};
+
 /// 音频处理器 - 处理后台播放和通知栏控制
 class EchoAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
   final AudioPlayer _audioPlayer;
@@ -42,6 +44,9 @@ class EchoAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
       playbackState.value.copyWith(
         controls: _getControls(),
         androidCompactActionIndices: const [0, 1, 2],
+        // Explicitly advertise seeking so OEM MediaStyle implementations do
+        // not render the notification progress control as disabled.
+        systemActions: echoPlaybackSystemActions,
         processingState: _getProcessingState(),
         playing: _audioPlayer.playing,
         updatePosition: _audioPlayer.position,
@@ -86,6 +91,7 @@ class EchoAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
       playbackState.value.copyWith(
         controls: _getControls(),
         androidCompactActionIndices: const [0, 1, 2],
+        systemActions: echoPlaybackSystemActions,
         processingState: AudioProcessingState.ready,
         playing: true, // 关键：标记为正在播放
         updatePosition: Duration.zero,

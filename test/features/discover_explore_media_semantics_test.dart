@@ -59,13 +59,19 @@ void main() {
     var selectionPresses = 0;
     var downloadPresses = 0;
 
-    Widget subject({bool selectionMode = false, bool resolving = false}) {
+    Widget subject({
+      bool selectionMode = false,
+      bool resolving = false,
+      ExploreRemoteDownloadState downloadState =
+          ExploreRemoteDownloadState.idle,
+    }) {
       return app(
         ExploreRemoteSongRow(
           song: song,
           selected: false,
           selectionMode: selectionMode,
           resolving: resolving,
+          downloadState: downloadState,
           onPressed: () => rowPresses++,
           onLongPress: () {},
           onToggleSelected: () => selectionPresses++,
@@ -96,6 +102,23 @@ void main() {
     await tester.pumpWidget(subject(resolving: true));
     final resolvingNode = tester.getSemantics(find.bySemanticsLabel('正在解析 晨光'));
     expect(resolvingNode.flagsCollection.isLiveRegion, isTrue);
+    expect(find.bySemanticsLabel('添加 晨光 到离线下载队列'), findsNothing);
+
+    await tester.pumpWidget(
+      subject(downloadState: ExploreRemoteDownloadState.submitting),
+    );
+    await tester.pump(const Duration(milliseconds: 200));
+    final submittingNode = tester.getSemantics(
+      find.bySemanticsLabel('正在添加 晨光 到离线下载队列'),
+    );
+    expect(submittingNode.flagsCollection.isLiveRegion, isTrue);
+    expect(find.bySemanticsLabel('添加 晨光 到离线下载队列'), findsNothing);
+
+    await tester.pumpWidget(
+      subject(downloadState: ExploreRemoteDownloadState.queued),
+    );
+    await tester.pump(const Duration(milliseconds: 200));
+    expect(find.bySemanticsLabel('晨光 已加入离线下载队列'), findsOneWidget);
     expect(find.bySemanticsLabel('添加 晨光 到离线下载队列'), findsNothing);
   });
 }

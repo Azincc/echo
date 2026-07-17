@@ -207,6 +207,8 @@ class ExploreLibrarySongRow extends StatelessWidget {
   }
 }
 
+enum ExploreRemoteDownloadState { idle, submitting, queued }
+
 class ExploreRemoteSongRow extends StatelessWidget {
   const ExploreRemoteSongRow({
     super.key,
@@ -214,6 +216,7 @@ class ExploreRemoteSongRow extends StatelessWidget {
     required this.selected,
     required this.selectionMode,
     required this.resolving,
+    required this.downloadState,
     required this.onPressed,
     required this.onLongPress,
     required this.onToggleSelected,
@@ -224,6 +227,7 @@ class ExploreRemoteSongRow extends StatelessWidget {
   final bool selected;
   final bool selectionMode;
   final bool resolving;
+  final ExploreRemoteDownloadState downloadState;
   final VoidCallback onPressed;
   final VoidCallback onLongPress;
   final VoidCallback onToggleSelected;
@@ -244,6 +248,8 @@ class ExploreRemoteSongRow extends StatelessWidget {
         '远程试听',
         if (selected) '已选择',
         if (resolving) '正在解析播放地址',
+        if (downloadState == ExploreRemoteDownloadState.submitting) '正在提交下载',
+        if (downloadState == ExploreRemoteDownloadState.queued) '已加入下载队列',
       ].join('，'),
       semanticsMode: EchoPressableSemanticsMode.explicitChildren,
       selected: selected,
@@ -304,12 +310,90 @@ class ExploreRemoteSongRow extends StatelessWidget {
                   ),
                 )
               else
-                EchoIconButton(
-                  icon: AppIcons.downloadOutline,
-                  label: '添加 ${song.title} 到离线下载队列',
-                  onPressed: onDownload,
+                AnimatedSwitcher(
+                  duration: context.echoMotion.resolve(
+                    context,
+                    context.echoMotion.feedback,
+                  ),
+                  switchInCurve: context.echoMotion.easeOut,
+                  switchOutCurve: context.echoMotion.easeOut,
+                  child: switch (downloadState) {
+                    ExploreRemoteDownloadState.idle => EchoIconButton(
+                      key: const ValueKey<String>('download-idle'),
+                      icon: AppIcons.downloadOutline,
+                      label: '添加 ${song.title} 到离线下载队列',
+                      onPressed: onDownload,
+                    ),
+                    ExploreRemoteDownloadState.submitting =>
+                      _RemoteDownloadStatus(
+                        key: const ValueKey<String>('download-submitting'),
+                        songTitle: song.title,
+                        submitting: true,
+                      ),
+                    ExploreRemoteDownloadState.queued => _RemoteDownloadStatus(
+                      key: const ValueKey<String>('download-queued'),
+                      songTitle: song.title,
+                      submitting: false,
+                    ),
+                  },
                 ),
             ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _RemoteDownloadStatus extends StatelessWidget {
+  const _RemoteDownloadStatus({
+    super.key,
+    required this.songTitle,
+    required this.submitting,
+  });
+
+  final String songTitle;
+  final bool submitting;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.echoColors;
+    final animationsDisabled =
+        MediaQuery.maybeOf(context)?.disableAnimations ??
+        WidgetsBinding
+            .instance
+            .platformDispatcher
+            .accessibilityFeatures
+            .disableAnimations;
+    final label = submitting
+        ? '正在添加 $songTitle 到离线下载队列'
+        : '$songTitle 已加入离线下载队列';
+
+    return Semantics(
+      liveRegion: true,
+      label: label,
+      child: ExcludeSemantics(
+        child: SizedBox.square(
+          dimension: context.echoInteraction.minimumTouchTarget,
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              color: colors.accent.withValues(alpha: 0.12),
+              borderRadius: context.echoRadii.control,
+            ),
+            child: Center(
+              child: submitting
+                  ? animationsDisabled
+                        ? Icon(AppIcons.time, size: 20, color: colors.accent)
+                        : SizedBox.square(
+                            dimension: 20,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: colors.accent,
+                              backgroundColor: colors.divider,
+                            ),
+                          )
+                  : Icon(AppIcons.check, size: 22, color: colors.accent),
+            ),
           ),
         ),
       ),

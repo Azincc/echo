@@ -98,6 +98,189 @@ void main() {
     expect(seeks, <Duration>[const Duration(seconds: 3)]);
   });
 
+  testWidgets('edge softening filters lyric glyphs without blurring backdrop', (
+    tester,
+  ) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(360, 640);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    addTearDown(tester.view.resetPhysicalSize);
+
+    final longLyrics = StructuredLyrics(
+      synced: true,
+      lines: <LyricsLine>[
+        for (var index = 0; index < 30; index += 1)
+          LyricsLine(startMs: index * 1000, value: 'Lyric line $index'),
+      ],
+    );
+
+    await tester.pumpWidget(
+      buildSubject(
+        position: const Duration(seconds: 15),
+        onSeek: (_) async {},
+        subjectLyrics: longLyrics,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byType(BackdropFilter), findsNothing);
+    final textFilters = find.byWidgetPredicate((widget) {
+      final key = widget.key;
+      return widget is ImageFiltered &&
+          key is ValueKey<String> &&
+          key.value.startsWith('lyrics-text-filter-');
+    });
+    expect(textFilters, findsWidgets);
+    final enabledTextFilters = find.byWidgetPredicate((widget) {
+      final key = widget.key;
+      return widget is ImageFiltered &&
+          widget.enabled &&
+          key is ValueKey<String> &&
+          key.value.startsWith('lyrics-text-filter-');
+    });
+    expect(enabledTextFilters, findsWidgets);
+    expect(
+      find.descendant(
+        of: textFilters,
+        matching: find.byType(AnimatedDefaultTextStyle),
+      ),
+      findsWidgets,
+    );
+    final lineMarkers = find.byWidgetPredicate((widget) {
+      final key = widget.key;
+      return widget is AnimatedOpacity &&
+          key is ValueKey<String> &&
+          key.value.startsWith('lyrics-line-marker-');
+    });
+    expect(
+      find.descendant(of: textFilters, matching: lineMarkers),
+      findsNothing,
+    );
+    final softenedText = find.byWidgetPredicate((widget) {
+      final key = widget.key;
+      return widget is Opacity &&
+          widget.opacity < 1 &&
+          key is ValueKey<String> &&
+          key.value.startsWith('lyrics-text-softening-');
+    });
+    expect(softenedText, findsWidgets);
+    final softenedOpacities = softenedText
+        .evaluate()
+        .map((element) => (element.widget as Opacity).opacity)
+        .toList(growable: false);
+    expect(softenedOpacities.any((opacity) => opacity <= 0.05), isTrue);
+    expect(
+      softenedOpacities.any((opacity) => opacity >= 0.9 && opacity < 1),
+      isTrue,
+    );
+
+    final currentText = tester.widget<Opacity>(
+      find.byKey(const ValueKey<String>('lyrics-text-softening-15')),
+    );
+    expect(currentText.opacity, 1);
+    expect(
+      tester
+          .widget<ImageFiltered>(
+            find.byKey(const ValueKey<String>('lyrics-text-filter-15')),
+          )
+          .enabled,
+      isFalse,
+    );
+
+    await tester.pumpWidget(
+      buildSubject(
+        position: Duration.zero,
+        onSeek: (_) async {},
+        subjectLyrics: longLyrics,
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(
+      tester
+          .widget<Opacity>(
+            find.byKey(const ValueKey<String>('lyrics-text-softening-0')),
+          )
+          .opacity,
+      1,
+    );
+    expect(
+      tester
+          .widget<ImageFiltered>(
+            find.byKey(const ValueKey<String>('lyrics-text-filter-0')),
+          )
+          .enabled,
+      isFalse,
+    );
+
+    await tester.pumpWidget(
+      buildSubject(
+        position: const Duration(milliseconds: 29500),
+        onSeek: (_) async {},
+        subjectLyrics: longLyrics,
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(
+      tester
+          .widget<Opacity>(
+            find.byKey(const ValueKey<String>('lyrics-text-softening-29')),
+          )
+          .opacity,
+      1,
+    );
+    expect(
+      tester
+          .widget<ImageFiltered>(
+            find.byKey(const ValueKey<String>('lyrics-text-filter-29')),
+          )
+          .enabled,
+      isFalse,
+    );
+  });
+
+  testWidgets('invisible current lines do not show the emphasis rail', (
+    tester,
+  ) async {
+    final lyricsWithGap = StructuredLyrics(
+      synced: true,
+      lines: <LyricsLine>[
+        LyricsLine(startMs: 0, value: 'Opening line'),
+        LyricsLine(startMs: 1000, value: ' \t\u200B\u2060\uFEFF '),
+        LyricsLine(startMs: 2000, value: '♪ … 👩‍🎤'),
+      ],
+    );
+
+    await tester.pumpWidget(
+      buildSubject(
+        position: const Duration(milliseconds: 1200),
+        onSeek: (_) async {},
+        subjectLyrics: lyricsWithGap,
+      ),
+    );
+    await tester.pump();
+
+    final invisibleMarker = tester.widget<AnimatedOpacity>(
+      find.byKey(const ValueKey<String>('lyrics-line-marker-1')),
+    );
+    expect(invisibleMarker.opacity, 0);
+    expect(find.bySemanticsLabel(RegExp('当前歌词')), findsNothing);
+
+    await tester.pumpWidget(
+      buildSubject(
+        position: const Duration(milliseconds: 2200),
+        onSeek: (_) async {},
+        subjectLyrics: lyricsWithGap,
+      ),
+    );
+    await tester.pump();
+
+    final visibleSymbolMarker = tester.widget<AnimatedOpacity>(
+      find.byKey(const ValueKey<String>('lyrics-line-marker-2')),
+    );
+    expect(visibleSymbolMarker.opacity, 1);
+    expect(find.bySemanticsLabel(RegExp('当前歌词，♪ … 👩‍🎤')), findsOneWidget);
+  });
+
   testWidgets('bilingual lines wrap at 200% and reduced motion stays static', (
     tester,
   ) async {

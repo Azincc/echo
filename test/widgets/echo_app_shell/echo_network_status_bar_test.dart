@@ -1,3 +1,4 @@
+import 'package:echoes/core/design/echo_design.dart';
 import 'package:echoes/core/theme/app_theme.dart';
 import 'package:echoes/widgets/echo_app_shell/echo_network_status_bar.dart';
 import 'package:flutter/material.dart';
@@ -29,6 +30,21 @@ void main() {
     expect(find.text('当前离线'), findsOneWidget);
     expect(find.text('已加载内容和离线歌曲仍可使用，在线操作将在联网后恢复'), findsOneWidget);
     expect(tester.getSize(_statusSlot).height, greaterThan(0));
+    final statusSurface = find.byKey(
+      const ValueKey<String>('echo-network-status-surface'),
+    );
+    final surfaceContext = tester.element(statusSurface);
+    final surfaceSize = tester.getSize(statusSurface);
+    final slotSize = tester.getSize(_statusSlot);
+    expect(
+      surfaceSize.width,
+      slotSize.width - surfaceContext.echoSpacing.sm * 2,
+    );
+    expect(surfaceSize.height, slotSize.height);
+    expect(
+      tester.widget<EchoSurface>(statusSurface).borderRadius,
+      surfaceContext.echoRadii.surface,
+    );
     expect(find.byType(MaterialBanner), findsNothing);
     expect(tester.takeException(), isNull);
   });

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:azlistview/azlistview.dart';
 import 'package:flutter/material.dart';
 
@@ -336,31 +338,151 @@ class EchoLibrarySectionLabel extends StatelessWidget {
   }
 }
 
-IndexBarOptions echoIndexBarOptions(BuildContext context) {
+typedef EchoAzRevealBuilder =
+    Widget Function(BuildContext context, double opacity, bool visible);
+
+/// Reveals the alphabetical rail while the user scrolls or touches its edge.
+///
+/// The rail remains laid out while visually hidden so the first drag can jump
+/// immediately instead of merely revealing the control for a second gesture.
+class EchoAzIndexReveal extends StatefulWidget {
+  const EchoAzIndexReveal({
+    super.key,
+    required this.builder,
+    this.enabled = true,
+  });
+
+  final EchoAzRevealBuilder builder;
+  final bool enabled;
+
+  @override
+  State<EchoAzIndexReveal> createState() => _EchoAzIndexRevealState();
+}
+
+class _EchoAzIndexRevealState extends State<EchoAzIndexReveal> {
+  static const Duration _lingerDuration = Duration(milliseconds: 1200);
+  static const double _edgeActivationWidth = 40;
+
+  Timer? _hideTimer;
+  bool _visible = false;
+  bool _pointerActive = false;
+
+  @override
+  void didUpdateWidget(covariant EchoAzIndexReveal oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.enabled && !widget.enabled) {
+      _hideTimer?.cancel();
+      _pointerActive = false;
+      _visible = false;
+    }
+  }
+
+  @override
+  void dispose() {
+    _hideTimer?.cancel();
+    super.dispose();
+  }
+
+  void _reveal() {
+    if (!widget.enabled || !mounted) return;
+    _hideTimer?.cancel();
+    if (!_visible) setState(() => _visible = true);
+    if (_pointerActive) return;
+    _hideTimer = Timer(_lingerDuration, () {
+      if (mounted) setState(() => _visible = false);
+    });
+  }
+
+  void _beginPointer(PointerDownEvent event, double width) {
+    if (!widget.enabled ||
+        event.localPosition.dx < width - _edgeActivationWidth) {
+      return;
+    }
+    _pointerActive = true;
+    _reveal();
+  }
+
+  void _endPointer() {
+    if (!_pointerActive) return;
+    _pointerActive = false;
+    _reveal();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (!widget.enabled) return widget.builder(context, 0, false);
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        return Listener(
+          onPointerDown: (event) => _beginPointer(event, constraints.maxWidth),
+          onPointerUp: (_) => _endPointer(),
+          onPointerCancel: (_) => _endPointer(),
+          child: NotificationListener<ScrollNotification>(
+            onNotification: (notification) {
+              if (notification is ScrollStartNotification ||
+                  notification is ScrollUpdateNotification ||
+                  notification is UserScrollNotification) {
+                _reveal();
+              }
+              return false;
+            },
+            child: TweenAnimationBuilder<double>(
+              tween: Tween<double>(end: _visible ? 1 : 0),
+              duration: context.echoMotion.resolve(
+                context,
+                context.echoMotion.feedback,
+              ),
+              curve: context.echoMotion.easeOut,
+              builder: (context, opacity, _) {
+                return widget.builder(context, opacity, opacity > 0.01);
+              },
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+IndexBarOptions echoIndexBarOptions(
+  BuildContext context, {
+  required double opacity,
+}) {
   final colors = context.echoColors;
   final typography = context.echoTypography;
   final textScale = MediaQuery.textScalerOf(context).scale(1);
-  final metadataSize = (typography.metadata.fontSize ?? 13) / textScale;
+  final indexSize = 11 / textScale;
   final hintSize = (typography.headline.fontSize ?? 24) / textScale;
   return IndexBarOptions(
     needRebuild: true,
     ignoreDragCancel: true,
-    textStyle: typography.metadata.copyWith(
-      fontSize: metadataSize,
-      color: colors.muted,
+    decoration: BoxDecoration(
+      color: colors.surface.withValues(alpha: 0.96 * opacity),
+      borderRadius: context.echoRadii.pill,
+      border: Border.all(color: colors.divider.withValues(alpha: opacity)),
     ),
-    downTextStyle: typography.metadata.copyWith(
-      fontSize: metadataSize,
-      color: colors.onAccent,
+    downDecoration: BoxDecoration(
+      color: colors.raised.withValues(alpha: opacity),
+      borderRadius: context.echoRadii.pill,
+    ),
+    textStyle: typography.metadata.copyWith(
+      fontSize: indexSize,
+      height: 1,
+      color: colors.muted.withValues(alpha: opacity),
+    ),
+    downTextStyle: typography.label.copyWith(
+      fontSize: indexSize,
+      height: 1,
+      color: colors.accent.withValues(alpha: opacity),
     ),
     downItemDecoration: BoxDecoration(
       shape: BoxShape.circle,
-      color: colors.accent,
+      color: colors.accent.withValues(alpha: 0.14 * opacity),
     ),
     indexHintWidth: 60,
     indexHintHeight: 50,
     indexHintDecoration: BoxDecoration(
-      color: colors.ink,
+      color: colors.ink.withValues(alpha: 0.92),
       borderRadius: context.echoRadii.control,
     ),
     indexHintTextStyle: typography.headline.copyWith(

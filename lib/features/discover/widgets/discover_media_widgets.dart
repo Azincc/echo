@@ -374,36 +374,99 @@ class DiscoverFrequentAlbumShelf extends StatelessWidget {
             .clamp(minimumWidth, maximumWidth)
             .toDouble();
         final itemHeight = 104 + (scale - 1) * 80;
+        final groupCount = (albums.length + 1) ~/ 2;
 
         return SizedBox(
           key: const Key('discover-frequent-shelf'),
           height: itemHeight * 2 + context.echoSpacing.sm,
-          child: GridView.builder(
+          child: ListView.separated(
             scrollDirection: Axis.horizontal,
-            itemCount: albums.length,
-            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: 2,
-              mainAxisExtent: tileWidth,
-              mainAxisSpacing: context.echoSpacing.md,
-              crossAxisSpacing: context.echoSpacing.sm,
-            ),
-            itemBuilder: (context, index) {
-              final album = albums[index];
-              return EchoAlbumRow(
-                album: album,
-                allowFullText: false,
-                contentPadding: EdgeInsets.symmetric(
-                  vertical: context.echoSpacing.xs,
-                ),
-                onPressed: () => onAlbumPressed(album),
-                onLongPress: onAlbumLongPress == null
-                    ? null
-                    : () => onAlbumLongPress!(album),
+            itemCount: groupCount,
+            separatorBuilder: (context, index) =>
+                SizedBox(width: context.echoSpacing.md),
+            itemBuilder: (context, groupIndex) {
+              final start = groupIndex * 2;
+              final end = (start + 2).clamp(0, albums.length);
+              return _DiscoverFrequentAlbumGroup(
+                key: ValueKey<String>('discover-frequent-group-$groupIndex'),
+                albums: albums.sublist(start, end),
+                width: tileWidth,
+                onAlbumPressed: onAlbumPressed,
+                onAlbumLongPress: onAlbumLongPress,
               );
             },
           ),
         );
       },
+    );
+  }
+}
+
+class _DiscoverFrequentAlbumGroup extends StatelessWidget {
+  const _DiscoverFrequentAlbumGroup({
+    super.key,
+    required this.albums,
+    required this.width,
+    required this.onAlbumPressed,
+    this.onAlbumLongPress,
+  });
+
+  final List<Album> albums;
+  final double width;
+  final ValueChanged<Album> onAlbumPressed;
+  final ValueChanged<Album>? onAlbumLongPress;
+
+  @override
+  Widget build(BuildContext context) {
+    final spacing = context.echoSpacing;
+    final radius = context.echoRadii.surface;
+    return SizedBox(
+      width: width,
+      child: Semantics(
+        container: true,
+        explicitChildNodes: true,
+        child: ClipRRect(
+          borderRadius: radius,
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              color: context.echoColors.surface,
+              borderRadius: radius,
+              border: Border.all(color: context.echoColors.divider),
+            ),
+            child: Padding(
+              padding: EdgeInsets.symmetric(
+                horizontal: spacing.sm,
+                vertical: spacing.xxs,
+              ),
+              child: Column(
+                children: <Widget>[
+                  for (
+                    var index = 0;
+                    index < albums.length;
+                    index++
+                  ) ...<Widget>[
+                    if (index > 0)
+                      EchoDivider(color: context.echoColors.divider),
+                    Expanded(
+                      child: EchoAlbumRow(
+                        album: albums[index],
+                        allowFullText: false,
+                        contentPadding: EdgeInsets.symmetric(
+                          vertical: spacing.xs,
+                        ),
+                        onPressed: () => onAlbumPressed(albums[index]),
+                        onLongPress: onAlbumLongPress == null
+                            ? null
+                            : () => onAlbumLongPress!(albums[index]),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
     );
   }
 }
@@ -716,20 +779,52 @@ class DiscoverFrequentAlbumLoading extends StatelessWidget {
         final tileWidth = (constraints.maxWidth * 0.86)
             .clamp(minimumWidth, maximumWidth)
             .toDouble();
+        final groupCount = (count + 1) ~/ 2;
 
         return SizedBox(
           height: itemHeight * 2 + context.echoSpacing.sm,
-          child: GridView.builder(
+          child: ListView.separated(
             scrollDirection: Axis.horizontal,
             physics: const NeverScrollableScrollPhysics(),
-            itemCount: count,
-            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: 2,
-              mainAxisExtent: tileWidth,
-              mainAxisSpacing: context.echoSpacing.md,
-              crossAxisSpacing: context.echoSpacing.sm,
-            ),
-            itemBuilder: (context, index) => const _DiscoverAlbumRowSkeleton(),
+            itemCount: groupCount,
+            separatorBuilder: (context, index) =>
+                SizedBox(width: context.echoSpacing.md),
+            itemBuilder: (context, groupIndex) {
+              final start = groupIndex * 2;
+              final groupItemCount = (count - start).clamp(0, 2);
+              return SizedBox(
+                width: tileWidth,
+                child: ClipRRect(
+                  borderRadius: context.echoRadii.surface,
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      color: context.echoColors.surface,
+                      borderRadius: context.echoRadii.surface,
+                      border: Border.all(color: context.echoColors.divider),
+                    ),
+                    child: Padding(
+                      padding: EdgeInsets.symmetric(
+                        horizontal: context.echoSpacing.sm,
+                        vertical: context.echoSpacing.xxs,
+                      ),
+                      child: Column(
+                        children: <Widget>[
+                          for (
+                            var itemIndex = 0;
+                            itemIndex < groupItemCount;
+                            itemIndex++
+                          ) ...<Widget>[
+                            if (itemIndex > 0)
+                              EchoDivider(color: context.echoColors.divider),
+                            const Expanded(child: _DiscoverAlbumRowSkeleton()),
+                          ],
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              );
+            },
           ),
         );
       },

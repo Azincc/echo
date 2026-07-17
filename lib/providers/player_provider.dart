@@ -78,6 +78,12 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
   String? _currentStreamFormat;
   int? _currentStreamMaxBitRate;
   String? _loadedSourceSongId;
+  int _sourceGeneration = 0;
+  int _seekRequestGeneration = 0;
+  int _transportRequestGeneration = 0;
+  int? _activeSeekGeneration;
+  String? _activeSeekSongId;
+  bool _isApplyingPendingSeek = false;
   bool _seekByReloadStream = false;
   // 默认关闭：当前服务端对 timeOffset 支持不稳定，首跳可能先失败再回退，导致明显卡顿。
   bool _transcodeTimeOffsetSupported = false;
@@ -95,6 +101,7 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
   int _playDebugSession = 0;
   bool _loggedDurationUnavailableForSong = false;
   Timer? _fadeTimer;
+  Completer<void>? _fadeCompleter;
   static const Duration _playbackSessionPersistInterval = Duration(seconds: 2);
   Timer? _playbackSessionPersistTimer;
   bool _isPersistingPlaybackSession = false;
@@ -185,11 +192,7 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
       // A queued seek is the user's latest intent. While the next source is
       // still loading, just_audio may continue to report the previous source
       // position; do not let that stale value make the scrubber jump back.
-      if (shouldPreservePendingSeekPosition(
-        pendingPosition: _pendingSeekPosition,
-        pendingSongId: _pendingSeekSongId,
-        currentSongId: state.currentSong?.id,
-      )) {
+      if (_shouldPreserveSeekPosition()) {
         return;
       }
 
@@ -485,6 +488,9 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
     );
 
     final debugSession = ++_playDebugSession;
+    _transportRequestGeneration += 1;
+    bool isCurrentSession() =>
+        _isPlaybackContextCurrent(session: debugSession, songId: song.id);
     _clearCurrentPlaybackRetry(
       reason: 'play_song_started',
       preserveRetrying: _retryingCurrentPlayback,
@@ -503,10 +509,12 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
 
       // 淡出当前歌曲（如果启用了淡入淡出）
       await _fadeOut(debugSession);
+      if (_playDebugSession != debugSession) return;
       if (!autoPlay) {
         _cancelFade();
         await _audioPlayer?.pause();
         await _audioHandler?.pause();
+        if (_playDebugSession != debugSession) return;
       }
 
       _downloadProgressSubscription?.cancel();
@@ -514,7 +522,8 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
       _clearPendingSeek();
       _usingLockCachingSource = false;
       _currentStreamUrl = null;
-      _loadedSourceSongId = null;
+      _invalidateLoadedSource(reason: 'play_song_started');
+      _invalidateSeekRequests();
       _clearStreamContext();
       _clearForcedNext();
       _isHandlingCompletion = false;
@@ -565,13 +574,24 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
         _playDbg(
           'sid=$debugSession source=download setFilePath path=$downloadedPath',
         );
-        await _audioPlayer?.setFilePath(downloadedPath);
-        _markLoadedSource(song.id);
+        final sourceReady = await _replaceLoadedSource(
+          songId: song.id,
+          label: 'download',
+          ownsSource: () =>
+              _isPlaybackContextCurrent(session: debugSession, songId: song.id),
+          setSource: (player) async {
+            await player.setFilePath(downloadedPath);
+          },
+        );
+        if (!sourceReady) return;
+        _replaceDownloadProgressSubscription(null);
         _usingLockCachingSource = false;
         _currentStreamUrl = null;
         _clearStreamContext();
         await _syncPlaybackAfterSourceReady(autoPlay: autoPlay);
+        if (!isCurrentSession()) return;
         await _applyPendingSeekIfNeeded();
+        if (!isCurrentSession()) return;
         _seekDbg('source=download path=$downloadedPath');
         state = state.copyWith(
           currentQuality: AudioQualityLevel.original,
@@ -586,6 +606,7 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
         _clearCurrentPlaybackRetry(reason: 'playback_ready_downloaded');
         if (autoPlay) {
           await _scrobble(song.id, submission: false);
+          if (!isCurrentSession()) return;
           _preCacheNextSong();
         }
         return;
@@ -603,13 +624,23 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
           'sid=$debugSession source=cache setFilePath path=$cachedPath '
           'quality=${effectiveQuality.name}',
         );
-        await _audioPlayer?.setFilePath(cachedPath);
-        _markLoadedSource(song.id);
+        final sourceReady = await _replaceLoadedSource(
+          songId: song.id,
+          label: 'cache',
+          ownsSource: () =>
+              _isPlaybackContextCurrent(session: debugSession, songId: song.id),
+          setSource: (player) async {
+            await player.setFilePath(cachedPath);
+          },
+        );
+        if (!sourceReady) return;
         _usingLockCachingSource = false;
         _currentStreamUrl = null;
         _clearStreamContext();
         await _syncPlaybackAfterSourceReady(autoPlay: autoPlay);
+        if (!isCurrentSession()) return;
         await _applyPendingSeekIfNeeded();
+        if (!isCurrentSession()) return;
         _seekDbg(
           'source=cache path=$cachedPath quality=${effectiveQuality.name}',
         );
@@ -627,6 +658,7 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
         _clearCurrentPlaybackRetry(reason: 'playback_ready_cached');
         if (autoPlay) {
           await _scrobble(song.id, submission: false);
+          if (!isCurrentSession()) return;
           unawaited(
             _recordMobileCacheSavedBytesForHit(
               songId: song.id,
@@ -743,8 +775,18 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
             'sid=$debugSession source=lock_cache setAudioSource '
             'cachePath=$cacheFilePath',
           );
-          await _audioPlayer?.setAudioSource(audioSource);
-          _markLoadedSource(song.id);
+          final sourceReady = await _replaceLoadedSource(
+            songId: song.id,
+            label: 'lock_cache',
+            ownsSource: () => _isPlaybackContextCurrent(
+              session: debugSession,
+              songId: song.id,
+            ),
+            setSource: (player) async {
+              await player.setAudioSource(audioSource);
+            },
+          );
+          if (!sourceReady) return;
           _usingLockCachingSource = true;
           _currentStreamUrl = streamUrl;
           _setStreamContext(
@@ -754,12 +796,14 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
             seekByReloadStream: false,
           );
           await _syncPlaybackAfterSourceReady(autoPlay: autoPlay);
+          if (!isCurrentSession()) return;
           _seekDbg(
             'source=lock_cache stream quality=${effectiveQuality.name} '
             'format=${transcodeFormat ?? song.suffix} '
             'processing=${_audioPlayer?.processingState.name}',
           );
           await _applyPendingSeekIfNeeded();
+          if (!isCurrentSession()) return;
 
           state = state.copyWith(
             currentQuality: effectiveQuality,
@@ -809,8 +853,18 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
             'sid=$debugSession source=direct_stream_from_lock_fallback '
             'setUrl=${_summarizeStreamUrl(streamUrl)}',
           );
-          await _audioPlayer?.setUrl(streamUrl);
-          _markLoadedSource(song.id);
+          final sourceReady = await _replaceLoadedSource(
+            songId: song.id,
+            label: 'direct_stream_from_lock_fallback',
+            ownsSource: () => _isPlaybackContextCurrent(
+              session: debugSession,
+              songId: song.id,
+            ),
+            setSource: (player) async {
+              await player.setUrl(streamUrl);
+            },
+          );
+          if (!sourceReady) return;
           _usingLockCachingSource = false;
           _currentStreamUrl = streamUrl;
           _setStreamContext(
@@ -820,11 +874,13 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
             seekByReloadStream: transcodeFormat != null,
           );
           await _syncPlaybackAfterSourceReady(autoPlay: autoPlay);
+          if (!isCurrentSession()) return;
           _seekDbg(
             'source=direct_stream_from_lock_fallback quality=${effectiveQuality.name} '
             'format=${transcodeFormat ?? song.suffix}',
           );
           await _applyPendingSeekIfNeeded();
+          if (!isCurrentSession()) return;
           state = state.copyWith(
             currentQuality: effectiveQuality,
             playbackSource: PlaybackSource.stream,
@@ -843,8 +899,18 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
             'sid=$debugSession source=direct_stream setUrl='
             '${_summarizeStreamUrl(streamUrl)}',
           );
-          await _audioPlayer?.setUrl(streamUrl);
-          _markLoadedSource(song.id);
+          final sourceReady = await _replaceLoadedSource(
+            songId: song.id,
+            label: 'direct_stream',
+            ownsSource: () => _isPlaybackContextCurrent(
+              session: debugSession,
+              songId: song.id,
+            ),
+            setSource: (player) async {
+              await player.setUrl(streamUrl);
+            },
+          );
+          if (!sourceReady) return;
           _usingLockCachingSource = false;
           _currentStreamUrl = streamUrl;
           _setStreamContext(
@@ -854,6 +920,7 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
             seekByReloadStream: transcodeFormat != null,
           );
           await _syncPlaybackAfterSourceReady(autoPlay: autoPlay);
+          if (!isCurrentSession()) return;
           _seekDbg(
             'source=direct_stream quality=${effectiveQuality.name} '
             'format=${transcodeFormat ?? song.suffix}',
@@ -885,8 +952,18 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
             'sid=$debugSession source=lock_cache_from_direct_fallback '
             'setAudioSource cachePath=$cacheFilePath',
           );
-          await _audioPlayer?.setAudioSource(audioSource);
-          _markLoadedSource(song.id);
+          final sourceReady = await _replaceLoadedSource(
+            songId: song.id,
+            label: 'lock_cache_from_direct_fallback',
+            ownsSource: () => _isPlaybackContextCurrent(
+              session: debugSession,
+              songId: song.id,
+            ),
+            setSource: (player) async {
+              await player.setAudioSource(audioSource);
+            },
+          );
+          if (!sourceReady) return;
           _usingLockCachingSource = true;
           _currentStreamUrl = streamUrl;
           _setStreamContext(
@@ -896,6 +973,7 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
             seekByReloadStream: false,
           );
           await _syncPlaybackAfterSourceReady(autoPlay: autoPlay);
+          if (!isCurrentSession()) return;
           _seekDbg(
             'source=lock_cache_from_direct_fallback '
             'quality=${effectiveQuality.name} '
@@ -904,6 +982,7 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
         }
 
         await _applyPendingSeekIfNeeded();
+        if (!isCurrentSession()) return;
         state = state.copyWith(
           currentQuality: effectiveQuality,
           playbackSource: PlaybackSource.stream,
@@ -916,11 +995,13 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
         );
       }
 
+      if (!isCurrentSession()) return;
       _clearCurrentPlaybackRetry(reason: 'playback_ready_stream');
 
       // 上报"正在播放"
       if (autoPlay) {
         await _scrobble(song.id, submission: false);
+        if (!isCurrentSession()) return;
       }
 
       Logger.info('Playing: ${song.title}');
@@ -998,6 +1079,8 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
   }) async {
     // 会话已被更新的 playSong 取代，放弃本次转码重试
     final sid = debugSession ?? _playDebugSession;
+    bool isCurrentSession() =>
+        _isPlaybackContextCurrent(session: sid, songId: song.id);
     if (debugSession != null && _playDebugSession != debugSession) {
       _playDbg(
         'sid=$sid transcoding retry abandoned '
@@ -1041,8 +1124,16 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
           );
           return;
         }
-        await _audioPlayer?.setUrl(streamUrl);
-        _markLoadedSource(song.id);
+        final sourceReady = await _replaceLoadedSource(
+          songId: song.id,
+          label: 'direct_stream_transcoding',
+          ownsSource: () =>
+              _isPlaybackContextCurrent(session: sid, songId: song.id),
+          setSource: (player) async {
+            await player.setUrl(streamUrl);
+          },
+        );
+        if (!sourceReady) return;
         _usingLockCachingSource = false;
         _currentStreamUrl = streamUrl;
         _setStreamContext(
@@ -1052,6 +1143,7 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
           seekByReloadStream: true,
         );
         await _syncPlaybackAfterSourceReady(autoPlay: autoPlay);
+        if (!isCurrentSession()) return;
         _seekDbg('source=direct_stream_transcoding mp3 song=${song.id}');
       } catch (e) {
         final canFallbackToLockCache =
@@ -1082,8 +1174,16 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
           'source=lock_cache_transcoding setAudioSource '
           'cachePath=$cacheFilePath',
         );
-        await _audioPlayer?.setAudioSource(audioSource);
-        _markLoadedSource(song.id);
+        final sourceReady = await _replaceLoadedSource(
+          songId: song.id,
+          label: 'lock_cache_transcoding',
+          ownsSource: () =>
+              _isPlaybackContextCurrent(session: sid, songId: song.id),
+          setSource: (player) async {
+            await player.setAudioSource(audioSource);
+          },
+        );
+        if (!sourceReady) return;
         _usingLockCachingSource = true;
         _currentStreamUrl = streamUrl;
         _setStreamContext(
@@ -1093,6 +1193,7 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
           seekByReloadStream: false,
         );
         await _syncPlaybackAfterSourceReady(autoPlay: autoPlay);
+        if (!isCurrentSession()) return;
         _seekDbg('source=lock_cache_transcoding mp3 song=${song.id}');
       }
 
@@ -1105,6 +1206,7 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
         return;
       }
       await _applyPendingSeekIfNeeded();
+      if (!isCurrentSession()) return;
       final effectiveQuality = _ref.read(effectiveQualityProvider);
       state = state.copyWith(
         currentQuality: effectiveQuality,
@@ -1121,6 +1223,7 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
       // 上报"正在播放"
       if (autoPlay) {
         await _scrobble(song.id, submission: false);
+        if (!isCurrentSession()) return;
       }
     } catch (e) {
       Logger.error('Failed to play song even with transcoding', e);
@@ -1435,6 +1538,11 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
   void _cancelFade() {
     _fadeTimer?.cancel();
     _fadeTimer = null;
+    final completer = _fadeCompleter;
+    _fadeCompleter = null;
+    if (completer != null && !completer.isCompleted) {
+      completer.complete();
+    }
     _audioPlayer?.setVolume(1.0);
   }
 
@@ -1457,11 +1565,15 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
     _playDbg('sid=$session fadeOut start durationMs=$fadeMs steps=$steps');
 
     final completer = Completer<void>();
+    _fadeCompleter = completer;
     _fadeTimer = Timer.periodic(const Duration(milliseconds: stepMs), (timer) {
       // 会话已变（用户快速切歌）→ 立即中止
       if (_playDebugSession != session) {
         timer.cancel();
         _fadeTimer = null;
+        if (identical(_fadeCompleter, completer)) {
+          _fadeCompleter = null;
+        }
         player.setVolume(0.0);
         if (!completer.isCompleted) completer.complete();
         return;
@@ -1471,6 +1583,9 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
       if (currentVolume <= 0.0) {
         timer.cancel();
         _fadeTimer = null;
+        if (identical(_fadeCompleter, completer)) {
+          _fadeCompleter = null;
+        }
         _playDbg('sid=$session fadeOut complete');
         if (!completer.isCompleted) completer.complete();
       }
@@ -1534,6 +1649,9 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
     bool autoPlay = true,
   }) async {
     final debugSession = ++_playDebugSession;
+    _transportRequestGeneration += 1;
+    bool isCurrentSession() =>
+        _isPlaybackContextCurrent(session: debugSession, songId: song.id);
     _clearCurrentPlaybackRetry(
       reason: 'play_preview_started',
       preserveRetrying: _retryingCurrentPlayback,
@@ -1548,6 +1666,7 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
       _cancelFade();
       await _audioPlayer?.pause();
       await _audioHandler?.pause();
+      if (_playDebugSession != debugSession) return;
     }
 
     _downloadProgressSubscription?.cancel();
@@ -1555,7 +1674,8 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
     _clearPendingSeek();
     _usingLockCachingSource = false;
     _currentStreamUrl = null;
-    _loadedSourceSongId = null;
+    _invalidateLoadedSource(reason: 'play_preview_started');
+    _invalidateSeekRequests();
     _clearStreamContext();
     _clearForcedNext();
     _isHandlingCompletion = false;
@@ -1590,8 +1710,16 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
         'url=${_summarizeStreamUrl(streamUrl)} '
         'headers=${previewHeaders.keys.join(",")}',
       );
-      await _audioPlayer?.setUrl(streamUrl, headers: previewHeaders);
-      _markLoadedSource(song.id);
+      final sourceReady = await _replaceLoadedSource(
+        songId: song.id,
+        label: 'preview',
+        ownsSource: () =>
+            _isPlaybackContextCurrent(session: debugSession, songId: song.id),
+        setSource: (player) async {
+          await player.setUrl(streamUrl, headers: previewHeaders);
+        },
+      );
+      if (!sourceReady) return;
       _usingLockCachingSource = false;
       _currentStreamUrl = streamUrl;
       _setStreamContext(
@@ -1601,7 +1729,9 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
         seekByReloadStream: true,
       );
       await _syncPlaybackAfterSourceReady(autoPlay: autoPlay);
+      if (!isCurrentSession()) return;
       await _applyPendingSeekIfNeeded();
+      if (!isCurrentSession()) return;
       state = state.copyWith(
         currentQuality: AudioQualityLevel.original,
         playbackSource: PlaybackSource.stream,
@@ -1654,19 +1784,30 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
 
   /// 暂停（带淡出）
   Future<void> pause() async {
+    final playbackSession = _playDebugSession;
+    final transportRequest = ++_transportRequestGeneration;
     final durationMs = _ref.read(crossfadeDurationMsProvider);
     if (durationMs > 0 && state.isPlaying) {
       await _fadeOutForPause();
+      if (_playDebugSession != playbackSession ||
+          _transportRequestGeneration != transportRequest) {
+        return;
+      }
     }
     await _audioPlayer?.pause();
+    if (_playDebugSession != playbackSession ||
+        _transportRequestGeneration != transportRequest) {
+      return;
+    }
     await _audioHandler?.pause();
   }
 
   /// 播放（从暂停恢复，不使用淡入——淡入淡出仅用于切歌）
-  Future<void> play() async {
+  Future<void> play() {
+    _transportRequestGeneration += 1;
     _cancelFade(); // 取消任何进行中的淡入淡出，恢复音量到 1.0
-    await _audioPlayer?.play();
-    await _audioHandler?.play();
+    _startPlayback(fadeIn: false);
+    return Future<void>.value();
   }
 
   /// 暂停前的淡出：音量降到 0 后返回，由 pause() 执行实际暂停。
@@ -1684,12 +1825,16 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
     var currentVolume = 1.0;
 
     final completer = Completer<void>();
+    _fadeCompleter = completer;
     _fadeTimer = Timer.periodic(const Duration(milliseconds: stepMs), (timer) {
       currentVolume = (currentVolume - volumeStep).clamp(0.0, 1.0);
       player.setVolume(currentVolume);
       if (currentVolume <= 0.0) {
         timer.cancel();
         _fadeTimer = null;
+        if (identical(_fadeCompleter, completer)) {
+          _fadeCompleter = null;
+        }
         if (!completer.isCompleted) completer.complete();
       }
     });
@@ -1810,6 +1955,17 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
     final currentSongId = state.currentSong?.id;
     if (player == null || currentSongId == null) return;
 
+    final seekGeneration = ++_seekRequestGeneration;
+    final playbackSession = _playDebugSession;
+    bool isCurrentSeek() => _isSeekRequestCurrent(
+      seekGeneration: seekGeneration,
+      playbackSession: playbackSession,
+      songId: currentSongId,
+    );
+    bool ownsSource() => _isPlaybackContextCurrent(
+      session: playbackSession,
+      songId: currentSongId,
+    );
     final target = _normalizeSeekPosition(position);
     final canSeekNow = canSeekLoadedPlayerSource(
       processingState: player.processingState,
@@ -1833,6 +1989,9 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
       return;
     }
 
+    _activeSeekGeneration = seekGeneration;
+    _activeSeekSongId = currentSongId;
+
     // 可立即 seek 时，先把 UI 锚定到目标位置，避免等待底层回调期间回退到旧进度。
     if (mounted) {
       state = state.copyWith(position: target);
@@ -1843,9 +2002,19 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
     }
 
     _clearPendingSeek();
-    await _seekWithFallback(target);
-    if (mounted) {
-      state = state.copyWith(position: target);
+    try {
+      await _seekWithFallback(
+        target,
+        songId: currentSongId,
+        isCurrentSeek: isCurrentSeek,
+        ownsSource: ownsSource,
+      );
+      if (isCurrentSeek() && mounted) {
+        state = state.copyWith(position: target);
+      }
+    } finally {
+      _releaseSeekAnchor(seekGeneration);
+      _schedulePendingSeekIfReady();
     }
   }
 
@@ -2459,7 +2628,8 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
 
     await _audioPlayer?.stop();
     await _audioHandler?.stop();
-    _loadedSourceSongId = null;
+    _invalidateLoadedSource(reason: 'queue_cleared');
+    _invalidateSeekRequests();
     state = state.copyWith(
       currentSong: null,
       queue: const [],
@@ -2490,7 +2660,8 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
       // 停止播放
       _audioPlayer?.stop();
       _audioHandler?.stop();
-      _loadedSourceSongId = null;
+      _invalidateLoadedSource(reason: 'current_queue_item_removed');
+      _invalidateSeekRequests();
       state = state.copyWith(
         queue: newQueue,
         currentSong: null,
@@ -2633,6 +2804,8 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
   }
 
   Future<void> _applyPendingSeekIfNeeded() async {
+    if (_isApplyingPendingSeek) return;
+
     final player = _audioPlayer;
     final pending = _pendingSeekPosition;
     final pendingSongId = _pendingSeekSongId;
@@ -2645,50 +2818,104 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
     }
     if (pendingSongId != currentSongId) return;
 
-    final canSeekNow =
-        player.processingState == ProcessingState.ready ||
-        player.processingState == ProcessingState.completed;
+    final canSeekNow = canSeekLoadedPlayerSource(
+      processingState: player.processingState,
+      loadedSourceSongId: _loadedSourceSongId,
+      currentSongId: currentSongId,
+    );
     if (!canSeekNow) return;
 
+    _isApplyingPendingSeek = true;
+    final seekGeneration = ++_seekRequestGeneration;
+    final playbackSession = _playDebugSession;
+    bool isCurrentSeek() => _isSeekRequestCurrent(
+      seekGeneration: seekGeneration,
+      playbackSession: playbackSession,
+      songId: currentSongId,
+    );
+    bool ownsSource() => _isPlaybackContextCurrent(
+      session: playbackSession,
+      songId: currentSongId,
+    );
     final target = _normalizeSeekPosition(pending);
+    _activeSeekGeneration = seekGeneration;
+    _activeSeekSongId = currentSongId;
     _seekDbg(
       'applyPendingSeek song=$currentSongId target=$target '
       'playerPos=${player.position} state=${player.processingState.name}',
     );
     _clearPendingSeek();
-    await _seekWithFallback(target);
-    if (mounted) {
-      state = state.copyWith(position: target);
+    try {
+      await _seekWithFallback(
+        target,
+        songId: currentSongId,
+        isCurrentSeek: isCurrentSeek,
+        ownsSource: ownsSource,
+      );
+      if (isCurrentSeek() && mounted) {
+        state = state.copyWith(position: target);
+      }
+    } finally {
+      _releaseSeekAnchor(seekGeneration);
+      _isApplyingPendingSeek = false;
+      _schedulePendingSeekIfReady();
     }
   }
 
-  Future<void> _seekWithFallback(Duration target) async {
+  Future<void> _seekWithFallback(
+    Duration target, {
+    required String songId,
+    required bool Function() isCurrentSeek,
+    required bool Function() ownsSource,
+  }) async {
     final player = _audioPlayer;
-    if (player == null) return;
+    if (player == null || !isCurrentSeek()) return;
 
     if (_seekByReloadStream &&
-        _currentStreamSongId != null &&
+        _currentStreamSongId == songId &&
         _currentStreamUrl != null) {
       final shouldResume = player.playing;
       final offset = target.inSeconds;
+      final streamFormat = _currentStreamFormat;
+      final streamMaxBitRate = _currentStreamMaxBitRate;
       final reloadUrl = _apiClient.getStreamUrl(
-        _currentStreamSongId!,
-        maxBitRate: _currentStreamMaxBitRate,
-        format: _currentStreamFormat,
+        songId,
+        maxBitRate: streamMaxBitRate,
+        format: streamFormat,
         timeOffset: offset,
       );
       _seekDbg(
-        'seek reload-stream song=$_currentStreamSongId '
-        'target=$target offsetSec=$offset format=$_currentStreamFormat '
-        'maxBitRate=$_currentStreamMaxBitRate wasPlaying=$shouldResume',
+        'seek reload-stream song=$songId '
+        'target=$target offsetSec=$offset format=$streamFormat '
+        'maxBitRate=$streamMaxBitRate wasPlaying=$shouldResume',
       );
       try {
-        await player.setUrl(reloadUrl, initialPosition: target);
+        final sourceReady = await _replaceLoadedSource(
+          songId: songId,
+          label: 'seek_reload_stream',
+          ownsSource: ownsSource,
+          setSource: (sourcePlayer) async {
+            await sourcePlayer.setUrl(reloadUrl, initialPosition: target);
+          },
+        );
+        if (!sourceReady) return;
+        _usingLockCachingSource = false;
         _currentStreamUrl = reloadUrl;
+        _setStreamContext(
+          songId: songId,
+          format: streamFormat,
+          maxBitRate: streamMaxBitRate,
+          seekByReloadStream: true,
+        );
+        if (!isCurrentSeek()) {
+          _schedulePendingSeekIfReady();
+          return;
+        }
         if (shouldResume) {
           _startPlayback();
         }
         await Future<void>.delayed(const Duration(milliseconds: 220));
+        if (!isCurrentSeek()) return;
         final actualReload = player.position;
         final reloadDrift = (actualReload - target).inMilliseconds.abs();
         _seekDbg(
@@ -2709,9 +2936,11 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
           'Reload-stream seek drift still high '
           '(target=$target, actual=$actualReload), retrying plain seek',
         );
+        if (!isCurrentSeek()) return;
         await player.seek(target);
         return;
       } catch (e) {
+        if (!isCurrentSeek()) return;
         Logger.warn('Reload-stream seek failed, fallback to plain seek', e);
         await player.seek(target);
         return;
@@ -2723,8 +2952,10 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
       'state=${player.processingState.name} lockCache=$_usingLockCachingSource',
     );
     await player.seek(target);
+    if (!isCurrentSeek()) return;
 
     await Future<void>.delayed(const Duration(milliseconds: 220));
+    if (!isCurrentSeek()) return;
     final actual = player.position;
     final drift = (actual - target).inMilliseconds.abs();
     _seekDbg('seek verify target=$target actual=$actual driftMs=$drift');
@@ -2745,9 +2976,14 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
             player: player,
             target: target,
             shouldResume: shouldResume,
+            songId: songId,
+            isCurrentSeek: isCurrentSeek,
+            ownsSource: ownsSource,
           );
+          if (!isCurrentSeek()) return;
           if (reloaded) return;
         } catch (e) {
+          if (!isCurrentSeek()) return;
           Logger.warn('Lock-cache reload seek failed on Apple HTTP', e);
         }
         _seekDbg(
@@ -2755,7 +2991,7 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
           'keep synthetic position target=$target',
         );
         _syntheticPositionFallbackActive = true;
-        if (mounted) {
+        if (isCurrentSeek() && mounted) {
           state = state.copyWith(position: target);
         }
         return;
@@ -2770,21 +3006,45 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
         'wasPlaying=$shouldResume',
       );
       try {
-        await player.setUrl(_currentStreamUrl!, initialPosition: target);
+        final streamUrl = _currentStreamUrl!;
+        final streamFormat = _currentStreamFormat;
+        final streamMaxBitRate = _currentStreamMaxBitRate;
+        final sourceReady = await _replaceLoadedSource(
+          songId: songId,
+          label: 'seek_direct_stream_fallback',
+          ownsSource: ownsSource,
+          setSource: (sourcePlayer) async {
+            await sourcePlayer.setUrl(streamUrl, initialPosition: target);
+          },
+        );
+        if (!sourceReady) return;
+        _replaceDownloadProgressSubscription(null);
         _usingLockCachingSource = false;
+        _currentStreamUrl = streamUrl;
+        _setStreamContext(
+          songId: songId,
+          format: streamFormat,
+          maxBitRate: streamMaxBitRate,
+          seekByReloadStream: streamFormat != null,
+        );
+        if (!isCurrentSeek()) {
+          _schedulePendingSeekIfReady();
+          return;
+        }
         if (shouldResume) {
-          await player.play();
+          _startPlayback(fadeIn: false);
         }
         _seekDbg('seek fallback completed now=${player.position}');
         return;
       } catch (e) {
+        if (!isCurrentSeek()) return;
         Logger.warn('Seek fallback direct stream failed, keep lock cache', e);
         _seekDbg(
           'seek fallback direct stream failed, '
           'keep synthetic position target=$target',
         );
         _syntheticPositionFallbackActive = true;
-        if (mounted) {
+        if (isCurrentSeek() && mounted) {
           state = state.copyWith(position: target);
         }
         return;
@@ -2799,12 +3059,15 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
     );
     if (shouldResume) {
       await player.pause();
+      if (!isCurrentSeek()) return;
     }
     await player.seek(target);
+    if (!isCurrentSeek()) return;
     if (shouldResume) {
-      await player.play();
+      _startPlayback(fadeIn: false);
     }
     await Future<void>.delayed(const Duration(milliseconds: 120));
+    if (!isCurrentSeek()) return;
     _seekDbg('seek retry completed now=${player.position}');
   }
 
@@ -2812,13 +3075,11 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
     required AudioPlayer player,
     required Duration target,
     required bool shouldResume,
+    required String songId,
+    required bool Function() isCurrentSeek,
+    required bool Function() ownsSource,
   }) async {
-    final songId = _currentStreamSongId ?? state.currentSong?.id;
-    if (songId == null) return false;
-
-    final authState = _ref.read(authStateProvider);
-    final libraryId = authState.currentLibrary?.id ?? '';
-    if (libraryId.isEmpty) return false;
+    if (!isCurrentSeek()) return false;
 
     final offset = target.inSeconds;
     final reloadUrl = _apiClient.getStreamUrl(
@@ -2828,31 +3089,31 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
       timeOffset: offset,
     );
 
-    final cacheService = _ref.read(audioCacheServiceProvider);
-    final quality = state.currentQuality ?? AudioQualityLevel.original;
-    final cacheFilePath = await cacheService.getCacheFilePath(
-      songId: songId,
-      libraryId: libraryId,
-      quality: quality,
-    );
-
     _seekDbg(
       'seek fallback -> lock-cache reload target=$target '
       'offsetSec=$offset format=$_currentStreamFormat '
-      'maxBitRate=$_currentStreamMaxBitRate quality=${quality.name}',
+      'maxBitRate=$_currentStreamMaxBitRate cache=temporary',
     );
     _playDbg(
       'seek_lock_cache_reload '
-      'url=${_summarizeStreamUrl(reloadUrl)} cachePath=$cacheFilePath',
+      'url=${_summarizeStreamUrl(reloadUrl)} cache=temporary',
     );
 
     // ignore: experimental_member_use
-    final audioSource = LockCachingAudioSource(
-      Uri.parse(reloadUrl),
-      cacheFile: fileForPath(cacheFilePath),
+    final audioSource = LockCachingAudioSource(Uri.parse(reloadUrl));
+    final sourceReady = await _replaceLoadedSource(
+      songId: songId,
+      label: 'seek_lock_cache_reload',
+      ownsSource: ownsSource,
+      setSource: (sourcePlayer) async {
+        await sourcePlayer.setAudioSource(audioSource);
+      },
     );
-    await player.setAudioSource(audioSource);
-    _markLoadedSource(songId);
+    if (!sourceReady) return false;
+    // This source starts at a non-zero timeOffset, so its cache file is only a
+    // tail segment and must never be registered as the complete song cache.
+    // Let bufferedPositionStream represent temporary buffering instead.
+    _replaceDownloadProgressSubscription(null);
     _usingLockCachingSource = true;
     _currentStreamUrl = reloadUrl;
     _setStreamContext(
@@ -2861,11 +3122,16 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
       maxBitRate: _currentStreamMaxBitRate,
       seekByReloadStream: false,
     );
+    if (!isCurrentSeek()) {
+      _schedulePendingSeekIfReady();
+      return true;
+    }
     if (shouldResume) {
       _startPlayback();
     }
 
     await Future<void>.delayed(const Duration(milliseconds: 220));
+    if (!isCurrentSeek()) return true;
     final actual = player.position;
     final drift = (actual - target).inMilliseconds.abs();
     _seekDbg(
@@ -2876,7 +3142,7 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
     if (actual <= const Duration(milliseconds: 50)) {
       // 底层 position 仍可能卡 0，保持 UI 在用户拖动位置，后续由合成进度推进。
       _syntheticPositionFallbackActive = true;
-      if (mounted) {
+      if (isCurrentSeek() && mounted) {
         state = state.copyWith(position: target);
       }
       _seekDbg(
@@ -2929,11 +3195,120 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
     _seekByReloadStream = false;
   }
 
-  void _markLoadedSource(String songId) {
-    if (_audioPlayer?.audioSource == null || state.currentSong?.id != songId) {
+  bool _isPlaybackContextCurrent({
+    required int session,
+    required String songId,
+  }) {
+    return _playDebugSession == session && state.currentSong?.id == songId;
+  }
+
+  void _invalidateLoadedSource({required String reason}) {
+    _sourceGeneration += 1;
+    _loadedSourceSongId = null;
+    _playDbg('source invalidated generation=$_sourceGeneration reason=$reason');
+  }
+
+  Future<bool> _replaceLoadedSource({
+    required String songId,
+    required String label,
+    required bool Function() ownsSource,
+    required Future<void> Function(AudioPlayer player) setSource,
+  }) async {
+    final player = _audioPlayer;
+    if (player == null || !ownsSource()) {
+      _playDbg('source=$label setup abandoned before load song=$songId');
+      return false;
+    }
+
+    final generation = ++_sourceGeneration;
+    _loadedSourceSongId = null;
+    _playDbg('source=$label load begin song=$songId generation=$generation');
+
+    try {
+      await setSource(player);
+    } catch (_) {
+      if (_sourceGeneration == generation) {
+        _loadedSourceSongId = null;
+      }
+      rethrow;
+    }
+
+    if (_sourceGeneration != generation ||
+        !ownsSource() ||
+        player.audioSource == null) {
+      _playDbg(
+        'source=$label load abandoned song=$songId generation=$generation '
+        'currentGeneration=$_sourceGeneration',
+      );
+      return false;
+    }
+
+    _loadedSourceSongId = songId;
+    _playDbg('source=$label load ready song=$songId generation=$generation');
+    return true;
+  }
+
+  void _replaceDownloadProgressSubscription(StreamSubscription? next) {
+    final previous = _downloadProgressSubscription;
+    _downloadProgressSubscription = next;
+    if (previous != null && !identical(previous, next)) {
+      unawaited(previous.cancel());
+    }
+  }
+
+  void _invalidateSeekRequests() {
+    _seekRequestGeneration += 1;
+    _activeSeekGeneration = null;
+    _activeSeekSongId = null;
+  }
+
+  bool _isSeekRequestCurrent({
+    required int seekGeneration,
+    required int playbackSession,
+    required String songId,
+  }) {
+    return _seekRequestGeneration == seekGeneration &&
+        _isPlaybackContextCurrent(session: playbackSession, songId: songId);
+  }
+
+  void _releaseSeekAnchor(int seekGeneration) {
+    if (_activeSeekGeneration != seekGeneration) return;
+    _activeSeekGeneration = null;
+    _activeSeekSongId = null;
+  }
+
+  void _schedulePendingSeekIfReady() {
+    if (!mounted || _isApplyingPendingSeek) return;
+    final player = _audioPlayer;
+    final currentSongId = state.currentSong?.id;
+    if (player == null || currentSongId == null) return;
+    if (!shouldPreservePendingSeekPosition(
+      pendingPosition: _pendingSeekPosition,
+      pendingSongId: _pendingSeekSongId,
+      currentSongId: currentSongId,
+    )) {
       return;
     }
-    _loadedSourceSongId = songId;
+    if (!canSeekLoadedPlayerSource(
+      processingState: player.processingState,
+      loadedSourceSongId: _loadedSourceSongId,
+      currentSongId: currentSongId,
+    )) {
+      return;
+    }
+    unawaited(_applyPendingSeekIfNeeded());
+  }
+
+  bool _shouldPreserveSeekPosition() {
+    final currentSongId = state.currentSong?.id;
+    return shouldPreservePendingSeekPosition(
+          pendingPosition: _pendingSeekPosition,
+          pendingSongId: _pendingSeekSongId,
+          currentSongId: currentSongId,
+        ) ||
+        (_activeSeekGeneration == _seekRequestGeneration &&
+            _activeSeekSongId != null &&
+            _activeSeekSongId == currentSongId);
   }
 
   void _startPositionPolling(AudioPlayer player) {
@@ -2941,11 +3316,7 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
     _positionPollTimer = Timer.periodic(const Duration(milliseconds: 500), (_) {
       if (!mounted) return;
       if (state.currentSong == null) return;
-      if (shouldPreservePendingSeekPosition(
-        pendingPosition: _pendingSeekPosition,
-        pendingSongId: _pendingSeekSongId,
-        currentSongId: state.currentSong?.id,
-      )) {
+      if (_shouldPreserveSeekPosition()) {
         return;
       }
 
@@ -3105,7 +3476,7 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
     _playbackSessionPersistTimer?.cancel();
     unawaited(_persistPlaybackSession());
     _positionPollTimer?.cancel();
-    _fadeTimer?.cancel();
+    _cancelFade();
     _downloadProgressSubscription?.cancel();
     _networkTypeSubscription?.cancel();
     // Check if initialized/assigned before disposing

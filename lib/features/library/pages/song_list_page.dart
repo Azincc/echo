@@ -34,9 +34,6 @@ class _SongListPageState extends ConsumerState<SongListPage> {
   late final ItemPositionsListener _itemPositionsListener;
   int _coverLoadStart = 0;
   int _coverLoadEnd = -1;
-  Timer? _indexBarHideTimer;
-  bool _showIndexBar = false;
-  bool _isIndexBarPointerActive = false;
 
   @override
   void initState() {
@@ -47,49 +44,10 @@ class _SongListPageState extends ConsumerState<SongListPage> {
 
   @override
   void dispose() {
-    _indexBarHideTimer?.cancel();
     _itemPositionsListener.itemPositions.removeListener(
       _onItemPositionsChanged,
     );
     super.dispose();
-  }
-
-  void _showIndexBarTemporarily() {
-    if (!mounted || !_sortOption.usesAlphabeticalIndexBar) return;
-
-    _indexBarHideTimer?.cancel();
-    if (!_showIndexBar) {
-      setState(() {
-        _showIndexBar = true;
-      });
-    }
-
-    if (_isIndexBarPointerActive) return;
-    _indexBarHideTimer = Timer(const Duration(milliseconds: 1200), () {
-      if (!mounted) return;
-      setState(() {
-        _showIndexBar = false;
-      });
-    });
-  }
-
-  void _handleIndexBarPointerDown(PointerDownEvent event, double width) {
-    if (!_sortOption.usesAlphabeticalIndexBar) return;
-    if (event.localPosition.dx < width - 36) return;
-
-    _indexBarHideTimer?.cancel();
-    _isIndexBarPointerActive = true;
-    if (!_showIndexBar) {
-      setState(() {
-        _showIndexBar = true;
-      });
-    }
-  }
-
-  void _handleIndexBarPointerEnd() {
-    if (!_isIndexBarPointerActive) return;
-    _isIndexBarPointerActive = false;
-    _showIndexBarTemporarily();
   }
 
   void _onItemPositionsChanged() {
@@ -196,10 +154,8 @@ class _SongListPageState extends ConsumerState<SongListPage> {
       ),
     );
     if (!mounted || selected == null || selected == _sortOption) return;
-    _indexBarHideTimer?.cancel();
     setState(() {
       _sortOption = selected;
-      _showIndexBar = false;
     });
   }
 
@@ -276,60 +232,28 @@ class _SongListPageState extends ConsumerState<SongListPage> {
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 1400),
         child: _sortOption.usesAlphabeticalIndexBar
-            ? LayoutBuilder(
-                builder: (context, constraints) {
-                  return Listener(
-                    onPointerDown: (event) =>
-                        _handleIndexBarPointerDown(event, constraints.maxWidth),
-                    onPointerUp: (_) => _handleIndexBarPointerEnd(),
-                    onPointerCancel: (_) => _handleIndexBarPointerEnd(),
-                    child: NotificationListener<ScrollNotification>(
-                      onNotification: (notification) {
-                        if (notification is ScrollStartNotification ||
-                            notification is ScrollUpdateNotification ||
-                            notification is UserScrollNotification) {
-                          _showIndexBarTemporarily();
-                        }
-                        return false;
-                      },
-                      child: TweenAnimationBuilder<double>(
-                        tween: Tween<double>(end: _showIndexBar ? 1 : 0),
-                        duration: context.echoMotion.resolve(
-                          context,
-                          context.echoMotion.feedback,
-                        ),
-                        curve: context.echoMotion.easeOut,
-                        builder: (context, opacity, child) {
-                          final visible = opacity > 0.01;
-                          return AzListView(
-                            key: const ValueKey<String>(
-                              'song-list-alphabetical-scroll',
-                            ),
-                            data: _azSongs,
-                            itemCount: _azSongs.length,
-                            padding: EdgeInsets.only(
-                              bottom:
-                                  context.echoSpacing.xxl +
-                                  context.echoShellBottomObstruction,
-                            ),
-                            itemPositionsListener: _itemPositionsListener,
-                            itemBuilder: (context, index) =>
-                                _buildSongListItem(index),
-                            indexBarData: SuspensionUtil.getTagIndexList(
-                              _azSongs,
-                            ),
-                            indexBarWidth: visible ? 22 : 0,
-                            indexBarHeight: visible ? null : 0,
-                            indexBarMargin: EdgeInsetsDirectional.only(
-                              end: visible ? context.echoSpacing.xxs : 0,
-                            ),
-                            indexBarOptions: _songIndexBarOptions(opacity),
-                          );
-                        },
-                      ),
-                    ),
-                  );
-                },
+            ? EchoAzIndexReveal(
+                builder: (context, opacity, _) => AzListView(
+                  key: const ValueKey<String>('song-list-alphabetical-scroll'),
+                  data: _azSongs,
+                  itemCount: _azSongs.length,
+                  padding: EdgeInsets.only(
+                    bottom:
+                        context.echoSpacing.xxl +
+                        context.echoShellBottomObstruction,
+                  ),
+                  itemPositionsListener: _itemPositionsListener,
+                  itemBuilder: (context, index) => _buildSongListItem(index),
+                  indexBarData: SuspensionUtil.getTagIndexList(_azSongs),
+                  indexBarWidth: 24,
+                  indexBarMargin: EdgeInsetsDirectional.only(
+                    end: context.echoSpacing.xxs,
+                  ),
+                  indexBarOptions: echoIndexBarOptions(
+                    context,
+                    opacity: opacity,
+                  ),
+                ),
               )
             : ScrollablePositionedList.builder(
                 key: const ValueKey<String>('song-list-sorted-scroll'),
@@ -343,55 +267,6 @@ class _SongListPageState extends ConsumerState<SongListPage> {
                 itemBuilder: (context, index) => _buildSongListItem(index),
               ),
       ),
-    );
-  }
-
-  IndexBarOptions _songIndexBarOptions(double opacity) {
-    final colors = context.echoColors;
-    final textScale = MediaQuery.textScalerOf(context).scale(1);
-    final metadataSize =
-        (context.echoTypography.metadata.fontSize ?? 13) / textScale;
-    final hintSize =
-        (context.echoTypography.headline.fontSize ?? 24) / textScale;
-    return IndexBarOptions(
-      needRebuild: true,
-      ignoreDragCancel: true,
-      decoration: BoxDecoration(
-        color: colors.ink.withValues(alpha: 0.58 * opacity),
-        borderRadius: context.echoRadii.pill,
-      ),
-      downDecoration: BoxDecoration(
-        color: colors.ink.withValues(alpha: 0.72 * opacity),
-        borderRadius: context.echoRadii.pill,
-      ),
-      textStyle: context.echoTypography.metadata.copyWith(
-        fontSize: metadataSize,
-        height: 1,
-        color: colors.canvas.withValues(alpha: opacity),
-      ),
-      downTextStyle: context.echoTypography.metadata.copyWith(
-        fontSize: metadataSize,
-        height: 1,
-        fontWeight: FontWeight.w700,
-        color: colors.canvas.withValues(alpha: opacity),
-      ),
-      downItemDecoration: BoxDecoration(
-        shape: BoxShape.circle,
-        color: colors.canvas.withValues(alpha: 0.24 * opacity),
-      ),
-      indexHintWidth: 60,
-      indexHintHeight: 50,
-      indexHintDecoration: BoxDecoration(
-        color: colors.ink.withValues(alpha: 0.88),
-        borderRadius: context.echoRadii.control,
-      ),
-      indexHintTextStyle: context.echoTypography.headline.copyWith(
-        fontSize: hintSize,
-        color: colors.canvas,
-      ),
-      indexHintAlignment: Alignment.centerRight,
-      indexHintChildAlignment: const Alignment(-0.25, 0),
-      indexHintOffset: const Offset(-20, 0),
     );
   }
 

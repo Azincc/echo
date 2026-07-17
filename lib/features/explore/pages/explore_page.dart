@@ -32,6 +32,8 @@ class _ExplorePageState extends ConsumerState<ExplorePage> {
   String _query = '';
   String? _resolvingSongId;
   bool _isBatchDownloading = false;
+  final Set<String> _submittingDownloadKeys = <String>{};
+  final Set<String> _queuedDownloadKeys = <String>{};
 
   // Selection mode
   final Set<String> _selectedSongIds = {};
@@ -177,6 +179,12 @@ class _ExplorePageState extends ConsumerState<ExplorePage> {
   }
 
   Future<void> _enqueuePreview(Song song, {bool force = false}) async {
+    final downloadKey = _previewDownloadKey(song);
+    if (_submittingDownloadKeys.contains(downloadKey) ||
+        (!force && _queuedDownloadKeys.contains(downloadKey))) {
+      return;
+    }
+
     final activeLibrary = ref.read(activeLibraryProvider);
     if (activeLibrary == null) {
       _showMessage('当前没有活跃音乐库', kind: EchoMessageKind.warning);
@@ -186,6 +194,7 @@ class _ExplorePageState extends ConsumerState<ExplorePage> {
     final config = EmbedServiceConfig.fromLibraryExtensions(
       activeLibrary.extensions,
     );
+    setState(() => _submittingDownloadKeys.add(downloadKey));
     try {
       Logger.infoWithTag(
         _logTag,
@@ -203,6 +212,9 @@ class _ExplorePageState extends ConsumerState<ExplorePage> {
         _logTag,
         'enqueue single success source=${song.previewSource} track=${song.previewTrackId}',
       );
+      if (mounted) {
+        setState(() => _queuedDownloadKeys.add(downloadKey));
+      }
       _showMessage(
         force ? '已重新添加到离线下载队列' : '已添加到离线下载队列',
         kind: EchoMessageKind.success,
@@ -214,9 +226,16 @@ class _ExplorePageState extends ConsumerState<ExplorePage> {
         e,
       );
       if (e.toString().contains('已在离线队列中') && !force) {
+        if (mounted) {
+          setState(() => _queuedDownloadKeys.add(downloadKey));
+        }
         _showForceRedownloadDialog(song);
       } else {
         _showMessage('下载失败: $e', kind: EchoMessageKind.error);
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _submittingDownloadKeys.remove(downloadKey));
       }
     }
   }
@@ -871,6 +890,7 @@ class _ExplorePageState extends ConsumerState<ExplorePage> {
                   }
 
                   final song = remoteState.songs[index];
+                  final downloadKey = _previewDownloadKey(song);
                   final isResolving = _resolvingSongId == song.id;
                   final isSelected = _selectedSongIds.contains(song.id);
                   return ExploreRemoteSongRow(
@@ -878,6 +898,11 @@ class _ExplorePageState extends ConsumerState<ExplorePage> {
                     selected: isSelected,
                     selectionMode: _isSelectionMode,
                     resolving: isResolving,
+                    downloadState: _submittingDownloadKeys.contains(downloadKey)
+                        ? ExploreRemoteDownloadState.submitting
+                        : _queuedDownloadKeys.contains(downloadKey)
+                        ? ExploreRemoteDownloadState.queued
+                        : ExploreRemoteDownloadState.idle,
                     onPressed: _isSelectionMode
                         ? () => _toggleSelection(song.id)
                         : () => _playPreview(song),
@@ -912,4 +937,10 @@ class _ExplorePageState extends ConsumerState<ExplorePage> {
       }
     });
   }
+}
+
+String _previewDownloadKey(Song song) {
+  final source = song.previewSource?.trim() ?? '';
+  final trackId = song.previewTrackId?.trim() ?? '';
+  return source.isNotEmpty && trackId.isNotEmpty ? '$source:$trackId' : song.id;
 }

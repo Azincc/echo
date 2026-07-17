@@ -65,9 +65,13 @@ void main() {
     final frequentShelf = find.byKey(const Key('discover-frequent-shelf'));
     expect(frequentShelf, findsOneWidget);
     expect(
-      find.descendant(of: frequentShelf, matching: find.byType(GridView)),
+      find.descendant(of: frequentShelf, matching: find.byType(ListView)),
       findsOneWidget,
     );
+    expect(find.byKey(const Key('discover-frequent-group-0')), findsOneWidget);
+    await tester.drag(frequentShelf, const Offset(-900, 0));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('discover-frequent-group-3')), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
@@ -148,6 +152,7 @@ void main() {
       find.descendant(of: frequentShelf, matching: find.byType(GridView)),
       findsNothing,
     );
+    expect(find.byKey(const Key('discover-frequent-group-0')), findsNothing);
     expect(find.byType(DiscoverAlbumTile), findsNothing);
     expect(tester.takeException(), isNull);
   });
@@ -172,9 +177,27 @@ void main() {
 
     final shelf = find.byKey(const Key('discover-frequent-shelf'));
     expect(
-      find.descendant(of: shelf, matching: find.byType(GridView)),
+      find.descendant(of: shelf, matching: find.byType(ListView)),
       findsOneWidget,
     );
+    final firstGroup = find.byKey(const Key('discover-frequent-group-0'));
+    final groupSurface = tester.widget<DecoratedBox>(
+      find
+          .descendant(of: firstGroup, matching: find.byType(DecoratedBox))
+          .first,
+    );
+    final decoration = groupSurface.decoration as BoxDecoration;
+    expect(decoration.color, tester.element(firstGroup).echoColors.surface);
+    expect(decoration.border, isNotNull);
+    final groupDividerFinder = find.descendant(
+      of: firstGroup,
+      matching: find.byType(EchoDivider),
+    );
+    expect(groupDividerFinder, findsOneWidget);
+    final groupDivider = tester.widget<EchoDivider>(groupDividerFinder);
+    expect(groupDivider.inset, 0);
+    expect(groupDivider.endInset, 0);
+    expect(groupDivider.color, tester.element(firstGroup).echoColors.divider);
     final title = find.descendant(
       of: shelf,
       matching: find.text(frequent.first.name),

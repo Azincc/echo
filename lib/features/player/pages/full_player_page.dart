@@ -39,6 +39,9 @@ class _FullPlayerPageState extends ConsumerState<FullPlayerPage>
 
   late final AnimationController _lyricsController;
   late final Animation<double> _lyricsProgress;
+  Animation<double> _routeForegroundOpacity =
+      const AlwaysStoppedAnimation<double>(1);
+  CurvedAnimation? _routeForegroundCurvedAnimation;
 
   @override
   void initState() {
@@ -62,6 +65,24 @@ class _FullPlayerPageState extends ConsumerState<FullPlayerPage>
     final stateDuration = motion.resolve(context, motion.state);
     _lyricsController.duration = stateDuration;
 
+    _routeForegroundCurvedAnimation?.dispose();
+    final routeAnimation = ModalRoute.of(context)?.animation;
+    if (routeAnimation == null) {
+      _routeForegroundCurvedAnimation = null;
+      _routeForegroundOpacity = const AlwaysStoppedAnimation<double>(1);
+    } else {
+      final foregroundOpacity = CurvedAnimation(
+        parent: routeAnimation,
+        curve: Interval(0.08, 0.82, curve: motion.easeOut),
+        // On pop, fade every non-Hero control out during the first 75% of the
+        // route flight. The flipped curve makes the exit decisive up front and
+        // prevents any foreground control from flashing on the final frame.
+        reverseCurve: Interval(0.25, 1, curve: motion.easeOut.flipped),
+      );
+      _routeForegroundCurvedAnimation = foregroundOpacity;
+      _routeForegroundOpacity = foregroundOpacity;
+    }
+
     if (context.echoReduceMotion) {
       _lyricsController.value = _showLyrics ? 1 : 0;
     }
@@ -69,6 +90,7 @@ class _FullPlayerPageState extends ConsumerState<FullPlayerPage>
 
   @override
   void dispose() {
+    _routeForegroundCurvedAnimation?.dispose();
     _lyricsController.dispose();
     super.dispose();
   }
@@ -339,23 +361,25 @@ class _FullPlayerPageState extends ConsumerState<FullPlayerPage>
                         ),
                       ),
                     ),
-                    SafeArea(
-                      child: LayoutBuilder(
-                        builder: (context, constraints) {
-                          final useWideLayout =
-                              constraints.maxWidth > constraints.maxHeight ||
-                              constraints.maxWidth >=
-                                  context.echoBreakpoints.expanded;
-                          return useWideLayout
-                              ? _buildWidePlayerLayout(
-                                  currentSong,
-                                  subtitle: subtitle,
-                                )
-                              : _buildPortraitPlayerLayout(
-                                  currentSong,
-                                  subtitle: subtitle,
-                                );
-                        },
+                    _buildRouteForeground(
+                      child: SafeArea(
+                        child: LayoutBuilder(
+                          builder: (context, constraints) {
+                            final useWideLayout =
+                                constraints.maxWidth > constraints.maxHeight ||
+                                constraints.maxWidth >=
+                                    context.echoBreakpoints.expanded;
+                            return useWideLayout
+                                ? _buildWidePlayerLayout(
+                                    currentSong,
+                                    subtitle: subtitle,
+                                  )
+                                : _buildPortraitPlayerLayout(
+                                    currentSong,
+                                    subtitle: subtitle,
+                                  );
+                          },
+                        ),
                       ),
                     ),
                   ],
@@ -365,6 +389,14 @@ class _FullPlayerPageState extends ConsumerState<FullPlayerPage>
           );
         },
       ),
+    );
+  }
+
+  Widget _buildRouteForeground({required Widget child}) {
+    return FadeTransition(
+      key: const ValueKey<String>('full_player_foreground_transition'),
+      opacity: _routeForegroundOpacity,
+      child: child,
     );
   }
 
@@ -1367,6 +1399,11 @@ class _ProgressBarState extends ConsumerState<ProgressBar>
 class PlaybackControls extends ConsumerWidget {
   const PlaybackControls({super.key, this.compact = false});
 
+  // The Remix play glyph has a centered advance box, but its triangular ink
+  // mass sits to the left of that center. Shift it by the measured optical
+  // correction so it reads centered inside the circular transport control.
+  static const double _playIconOpticalCorrection = 0.09;
+
   final bool compact;
 
   @override
@@ -1382,6 +1419,7 @@ class PlaybackControls extends ConsumerWidget {
     );
 
     final playDimension = compact ? 56.0 : 64.0;
+    final playIconSize = compact ? 30.0 : 32.0;
     final buttons = <Widget>[
       _PlayerIconButton(
         icon: AppIcons.previous,
@@ -1396,7 +1434,10 @@ class PlaybackControls extends ConsumerWidget {
         label: state.isPlaying ? '暂停' : '播放',
         emphasized: true,
         dimension: playDimension,
-        iconSize: compact ? 30 : 32,
+        iconSize: playIconSize,
+        iconOffset: state.isPlaying
+            ? Offset.zero
+            : Offset(playIconSize * _playIconOpticalCorrection, 0),
         onPressed: () =>
             unawaited(ref.read(playerProvider.notifier).togglePlayPause()),
       ),
@@ -1512,6 +1553,7 @@ class _PlayerIconButton extends StatelessWidget {
     this.emphasized = false,
     this.dimension = 48,
     this.iconSize = 22,
+    this.iconOffset = Offset.zero,
   });
 
   final IconData icon;
@@ -1521,6 +1563,7 @@ class _PlayerIconButton extends StatelessWidget {
   final bool emphasized;
   final double dimension;
   final double iconSize;
+  final Offset iconOffset;
 
   @override
   Widget build(BuildContext context) {
@@ -1555,7 +1598,15 @@ class _PlayerIconButton extends StatelessWidget {
                 : null,
           ),
           child: Center(
-            child: Icon(icon, size: iconSize, color: foreground),
+            child: Transform.translate(
+              key: emphasized
+                  ? const ValueKey<String>(
+                      'full_player_primary_transport_glyph',
+                    )
+                  : null,
+              offset: iconOffset,
+              child: Icon(icon, size: iconSize, color: foreground),
+            ),
           ),
         ),
       ),

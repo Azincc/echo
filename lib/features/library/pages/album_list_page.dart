@@ -134,68 +134,77 @@ class _AlbumListPageState extends ConsumerState<AlbumListPage> {
               alignment: Alignment.topCenter,
               child: ConstrainedBox(
                 constraints: const BoxConstraints(maxWidth: 1400),
-                child: AzListView(
-                  key: const ValueKey<String>('album-list-scroll'),
-                  data: rows,
-                  itemCount: rows.length,
-                  padding: EdgeInsets.only(
-                    bottom:
-                        context.echoSpacing.xxl +
-                        context.echoShellBottomObstruction,
-                  ),
-                  itemBuilder: (context, index) {
-                    final item = rows[index];
-                    return Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: <Widget>[
-                        if (item.isShowSuspension)
-                          EchoLibrarySectionLabel(
-                            label: item.getSuspensionTag(),
-                          ),
-                        Padding(
-                          padding: EdgeInsetsDirectional.fromSTEB(
-                            context.echoPageHorizontalPadding,
-                            context.echoSpacing.xs,
-                            44,
-                            context.echoSpacing.sm,
-                          ),
-                          child: Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: <Widget>[
-                              for (
-                                var slot = 0;
-                                slot < itemsPerRow;
-                                slot++
-                              ) ...<Widget>[
-                                Expanded(
-                                  child: slot < item.data.length
-                                      ? EchoAlbumTile(
-                                          album: item.data[slot],
-                                          allowFullText: textScale >= 1.6,
-                                          onPressed: () => _openAlbum(
-                                            context,
-                                            item.data[slot],
-                                          ),
-                                          onLongPress: () =>
-                                              showAlbumOptionsSheet(
-                                                context: context,
-                                                ref: ref,
-                                                album: item.data[slot],
-                                              ),
-                                        )
-                                      : const SizedBox.shrink(),
-                                ),
-                                if (slot < itemsPerRow - 1)
-                                  SizedBox(width: context.echoSpacing.sm),
+                child: EchoAzIndexReveal(
+                  builder: (context, opacity, _) => AzListView(
+                    key: const ValueKey<String>('album-list-scroll'),
+                    data: rows,
+                    itemCount: rows.length,
+                    padding: EdgeInsets.only(
+                      bottom:
+                          context.echoSpacing.xxl +
+                          context.echoShellBottomObstruction,
+                    ),
+                    itemBuilder: (context, index) {
+                      final item = rows[index];
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: <Widget>[
+                          if (item.isShowSuspension)
+                            EchoLibrarySectionLabel(
+                              label: item.getSuspensionTag(),
+                            ),
+                          Padding(
+                            padding: EdgeInsetsDirectional.fromSTEB(
+                              context.echoPageHorizontalPadding,
+                              context.echoSpacing.xs,
+                              44,
+                              context.echoSpacing.sm,
+                            ),
+                            child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: <Widget>[
+                                for (
+                                  var slot = 0;
+                                  slot < itemsPerRow;
+                                  slot++
+                                ) ...<Widget>[
+                                  Expanded(
+                                    child: slot < item.data.length
+                                        ? EchoAlbumTile(
+                                            album: item.data[slot],
+                                            allowFullText: textScale >= 1.6,
+                                            onPressed: () => _openAlbum(
+                                              context,
+                                              item.data[slot],
+                                            ),
+                                            onLongPress: () =>
+                                                showAlbumOptionsSheet(
+                                                  context: context,
+                                                  ref: ref,
+                                                  album: item.data[slot],
+                                                ),
+                                          )
+                                        : const SizedBox.shrink(),
+                                  ),
+                                  if (slot < itemsPerRow - 1)
+                                    SizedBox(width: context.echoSpacing.sm),
+                                ],
                               ],
-                            ],
+                            ),
                           ),
-                        ),
-                      ],
-                    );
-                  },
-                  indexBarData: SuspensionUtil.getTagIndexList(rows),
-                  indexBarOptions: echoIndexBarOptions(context),
+                        ],
+                      );
+                    },
+                    indexBarData: SuspensionUtil.getTagIndexList(rows),
+                    indexBarWidth: 24,
+                    indexBarMargin: EdgeInsetsDirectional.only(
+                      end: context.echoSpacing.xxs,
+                    ),
+                    indexBarOptions: echoIndexBarOptions(
+                      context,
+                      opacity: opacity,
+                    ),
+                  ),
                 ),
               ),
             );

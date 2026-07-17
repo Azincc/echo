@@ -5,6 +5,7 @@ import 'package:echoes/core/theme/app_theme.dart';
 import 'package:echoes/data/models/audio_quality.dart';
 import 'package:echoes/data/models/song.dart';
 import 'package:echoes/features/player/pages/full_player_page.dart';
+import 'package:echoes/features/player/widgets/mini_player.dart';
 import 'package:echoes/features/player/widgets/player_hero_helpers.dart';
 import 'package:echoes/features/player/widgets/player_scrubber.dart';
 import 'package:echoes/providers/lyrics_cover_provider.dart';
@@ -186,6 +187,42 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('play glyph is optically centered inside the primary control', (
+    tester,
+  ) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(360, 800);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    addTearDown(tester.view.resetPhysicalSize);
+
+    final notifier = TestPlayerNotifier(
+      initialState().copyWith(isPlaying: false),
+    );
+    await tester.pumpWidget(
+      providerApp(notifier: notifier, home: const FullPlayerPage()),
+    );
+    await tester.pump();
+
+    final glyph = find.byKey(
+      const ValueKey<String>('full_player_primary_transport_glyph'),
+    );
+    expect(glyph, findsOneWidget);
+    expect(find.bySemanticsLabel('播放'), findsOneWidget);
+
+    var transform = tester.widget<Transform>(glyph);
+    expect(transform.transform.getTranslation().x, closeTo(2.88, 0.01));
+    expect(transform.transform.getTranslation().y, 0);
+
+    await tester.tap(find.bySemanticsLabel('播放'));
+    await tester.pump();
+
+    expect(find.bySemanticsLabel('暂停'), findsOneWidget);
+    transform = tester.widget<Transform>(glyph);
+    expect(transform.transform.getTranslation().x, 0);
+    expect(transform.transform.getTranslation().y, 0);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets(
     'landscape player uses two columns and keeps controls reachable at 130%',
     (tester) async {
@@ -345,6 +382,64 @@ void main() {
     expect(find.text('打开播放器'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets(
+    'route foreground fades progress and controls together on close',
+    (tester) async {
+      tester.view.devicePixelRatio = 1;
+      tester.view.physicalSize = const Size(360, 800);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      addTearDown(tester.view.resetPhysicalSize);
+
+      final notifier = TestPlayerNotifier(initialState());
+      await tester.pumpWidget(
+        providerApp(
+          notifier: notifier,
+          disableAnimations: false,
+          home: const Scaffold(
+            body: Align(alignment: Alignment.bottomCenter, child: MiniPlayer()),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      await tester.tap(find.byKey(const Key('mini-player-track')));
+      await tester.pump(const Duration(milliseconds: 350));
+      await tester.pumpAndSettle();
+      expect(find.byType(FullPlayerPage), findsOneWidget);
+
+      final foreground = find.byKey(
+        const ValueKey<String>('full_player_foreground_transition'),
+      );
+      expect(foreground, findsOneWidget);
+      expect(
+        find.descendant(of: foreground, matching: find.byType(ProgressBar)),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(
+          of: foreground,
+          matching: find.byKey(
+            const ValueKey<String>('full_player_transport_controls'),
+          ),
+        ),
+        findsOneWidget,
+      );
+
+      await tester.tap(find.bySemanticsLabel('收起播放器'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 90));
+
+      final fade = tester.widget<FadeTransition>(foreground);
+      expect(fade.opacity.value, greaterThan(0));
+      expect(fade.opacity.value, lessThan(1));
+      expect(find.byType(ProgressBar), findsOneWidget);
+
+      await tester.pumpAndSettle();
+      expect(find.byType(FullPlayerPage), findsNothing);
+      expect(tester.takeException(), isNull);
+    },
+  );
 
   testWidgets('playback mode cycles in the established three-state order', (
     tester,

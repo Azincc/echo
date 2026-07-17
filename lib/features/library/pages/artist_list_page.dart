@@ -99,46 +99,55 @@ class _ArtistListPageState extends ConsumerState<ArtistListPage> {
               alignment: Alignment.topCenter,
               child: ConstrainedBox(
                 constraints: const BoxConstraints(maxWidth: 1400),
-                child: AzListView(
-                  key: const ValueKey<String>('artist-list-scroll'),
-                  data: _azArtists,
-                  itemCount: _azArtists.length,
-                  padding: EdgeInsets.only(
-                    bottom:
-                        context.echoSpacing.xxl +
-                        context.echoShellBottomObstruction,
-                  ),
-                  itemBuilder: (context, index) {
-                    final item = _azArtists[index];
-                    final artist = item.data;
-                    return Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: <Widget>[
-                        if (item.isShowSuspension)
-                          EchoLibrarySectionLabel(
-                            label: item.getSuspensionTag(),
-                          ),
-                        EchoArtistRow(
-                          artist: artist,
-                          contentPadding: EdgeInsetsDirectional.fromSTEB(
-                            context.echoPageHorizontalPadding,
-                            context.echoSpacing.xs,
-                            44,
-                            context.echoSpacing.xs,
-                          ),
-                          onPressed: () => Navigator.of(context).push<void>(
-                            EchoPageRoute<void>(
-                              context: context,
-                              builder: (_) =>
-                                  ArtistDetailPage(artistId: artist.id),
+                child: EchoAzIndexReveal(
+                  builder: (context, opacity, _) => AzListView(
+                    key: const ValueKey<String>('artist-list-scroll'),
+                    data: _azArtists,
+                    itemCount: _azArtists.length,
+                    padding: EdgeInsets.only(
+                      bottom:
+                          context.echoSpacing.xxl +
+                          context.echoShellBottomObstruction,
+                    ),
+                    itemBuilder: (context, index) {
+                      final item = _azArtists[index];
+                      final artist = item.data;
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: <Widget>[
+                          if (item.isShowSuspension)
+                            EchoLibrarySectionLabel(
+                              label: item.getSuspensionTag(),
+                            ),
+                          EchoArtistRow(
+                            artist: artist,
+                            contentPadding: EdgeInsetsDirectional.fromSTEB(
+                              context.echoPageHorizontalPadding,
+                              context.echoSpacing.xs,
+                              44,
+                              context.echoSpacing.xs,
+                            ),
+                            onPressed: () => Navigator.of(context).push<void>(
+                              EchoPageRoute<void>(
+                                context: context,
+                                builder: (_) =>
+                                    ArtistDetailPage(artistId: artist.id),
+                              ),
                             ),
                           ),
-                        ),
-                      ],
-                    );
-                  },
-                  indexBarData: SuspensionUtil.getTagIndexList(_azArtists),
-                  indexBarOptions: echoIndexBarOptions(context),
+                        ],
+                      );
+                    },
+                    indexBarData: SuspensionUtil.getTagIndexList(_azArtists),
+                    indexBarWidth: 24,
+                    indexBarMargin: EdgeInsetsDirectional.only(
+                      end: context.echoSpacing.xxs,
+                    ),
+                    indexBarOptions: echoIndexBarOptions(
+                      context,
+                      opacity: opacity,
+                    ),
+                  ),
                 ),
               ),
             );

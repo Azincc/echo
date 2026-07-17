@@ -1,13 +1,21 @@
+import 'dart:async';
+
 import 'package:dio/dio.dart';
 import 'package:echoes/core/design/echo_design.dart';
 import 'package:echoes/core/network/address_pool.dart';
 import 'package:echoes/core/network/connectivity_monitor.dart';
+import 'package:echoes/core/services/offline_download_service.dart';
 import 'package:echoes/core/theme/app_theme.dart';
+import 'package:echoes/data/models/embed_service_config.dart';
+import 'package:echoes/data/models/music_library.dart';
 import 'package:echoes/data/models/song.dart';
+import 'package:echoes/data/sources/remote/embed_service_client.dart';
 import 'package:echoes/features/explore/pages/explore_page.dart';
 import 'package:echoes/features/explore/widgets/explore_widgets.dart';
 import 'package:echoes/providers/api_provider.dart';
 import 'package:echoes/providers/explore_provider.dart';
+import 'package:echoes/providers/library_provider.dart';
+import 'package:echoes/providers/offline_download_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -102,6 +110,116 @@ void main() {
     await tester.pumpAndSettle();
     expect(selectionBar, findsNothing);
   });
+
+  testWidgets(
+    'single remote download gives immediate feedback and ignores repeated taps',
+    (tester) async {
+      final song = Song(
+        id: 'remote-download',
+        title: '待下载歌曲',
+        artist: '探索测试歌手',
+        album: '远程专辑',
+        duration: 188,
+        isPreview: true,
+        previewSource: 'netease',
+        previewTrackId: 'track-download',
+      );
+      final connectivity = ConnectivityMonitor(AddressPool(Dio()));
+      final downloadService = _ControllableOfflineDownloadService();
+      final now = DateTime(2026, 7, 17);
+      final library = MusicLibrary(
+        id: 'library-1',
+        name: '测试音乐库',
+        isActive: true,
+        extensions: const <String, dynamic>{
+          'embedService': <String, dynamic>{
+            'enabled': true,
+            'baseUrl': 'https://embed.example.test',
+            'apiKey': 'test-key',
+            'libraryId': 'library-1',
+          },
+        },
+        createdAt: now,
+        updatedAt: now,
+      );
+      addTearDown(connectivity.stop);
+      addTearDown(downloadService.dispose);
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: <Override>[
+            connectivityMonitorProvider.overrideWithValue(connectivity),
+            activeLibraryProvider.overrideWithValue(library),
+            offlineDownloadServiceProvider.overrideWithValue(downloadService),
+            exploreRemoteSearchProvider.overrideWith(
+              (ref) => _StaticExploreRemoteSearchNotifier(
+                ref,
+                ExploreRemoteState(
+                  songs: <Song>[song],
+                  page: 1,
+                  hasMore: false,
+                  query: '下载反馈',
+                  source: 'netease',
+                ),
+              ),
+            ),
+          ],
+          child: MaterialApp(
+            theme: AppTheme.light(),
+            home: const ExplorePage(),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      await tester.enterText(find.byType(TextField), '下载反馈');
+      await tester.testTextInput.receiveAction(TextInputAction.search);
+      await tester.pumpAndSettle();
+
+      final downloadAction = find.bySemanticsLabel('添加 待下载歌曲 到离线下载队列');
+      expect(downloadAction, findsOneWidget);
+
+      await tester.tap(downloadAction);
+      await tester.tap(downloadAction);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 200));
+
+      expect(downloadService.enqueueCount, 1);
+      expect(find.bySemanticsLabel('正在添加 待下载歌曲 到离线下载队列'), findsOneWidget);
+      expect(downloadAction, findsNothing);
+
+      downloadService.completeRequest();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 200));
+
+      expect(downloadService.enqueueCount, 1);
+      expect(find.bySemanticsLabel('待下载歌曲 已加入离线下载队列'), findsOneWidget);
+      expect(downloadAction, findsNothing);
+    },
+  );
+}
+
+class _ControllableOfflineDownloadService extends OfflineDownloadService {
+  _ControllableOfflineDownloadService()
+    : super(embedClient: EmbedServiceClient());
+
+  final Completer<void> _request = Completer<void>();
+  int enqueueCount = 0;
+
+  @override
+  Future<void> enqueuePreviewSong({
+    required Song song,
+    required String libraryId,
+    required EmbedServiceConfig config,
+    bool force = false,
+  }) {
+    enqueueCount += 1;
+    return _request.future;
+  }
+
+  void completeRequest() {
+    if (!_request.isCompleted) _request.complete();
+  }
 }
 
 class _StaticExploreRemoteSearchNotifier extends ExploreRemoteSearchNotifier {

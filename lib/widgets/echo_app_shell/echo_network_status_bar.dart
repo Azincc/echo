@@ -160,50 +160,60 @@ class _EchoNetworkStatusContent extends StatelessWidget {
       liveRegion: true,
       label: semanticsLabel,
       child: ExcludeSemantics(
-        child: EchoSurface(
-          level: EchoSurfaceLevel.surface,
-          color: background,
-          borderRadius: BorderRadius.zero,
-          child: SafeArea(
-            top: false,
-            bottom: includeBottomSafeArea,
-            child: Padding(
-              padding: EdgeInsetsDirectional.fromSTEB(
-                context.echoPageHorizontalPadding,
-                context.echoSpacing.xs,
-                context.echoPageHorizontalPadding,
-                context.echoSpacing.xs,
-              ),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: <Widget>[
-                  Padding(
-                    padding: EdgeInsets.only(top: context.echoSpacing.xxs / 2),
-                    child: Icon(presentation.icon, size: 20, color: iconColor),
-                  ),
-                  SizedBox(width: context.echoSpacing.sm),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisSize: MainAxisSize.min,
-                      children: <Widget>[
-                        Text(
-                          presentation.title,
-                          style: context.echoTypography.label.copyWith(
-                            color: titleColor,
-                          ),
-                        ),
-                        SizedBox(height: context.echoSpacing.xxs),
-                        Text(
-                          presentation.description,
-                          style: context.echoTypography.metadata.copyWith(
-                            color: descriptionColor,
-                          ),
-                        ),
-                      ],
+        child: Padding(
+          padding: EdgeInsets.symmetric(horizontal: context.echoSpacing.sm),
+          child: EchoSurface(
+            key: const ValueKey<String>('echo-network-status-surface'),
+            level: EchoSurfaceLevel.surface,
+            color: background,
+            borderRadius: context.echoRadii.surface,
+            child: SafeArea(
+              top: false,
+              bottom: includeBottomSafeArea,
+              child: Padding(
+                padding: EdgeInsetsDirectional.fromSTEB(
+                  context.echoPageHorizontalPadding,
+                  context.echoSpacing.xs,
+                  context.echoPageHorizontalPadding,
+                  context.echoSpacing.xs,
+                ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Padding(
+                      padding: EdgeInsets.only(
+                        top: context.echoSpacing.xxs / 2,
+                      ),
+                      child: Icon(
+                        presentation.icon,
+                        size: 20,
+                        color: iconColor,
+                      ),
                     ),
-                  ),
-                ],
+                    SizedBox(width: context.echoSpacing.sm),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: <Widget>[
+                          Text(
+                            presentation.title,
+                            style: context.echoTypography.label.copyWith(
+                              color: titleColor,
+                            ),
+                          ),
+                          SizedBox(height: context.echoSpacing.xxs),
+                          Text(
+                            presentation.description,
+                            style: context.echoTypography.metadata.copyWith(
+                              color: descriptionColor,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
           ),

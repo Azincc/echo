@@ -1,5 +1,7 @@
 import 'dart:async';
+import 'dart:ui' show ImageFilter, TileMode;
 
+import 'package:flutter/foundation.dart' show ValueListenable;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -84,8 +86,15 @@ class _SyncedLyricsSurfaceState extends State<SyncedLyricsSurface> {
   static final RegExp _zhEnBoundary = RegExp(
     r'^([\u4e00-\u9fff].*?)\s+([A-Za-z].*)$',
   );
+  static final RegExp _visibleLyricsCharacter = RegExp(
+    r'[^\s\u0000-\u001F\u007F-\u009F\u00AD\u034F\u061C\u180E'
+    r'\u200B-\u200F\u2028-\u202F\u2060-\u206F\uFE00-\uFE0F\uFEFF]',
+    unicode: true,
+  );
 
   final ItemScrollController _itemScrollController = ItemScrollController();
+  final ItemPositionsListener _itemPositionsListener =
+      ItemPositionsListener.create();
   int _currentIndex = -1;
   bool _hasInitialAutoPositioned = false;
   bool _isUserScrolling = false;
@@ -189,6 +198,10 @@ class _SyncedLyricsSurfaceState extends State<SyncedLyricsSurface> {
     return _LyricsRenderParts(text);
   }
 
+  bool _hasVisibleLyricsCharacters(String value) {
+    return _visibleLyricsCharacter.hasMatch(value);
+  }
+
   @override
   Widget build(BuildContext context) {
     final lines = widget.lyrics.lines;
@@ -245,6 +258,7 @@ class _SyncedLyricsSurfaceState extends State<SyncedLyricsSurface> {
         },
         child: ScrollablePositionedList.builder(
           itemScrollController: _itemScrollController,
+          itemPositionsListener: _itemPositionsListener,
           initialScrollIndex: initialIndex,
           initialAlignment: _alignmentForIndex(initialIndex),
           padding: EdgeInsets.symmetric(
@@ -257,6 +271,7 @@ class _SyncedLyricsSurfaceState extends State<SyncedLyricsSurface> {
             final isCurrent = widget.lyrics.synced && index == newIndex;
             final parts = _splitBilingualLine(line.value);
             final secondary = parts.secondary;
+            final hasVisibleLyrics = _hasVisibleLyricsCharacters(line.value);
             final canSeek = widget.lyrics.synced && line.startMs != null;
             final target = Duration(
               milliseconds: ((line.startMs ?? 0) + widget.lyrics.offsetMs)
@@ -265,9 +280,10 @@ class _SyncedLyricsSurfaceState extends State<SyncedLyricsSurface> {
             );
             final timeLabel = _formatDuration(target);
             final semanticLabel = <String>[
-              if (isCurrent) '当前歌词',
-              parts.primary,
-              if (secondary?.isNotEmpty == true) secondary!,
+              if (isCurrent && hasVisibleLyrics) '当前歌词',
+              if (_hasVisibleLyricsCharacters(parts.primary)) parts.primary,
+              if (secondary != null && _hasVisibleLyricsCharacters(secondary))
+                secondary,
               if (canSeek) '跳转到 $timeLabel',
             ].join('，');
             final lineContent = _SyncedLyricLineContent(
@@ -276,6 +292,9 @@ class _SyncedLyricsSurfaceState extends State<SyncedLyricsSurface> {
               primary: parts.primary,
               secondary: secondary,
               isCurrent: isCurrent,
+              showIndicator: isCurrent && hasVisibleLyrics,
+              itemPositions: _itemPositionsListener.itemPositions,
+              itemCount: lines.length,
               duration: stateDuration,
               activePrimaryColor: activePrimaryColor,
               activeSecondaryColor: activeSecondaryColor,
@@ -318,6 +337,92 @@ class _SyncedLyricsSurfaceState extends State<SyncedLyricsSurface> {
   }
 }
 
+class _LyricsTextEdgeEffect extends StatelessWidget {
+  const _LyricsTextEdgeEffect({
+    required this.index,
+    required this.itemCount,
+    required this.itemPositions,
+    required this.child,
+  });
+
+  static const double _edgeExtent = 0.15;
+  static const double _maximumSigma = 2.4;
+  static const double _terminalOpacity = 0;
+
+  final int index;
+  final int itemCount;
+  final ValueListenable<Iterable<ItemPosition>> itemPositions;
+  final Widget child;
+
+  double _resolveStrength(Iterable<ItemPosition> positions) {
+    ItemPosition? current;
+    ItemPosition? first;
+    ItemPosition? last;
+
+    for (final position in positions) {
+      final visible =
+          position.itemTrailingEdge > 0 && position.itemLeadingEdge < 1;
+      if (!visible) continue;
+      if (position.index == index) current = position;
+      if (first == null || position.index < first.index) first = position;
+      if (last == null || position.index > last.index) last = position;
+    }
+
+    if (current == null || first == null || last == null || itemCount <= 1) {
+      return 0;
+    }
+
+    final hasContentAbove = first.index > 0 || first.itemLeadingEdge < -0.001;
+    final hasContentBelow =
+        last.index < itemCount - 1 || last.itemTrailingEdge > 1.001;
+    final center = (current.itemLeadingEdge + current.itemTrailingEdge) / 2;
+    var topStrength = 0.0;
+    var bottomStrength = 0.0;
+
+    if (hasContentAbove && center < _edgeExtent) {
+      topStrength = ((_edgeExtent - center) / _edgeExtent).clamp(0.0, 1.0);
+    }
+    if (hasContentBelow && center > 1 - _edgeExtent) {
+      bottomStrength = ((center - (1 - _edgeExtent)) / _edgeExtent).clamp(
+        0.0,
+        1.0,
+      );
+    }
+
+    final strength = topStrength > bottomStrength
+        ? topStrength
+        : bottomStrength;
+    return strength * strength * strength;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return ValueListenableBuilder<Iterable<ItemPosition>>(
+      valueListenable: itemPositions,
+      child: child,
+      builder: (context, positions, child) {
+        final strength = _resolveStrength(positions);
+        final opacity = 1 - (1 - _terminalOpacity) * strength;
+        final content = child!;
+        return Opacity(
+          key: ValueKey<String>('lyrics-text-softening-$index'),
+          opacity: opacity,
+          child: ImageFiltered(
+            key: ValueKey<String>('lyrics-text-filter-$index'),
+            enabled: strength > 0.001,
+            imageFilter: ImageFilter.blur(
+              sigmaX: _maximumSigma * strength,
+              sigmaY: _maximumSigma * strength,
+              tileMode: TileMode.decal,
+            ),
+            child: content,
+          ),
+        );
+      },
+    );
+  }
+}
+
 class _SyncedLyricLineContent extends StatelessWidget {
   const _SyncedLyricLineContent({
     super.key,
@@ -325,6 +430,9 @@ class _SyncedLyricLineContent extends StatelessWidget {
     required this.primary,
     required this.secondary,
     required this.isCurrent,
+    required this.showIndicator,
+    required this.itemPositions,
+    required this.itemCount,
     required this.duration,
     required this.activePrimaryColor,
     required this.activeSecondaryColor,
@@ -336,6 +444,9 @@ class _SyncedLyricLineContent extends StatelessWidget {
   final String primary;
   final String? secondary;
   final bool isCurrent;
+  final bool showIndicator;
+  final ValueListenable<Iterable<ItemPosition>> itemPositions;
+  final int itemCount;
   final Duration duration;
   final Color activePrimaryColor;
   final Color activeSecondaryColor;
@@ -379,11 +490,11 @@ class _SyncedLyricLineContent extends StatelessWidget {
                     key: ValueKey<String>('lyrics-line-marker-$index'),
                     duration: duration,
                     curve: context.echoMotion.easeOut,
-                    opacity: isCurrent ? 1 : 0,
+                    opacity: showIndicator ? 1 : 0,
                     child: AnimatedScale(
                       duration: duration,
                       curve: context.echoMotion.easeOut,
-                      scale: isCurrent ? 1 : 0.72,
+                      scale: showIndicator ? 1 : 0.72,
                       child: DecoratedBox(
                         decoration: BoxDecoration(
                           color: activePrimaryColor,
@@ -397,36 +508,41 @@ class _SyncedLyricLineContent extends StatelessWidget {
             ),
             SizedBox(width: context.echoSpacing.sm),
             Expanded(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: <Widget>[
-                  AnimatedDefaultTextStyle(
-                    key: ValueKey<String>('lyrics-primary-style-$index'),
-                    duration: duration,
-                    curve: context.echoMotion.easeOut,
-                    style: primaryStyle,
-                    child: Text(
-                      primary,
-                      key: ValueKey<String>('lyrics-primary-$index'),
-                      textAlign: TextAlign.start,
-                    ),
-                  ),
-                  if (secondary?.isNotEmpty == true) ...<Widget>[
-                    SizedBox(height: context.echoSpacing.xxs),
+              child: _LyricsTextEdgeEffect(
+                index: index,
+                itemCount: itemCount,
+                itemPositions: itemPositions,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
                     AnimatedDefaultTextStyle(
-                      key: ValueKey<String>('lyrics-secondary-style-$index'),
+                      key: ValueKey<String>('lyrics-primary-style-$index'),
                       duration: duration,
                       curve: context.echoMotion.easeOut,
-                      style: secondaryStyle,
+                      style: primaryStyle,
                       child: Text(
-                        secondary!,
-                        key: ValueKey<String>('lyrics-secondary-$index'),
+                        primary,
+                        key: ValueKey<String>('lyrics-primary-$index'),
                         textAlign: TextAlign.start,
                       ),
                     ),
+                    if (secondary?.isNotEmpty == true) ...<Widget>[
+                      SizedBox(height: context.echoSpacing.xxs),
+                      AnimatedDefaultTextStyle(
+                        key: ValueKey<String>('lyrics-secondary-style-$index'),
+                        duration: duration,
+                        curve: context.echoMotion.easeOut,
+                        style: secondaryStyle,
+                        child: Text(
+                          secondary!,
+                          key: ValueKey<String>('lyrics-secondary-$index'),
+                          textAlign: TextAlign.start,
+                        ),
+                      ),
+                    ],
                   ],
-                ],
+                ),
               ),
             ),
           ],

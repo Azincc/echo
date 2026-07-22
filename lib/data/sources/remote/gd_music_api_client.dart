@@ -96,7 +96,7 @@ class GdMusicApiClient {
           final picId = (map['pic_id'] ?? '').toString().trim();
           final title = (map['name'] ?? '').toString().trim();
           final artist = _parseArtist(map['artist']);
-          final album = (map['album'] ?? '').toString();
+          final album = _parseAlbum(map['album']);
           final responseSource = (map['source'] ?? '').toString().trim();
           final normalizedSource = _normalizeSource(
             responseSource.isEmpty ? requestSource : responseSource,
@@ -122,6 +122,43 @@ class GdMusicApiClient {
       'search done source=$requestSource page=$page result=${songs.length}',
     );
     return songs;
+  }
+
+  /// Search metadata directly from GMusic and enrich the first valid results
+  /// with cover URLs on the client. Empty or malformed rows are skipped.
+  Future<List<Song>> searchMetadataCandidates({
+    required String keyword,
+    required String source,
+    int limit = 3,
+  }) async {
+    if (limit <= 0) return const [];
+    final songs = await searchSongs(
+      keyword: keyword,
+      source: source,
+      count: limit < 10 ? 10 : limit,
+    );
+    final selected = songs
+        .where(
+          (song) =>
+              (song.previewTrackId ?? '').trim().isNotEmpty &&
+              song.title.trim().isNotEmpty &&
+              song.title != '未知歌曲',
+        )
+        .take(limit)
+        .toList(growable: false);
+
+    return Future.wait(
+      selected.map((song) async {
+        final picId = (song.previewPicId ?? '').trim();
+        if (picId.isEmpty) return song;
+        final coverUrl = await resolveCoverUrl(
+          source: song.previewSource ?? source,
+          picId: picId,
+          preferredSizes: const <int>[500, 300],
+        );
+        return song.copyWith(previewCoverUrl: coverUrl);
+      }),
+    );
   }
 
   /// Fetch songs from a NetEase Cloud Music playlist by its ID.
@@ -158,7 +195,7 @@ class GdMusicApiClient {
           final picId = (map['pic_id'] ?? '').toString().trim();
           final title = (map['name'] ?? '').toString().trim();
           final artist = _parseArtist(map['artist']);
-          final album = (map['album'] ?? '').toString();
+          final album = _parseAlbum(map['album']);
 
           return Song(
             id: 'gd_netease_$trackId',
@@ -250,20 +287,28 @@ class GdMusicApiClient {
   Future<String?> resolveCoverUrl({
     required String source,
     required String picId,
+    List<int> preferredSizes = const <int>[500, 300],
   }) async {
     if (picId.trim().isEmpty) return null;
     for (final candidate in _sourceCandidates(source)) {
-      try {
-        final response = await _dio.get(
-          '/api.php',
-          queryParameters: {'types': 'pic', 'source': candidate, 'id': picId},
-        );
-        final map = _asMap(response.data);
-        final rawUrl = _sanitizeUrl((map?['url'] ?? '').toString());
-        if (rawUrl.isNotEmpty) {
-          return rawUrl;
-        }
-      } catch (_) {}
+      for (final size in preferredSizes) {
+        try {
+          final response = await _dio.get(
+            '/api.php',
+            queryParameters: {
+              'types': 'pic',
+              'source': candidate,
+              'id': picId,
+              'size': size,
+            },
+          );
+          final map = _asMap(response.data);
+          final rawUrl = _sanitizeUrl((map?['url'] ?? '').toString());
+          if (rawUrl.isNotEmpty) {
+            return rawUrl;
+          }
+        } catch (_) {}
+      }
     }
     return null;
   }
@@ -347,13 +392,31 @@ class GdMusicApiClient {
   String _parseArtist(dynamic raw) {
     if (raw is List) {
       final names = raw
-          .map((e) => e.toString().trim())
+          .map((item) {
+            if (item is Map) {
+              return (item['name'] ?? item['artistName'] ?? '')
+                  .toString()
+                  .trim();
+            }
+            return item.toString().trim();
+          })
           .where((e) => e.isNotEmpty);
       final merged = names.join(' / ');
       return merged.isEmpty ? '未知歌手' : merged;
     }
+    if (raw is Map) {
+      final name = (raw['name'] ?? raw['artistName'] ?? '').toString().trim();
+      return name.isEmpty ? '未知歌手' : name;
+    }
     final text = (raw ?? '').toString().trim();
     return text.isEmpty ? '未知歌手' : text;
+  }
+
+  String _parseAlbum(dynamic raw) {
+    if (raw is Map) {
+      return (raw['name'] ?? raw['title'] ?? '').toString().trim();
+    }
+    return (raw ?? '').toString().trim();
   }
 
   int? _toInt(dynamic value) {

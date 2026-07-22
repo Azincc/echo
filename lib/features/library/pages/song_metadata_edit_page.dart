@@ -3,12 +3,15 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/design/echo_design.dart';
 import '../../../core/utils/logger.dart';
-import '../../../data/models/embed_service_config.dart';
 import '../../../data/models/song.dart';
 import '../../../data/sources/remote/embed_service_client.dart';
+import '../../../providers/gd_music_provider.dart';
 import '../../../providers/music_provider.dart';
 import '../../../providers/offline_download_provider.dart';
 import '../../../providers/player_provider.dart';
+
+const List<String> _metadataSearchSources = <String>['netease', 'kuwo'];
+const int _metadataResultsPerSource = 3;
 
 class SongMetadataEditPage extends ConsumerStatefulWidget {
   final Song song;
@@ -40,14 +43,13 @@ class _SongMetadataEditPageState extends ConsumerState<SongMetadataEditPage> {
   late final TextEditingController _searchAlbumController;
   late final TextEditingController _searchArtistController;
 
-  bool _isLoading = true;
+  bool _isLoading = false;
   bool _isSearching = false;
   bool _hasSearched = false;
   bool _isSubmitting = false;
   String? _errorText;
   String? _searchErrorText;
   MetadataCandidatesResponse? _response;
-  MetadataCandidatesJobStatus? _candidateLookupStatus;
   int? _selectedCandidateIndex;
   MetadataApplyJobStatus? _jobStatus;
   EditableSongMetadata? _baselineMetadata;
@@ -56,6 +58,23 @@ class _SongMetadataEditPageState extends ConsumerState<SongMetadataEditPage> {
     MetadataSearchDimension.title,
     MetadataSearchDimension.artist,
   };
+  final Map<String, bool> _sourceSearching = <String, bool>{
+    'netease': false,
+    'kuwo': false,
+  };
+  final Map<String, String?> _sourceErrors = <String, String?>{
+    'netease': null,
+    'kuwo': null,
+  };
+  final Map<String, String?> _sourceWarnings = <String, String?>{
+    'netease': null,
+    'kuwo': null,
+  };
+  final Map<String, List<MetadataCandidate>> _sourceCandidates =
+      <String, List<MetadataCandidate>>{
+        'netease': <MetadataCandidate>[],
+        'kuwo': <MetadataCandidate>[],
+      };
 
   @override
   void initState() {
@@ -81,8 +100,7 @@ class _SongMetadataEditPageState extends ConsumerState<SongMetadataEditPage> {
       _logTag,
       'open editor ${_songSnapshot(widget.song, source: 'page_song')}',
     );
-
-    Future<void>.microtask(_loadCurrentMetadata);
+    _resetFromSong(notify: false);
   }
 
   @override
@@ -106,106 +124,36 @@ class _SongMetadataEditPageState extends ConsumerState<SongMetadataEditPage> {
     super.dispose();
   }
 
-  Future<void> _loadCurrentMetadata() async {
-    setState(() {
-      _isLoading = true;
-      _errorText = null;
+  void _resetFromSong({bool notify = true}) {
+    final current = _metadataFromSong(widget.song);
+    _applyMetadataToForm(current);
+    _syncSearchFields(current);
+    void update() {
+      _isLoading = false;
+      _errorText = (widget.song.path ?? '').trim().isEmpty
+          ? '当前歌曲缺少文件路径，无法写入元数据'
+          : null;
       _searchErrorText = null;
-      _response = null;
-      _candidateLookupStatus = null;
       _jobStatus = null;
       _selectedCandidateIndex = null;
       _hasSearched = false;
-    });
-
-    final config = ref.read(activeEmbedServiceConfigProvider);
-    if (!config.isConfigured) {
-      setState(() {
-        _isLoading = false;
-        _errorText = '当前音乐库未配置 Embed Service';
-      });
-      return;
-    }
-    if ((widget.song.path ?? '').trim().isEmpty) {
-      setState(() {
-        _isLoading = false;
-        _errorText = '当前歌曲缺少文件路径，无法修改元数据';
-      });
-      return;
+      for (final source in _metadataSearchSources) {
+        _sourceSearching[source] = false;
+        _sourceErrors[source] = null;
+        _sourceWarnings[source] = null;
+        _sourceCandidates[source] = <MetadataCandidate>[];
+      }
+      _isSearching = false;
+      _response = MetadataCandidatesResponse(
+        current: current,
+        candidates: const <MetadataCandidate>[],
+      );
     }
 
-    try {
-      await _logLatestSongSnapshot();
-
-      final client = ref.read(embedServiceClientProvider);
-      Logger.infoWithTag(
-        _logTag,
-        'create current metadata job ${_songSnapshot(widget.song, source: 'request_song')}',
-      );
-      final jobId = await client.createMetadataCandidatesJob(
-        config: config,
-        song: widget.song,
-        search: const MetadataSearchOptions(
-          dimensions: <MetadataSearchDimension>{},
-          title: '',
-          album: '',
-          artist: '',
-        ),
-      );
-      Logger.infoWithTag(
-        _logTag,
-        'current metadata job created songId=${widget.song.id} jobId=$jobId',
-      );
-
-      final lastStatus = await _waitForCandidatesJob(
-        client: client,
-        config: config,
-        jobId: jobId,
-      );
-
-      if (!mounted) return;
-      if (lastStatus.isFailed) {
-        final errorText = lastStatus.error ?? '当前文件元数据读取失败';
-        setState(() {
-          _isLoading = false;
-          _errorText = errorText;
-        });
-        return;
-      }
-      final response = lastStatus.result;
-      if (!lastStatus.isDone || response == null) {
-        setState(() {
-          _isLoading = false;
-          _errorText = '当前文件元数据仍在处理中，请稍后重试';
-        });
-        return;
-      }
-      Logger.infoWithTag(
-        _logTag,
-        'current metadata loaded songId=${widget.song.id} currentTitle="${response.current.title}" currentArtist="${response.current.artist}"',
-      );
-      if (!mounted) return;
-
-      _applyMetadataToForm(response.current);
-      _syncSearchFields(response.current);
-      setState(() {
-        _response = MetadataCandidatesResponse(
-          current: response.current,
-          candidates: const <MetadataCandidate>[],
-        );
-        _isLoading = false;
-      });
-    } catch (e) {
-      Logger.warnWithTag(
-        _logTag,
-        'load current metadata failed ${_songSnapshot(widget.song, source: 'request_song')}',
-        e,
-      );
-      if (!mounted) return;
-      setState(() {
-        _isLoading = false;
-        _errorText = '$e';
-      });
+    if (notify) {
+      setState(update);
+    } else {
+      update();
     }
   }
 
@@ -218,116 +166,156 @@ class _SongMetadataEditPageState extends ConsumerState<SongMetadataEditPage> {
       return;
     }
 
-    final config = ref.read(activeEmbedServiceConfigProvider);
     final currentResponse = _response;
-    if (!config.isConfigured || currentResponse == null) return;
-
-    final search = MetadataSearchOptions(
-      dimensions: Set<MetadataSearchDimension>.from(_searchDimensions),
-      title: _searchTitleController.text,
-      album: _searchAlbumController.text,
-      artist: _searchArtistController.text,
-    );
+    if (currentResponse == null) return;
+    final query = _searchQueryPreview;
     setState(() {
       _isSearching = true;
       _hasSearched = true;
       _searchErrorText = null;
-      _candidateLookupStatus = null;
       _selectedCandidateIndex = null;
+      for (final source in _metadataSearchSources) {
+        _sourceSearching[source] = true;
+        _sourceErrors[source] = null;
+        _sourceWarnings[source] = null;
+        _sourceCandidates[source] = <MetadataCandidate>[];
+      }
       _response = MetadataCandidatesResponse(
         current: currentResponse.current,
         candidates: const <MetadataCandidate>[],
       );
     });
 
+    Logger.infoWithTag(
+      _logTag,
+      'direct metadata search started songId=${widget.song.id} query="$query" dimensions=${_searchDimensions.map((dimension) => dimension.jsonValue).join(",")}',
+    );
+    await Future.wait(
+      _metadataSearchSources.map(
+        (source) => _searchMetadataSource(
+          source,
+          query: query,
+          preserveExisting: false,
+          loadingAlreadySet: true,
+        ),
+      ),
+    );
+  }
+
+  Future<void> _searchMetadataSource(
+    String source, {
+    String? query,
+    bool preserveExisting = true,
+    bool loadingAlreadySet = false,
+  }) async {
+    final searchQuery = (query ?? _searchQueryPreview).trim();
+    if (searchQuery.isEmpty) return;
+    if (!loadingAlreadySet) {
+      setState(() {
+        _sourceSearching[source] = true;
+        _sourceErrors[source] = null;
+        _sourceWarnings[source] = null;
+        _selectedCandidateIndex = null;
+        _isSearching = true;
+        _hasSearched = true;
+      });
+    }
+
     try {
-      final client = ref.read(embedServiceClientProvider);
-      Logger.infoWithTag(
-        _logTag,
-        'create explicit metadata search songId=${widget.song.id} query="$_searchQueryPreview" dimensions=${_searchDimensions.map((dimension) => dimension.jsonValue).join(",")}',
-      );
-      final jobId = await client.createMetadataCandidatesJob(
-        config: config,
-        song: widget.song,
-        search: search,
-      );
-      final lastStatus = await _waitForCandidatesJob(
-        client: client,
-        config: config,
-        jobId: jobId,
+      final client = ref.read(gdMusicApiClientProvider);
+      final songs = await client.searchMetadataCandidates(
+        keyword: searchQuery,
+        source: source,
+        limit: _metadataResultsPerSource,
       );
       if (!mounted) return;
-
-      if (lastStatus.isFailed) {
-        setState(() {
-          _isSearching = false;
-          _searchErrorText = lastStatus.error ?? '元数据搜索失败';
-        });
-        return;
-      }
-      final result = lastStatus.result;
-      if (!lastStatus.isDone || result == null) {
-        setState(() {
-          _isSearching = false;
-          _searchErrorText = '搜索仍在处理中，请稍后重试';
-        });
-        return;
-      }
-
+      final candidates = songs
+          .map(_candidateFromGdSong)
+          .whereType<MetadataCandidate>()
+          .toList(growable: false);
+      final blankCoverCount = candidates
+          .where((candidate) => candidate.metadata.coverUrl.trim().isEmpty)
+          .length;
+      setState(() {
+        if (candidates.isNotEmpty || !preserveExisting) {
+          _sourceCandidates[source] = candidates;
+        }
+        _sourceErrors[source] = candidates.isEmpty
+            ? '此渠道返回了空列表，可单独刷新重试。'
+            : null;
+        _sourceWarnings[source] = blankCoverCount > 0
+            ? '$blankCoverCount 条结果的封面为空，可刷新此渠道重新获取。'
+            : null;
+        _sourceSearching[source] = false;
+        _syncCombinedCandidates();
+      });
       Logger.infoWithTag(
         _logTag,
-        'explicit metadata search completed songId=${widget.song.id} query="$_searchQueryPreview" count=${result.candidates.length}',
+        'direct metadata source completed songId=${widget.song.id} source=$source query="$searchQuery" count=${candidates.length} blankCovers=$blankCoverCount',
       );
-      setState(() {
-        _response = MetadataCandidatesResponse(
-          current: currentResponse.current,
-          candidates: result.candidates,
-        );
-        _isSearching = false;
-      });
     } catch (e) {
       Logger.warnWithTag(
         _logTag,
-        'explicit metadata search failed songId=${widget.song.id} query="$_searchQueryPreview"',
+        'direct metadata source failed songId=${widget.song.id} source=$source query="$searchQuery"',
         e,
       );
       if (!mounted) return;
       setState(() {
-        _isSearching = false;
-        _searchErrorText = '$e';
+        _sourceErrors[source] = '请求失败：$e';
+        _sourceSearching[source] = false;
+        _syncCombinedCandidates();
       });
     }
   }
 
-  Future<MetadataCandidatesJobStatus> _waitForCandidatesJob({
-    required EmbedServiceClient client,
-    required EmbedServiceConfig config,
-    required String jobId,
-  }) async {
-    MetadataCandidatesJobStatus? lastStatus;
-    String? lastStatusValue;
-    for (var attempt = 0; attempt < 200; attempt++) {
-      final status = await client.getMetadataCandidatesJobStatus(
-        config: config,
-        jobId: jobId,
-      );
-      if (!mounted) return status;
-      if (status.status != lastStatusValue) {
-        Logger.infoWithTag(
-          _logTag,
-          'metadata candidates job status songId=${widget.song.id} jobId=$jobId status=${status.status}',
-        );
-        lastStatusValue = status.status;
-      }
-      setState(() {
-        _candidateLookupStatus = status;
-      });
-      lastStatus = status;
-      if (status.isDone || status.isFailed) return status;
-      await Future<void>.delayed(const Duration(seconds: 1));
+  void _syncCombinedCandidates() {
+    final current = _response?.current ?? _metadataFromSong(widget.song);
+    _response = MetadataCandidatesResponse(
+      current: current,
+      candidates: <MetadataCandidate>[
+        for (final source in _metadataSearchSources)
+          ...?_sourceCandidates[source],
+      ],
+    );
+    _isSearching = _sourceSearching.values.any((loading) => loading);
+  }
+
+  MetadataCandidate? _candidateFromGdSong(Song song) {
+    final source = (song.previewSource ?? '').trim();
+    final trackId = (song.previewTrackId ?? '').trim();
+    if (source.isEmpty || trackId.isEmpty || song.title.trim().isEmpty) {
+      return null;
     }
-    if (lastStatus != null) return lastStatus;
-    throw Exception('候选元数据任务状态查询失败');
+    final artist = (song.artist ?? '').trim();
+    return MetadataCandidate(
+      source: 'gdstudio_$source',
+      trackId: trackId,
+      confidence: 0,
+      metadata: EditableSongMetadata(
+        title: song.title.trim(),
+        artist: artist,
+        album: (song.album ?? '').trim(),
+        albumArtist: artist,
+        trackNumber: song.track ?? 0,
+        year: song.year ?? 0,
+        coverUrl: (song.previewCoverUrl ?? '').trim(),
+      ),
+    );
+  }
+
+  EditableSongMetadata _metadataFromSong(Song song) {
+    final artist = (song.artist ?? '').trim();
+    return EditableSongMetadata(
+      title: song.title.trim(),
+      artist: artist,
+      album: (song.album ?? '').trim(),
+      albumArtist: artist,
+      trackNumber: song.track ?? 0,
+      discNumber: song.discNumber ?? 0,
+      year: song.year ?? 0,
+      genre: (song.genre ?? '').trim(),
+      coverUrl: (song.previewCoverUrl ?? '').trim(),
+    );
   }
 
   void _syncSearchFields(EditableSongMetadata metadata) {
@@ -802,10 +790,10 @@ class _SongMetadataEditPageState extends ConsumerState<SongMetadataEditPage> {
           actions: <Widget>[
             EchoIconButton(
               icon: AppIcons.refresh,
-              label: '重新读取当前值',
+              label: '恢复歌曲当前值',
               onPressed: _isLoading || _isSearching || _isSubmitting || _isDirty
                   ? null
-                  : _loadCurrentMetadata,
+                  : _resetFromSong,
             ),
           ],
         ),
@@ -817,21 +805,18 @@ class _SongMetadataEditPageState extends ConsumerState<SongMetadataEditPage> {
 
   Widget _buildBody(BuildContext context) {
     if (_isLoading) {
-      final status = _candidateLookupStatus;
-      final statusText = status?.statusDisplayName;
-      final statusMessage = status?.message?.trim() ?? '';
-      return _MetadataLoadingView(
-        status: statusText?.isNotEmpty == true ? statusText! : '正在读取元数据',
-        message: statusMessage.isEmpty ? '正在读取音频文件中的当前值' : statusMessage,
+      return const _MetadataLoadingView(
+        status: '正在准备元数据',
+        message: '正在读取当前歌曲信息',
       );
     }
 
     if (_errorText != null) {
       return EchoErrorState(
-        title: '无法读取当前元数据',
+        title: '无法修改元数据',
         description: _errorText!,
-        actionLabel: '重试',
-        onAction: _loadCurrentMetadata,
+        actionLabel: '恢复当前值',
+        onAction: _resetFromSong,
       );
     }
 
@@ -917,8 +902,8 @@ class _SongMetadataEditPageState extends ConsumerState<SongMetadataEditPage> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: <Widget>[
         const EchoSectionHeader(
-          title: '当前文件元数据',
-          description: '先确认当前值，再选择用于搜索的字段组合。',
+          title: '当前歌曲元数据',
+          description: '当前值来自音乐库，搜索与封面获取直接在客户端完成。',
         ),
         SizedBox(height: context.echoSpacing.md),
         _MetadataSummarySurface(metadata: response.current),
@@ -1079,30 +1064,6 @@ class _SongMetadataEditPageState extends ConsumerState<SongMetadataEditPage> {
   }
 
   Widget _buildSearchResults(MetadataCandidatesResponse response) {
-    if (_isSearching) {
-      final status = _candidateLookupStatus;
-      return _InlineEditorNotice(
-        icon: AppIcons.timer,
-        message: status == null
-            ? '正在分别搜索网易云音乐与酷我音乐。'
-            : '${status.statusDisplayName}，两个来源会各自重试，最长约三分钟。',
-      );
-    }
-    if (_searchErrorText != null) {
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: <Widget>[
-          _InlineEditorNotice(icon: AppIcons.error, message: _searchErrorText!),
-          SizedBox(height: context.echoSpacing.sm),
-          EchoButton.ghost(
-            label: '按当前条件重试',
-            leadingIcon: AppIcons.refresh,
-            onPressed: _isSubmitting ? null : _searchMetadata,
-          ),
-        ],
-      );
-    }
-
     final indexedCandidates = response.candidates.indexed.toList();
     final netease = indexedCandidates
         .where((entry) => entry.$2.source.contains('netease'))
@@ -1115,34 +1076,77 @@ class _SongMetadataEditPageState extends ConsumerState<SongMetadataEditPage> {
       children: <Widget>[
         const EchoSectionHeader(
           title: '搜索结果',
-          description: '两个来源独立返回结果；选择一条后再确认要应用的字段。',
+          description: '客户端直连两个渠道，各保留前三条有效结果并独立刷新。',
         ),
+        if (_searchErrorText != null) ...<Widget>[
+          SizedBox(height: context.echoSpacing.sm),
+          _InlineEditorNotice(
+            icon: AppIcons.warning,
+            message: _searchErrorText!,
+          ),
+        ],
         SizedBox(height: context.echoSpacing.md),
-        _buildSourceSearchResults('网易云音乐', netease),
+        _buildSourceSearchResults('netease', '网易云音乐', netease),
         SizedBox(height: context.echoSpacing.lg),
-        _buildSourceSearchResults('酷我音乐', kuwo),
+        _buildSourceSearchResults('kuwo', '酷我音乐', kuwo),
       ],
     );
   }
 
   Widget _buildSourceSearchResults(
+    String source,
     String sourceLabel,
     List<(int, MetadataCandidate)> candidates,
   ) {
+    final loading = _sourceSearching[source] ?? false;
+    final error = _sourceErrors[source];
+    final warning = _sourceWarnings[source];
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: <Widget>[
-        _EditorGroupHeader(
-          title: sourceLabel,
-          description: candidates.isEmpty
-              ? '此来源没有返回可选结果。'
-              : '共 ${candidates.length} 条结果，按来源原始顺序排列。',
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            Expanded(
+              child: _EditorGroupHeader(
+                title: sourceLabel,
+                description: candidates.isEmpty
+                    ? '最多显示 3 条结果，可随时单独刷新。'
+                    : '已显示 ${candidates.length} 条结果，可单独刷新此渠道。',
+              ),
+            ),
+            SizedBox(width: context.echoSpacing.xs),
+            EchoIconButton(
+              icon: loading ? AppIcons.timer : AppIcons.refresh,
+              label: '刷新$sourceLabel',
+              onPressed: loading || _isSubmitting
+                  ? null
+                  : () => _searchMetadataSource(source),
+            ),
+          ],
         ),
         SizedBox(height: context.echoSpacing.sm),
-        if (candidates.isEmpty)
+        if (loading) ...<Widget>[
+          _InlineEditorNotice(
+            icon: AppIcons.timer,
+            message: candidates.isEmpty
+                ? '正在搜索歌曲并获取前三条结果的封面。'
+                : '正在刷新，完成前保留上一次结果。',
+          ),
+          SizedBox(height: context.echoSpacing.sm),
+        ],
+        if (error != null) ...<Widget>[
+          _InlineEditorNotice(icon: AppIcons.error, message: error),
+          SizedBox(height: context.echoSpacing.sm),
+        ],
+        if (warning != null) ...<Widget>[
+          _InlineEditorNotice(icon: AppIcons.warning, message: warning),
+          SizedBox(height: context.echoSpacing.sm),
+        ],
+        if (candidates.isEmpty && !loading)
           const _InlineEditorNotice(
             icon: AppIcons.fileSearch,
-            message: '可以调整搜索维度或关键词后再次搜索。',
+            message: '暂无有效结果；空列表不会阻塞其他渠道，可点击刷新重试。',
           )
         else
           for (var index = 0; index < candidates.length; index++) ...<Widget>[
@@ -1493,10 +1497,10 @@ class _SongMetadataEditPageState extends ConsumerState<SongMetadataEditPage> {
 
   String _saveStatusText() {
     if (_isLoading) {
-      return _candidateLookupStatus?.statusDisplayName ?? '正在读取当前值';
+      return '正在准备当前值';
     }
     if (_isSearching) {
-      return _candidateLookupStatus?.statusDisplayName ?? '正在搜索元数据';
+      return '客户端正在搜索歌曲与封面';
     }
     if (_isSubmitting) {
       final status = _jobStatus;

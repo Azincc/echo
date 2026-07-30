@@ -15,6 +15,7 @@ import '../../../providers/download_provider.dart';
 import '../../../providers/offline_download_provider.dart';
 import '../../../providers/player_provider.dart';
 import '../../../providers/playlist_provider.dart';
+import '../../../widgets/echo_artwork.dart';
 import '../../library/pages/album_detail_page.dart';
 import '../../library/pages/artist_detail_page.dart';
 import '../../library/pages/song_metadata_edit_page.dart';
@@ -41,17 +42,26 @@ Future<void> showSongOptionsSheet({
   bool useRootNavigator = true,
   List<SongOptionsExtraAction> extraActions = const <SongOptionsExtraAction>[],
   SongOptionsSheetMode mode = SongOptionsSheetMode.full,
+  EchoMediaVisuals? mediaVisuals,
 }) async {
   await showEchoBottomSheet<void>(
     context: context,
     useRootNavigator: useRootNavigator,
     isScrollControlled: true,
-    builder: (_) => _SongOptionsSheet(
-      hostContext: context,
-      song: song,
-      extraActions: extraActions,
-      mode: mode,
-    ),
+    builder: (_) {
+      final sheet = _SongOptionsSheet(
+        hostContext: context,
+        song: song,
+        extraActions: extraActions,
+        mode: mode,
+      );
+      if (mediaVisuals == null) return sheet;
+      return EchoMediaColorScope(
+        visuals: mediaVisuals,
+        role: EchoMediaSurfaceRole.panel,
+        child: sheet,
+      );
+    },
   );
 }
 
@@ -89,6 +99,8 @@ class _SongOptionsSheet extends ConsumerWidget {
     );
     final canDownload = libraryId.isNotEmpty;
     final embedConfig = ref.watch(activeEmbedServiceConfigProvider);
+    final canDownloadPreview =
+        canDownload && embedConfig.isEnabledAndConfigured;
     final canEditMetadata =
         embedConfig.isEnabledAndConfigured &&
         !song.isPreview &&
@@ -117,6 +129,50 @@ class _SongOptionsSheet extends ConsumerWidget {
           ),
         );
       }
+    } else if (song.isPreview) {
+      final previewSource = song.previewSource?.trim();
+      actions.addAll(<Widget>[
+        if (!isCurrentSong)
+          _SongOptionRow(
+            icon: AppIcons.queueAdd,
+            title: '下一曲播放',
+            onPressed: () => unawaited(
+              _closeAndRun(context, () async {
+                await ref.read(playerProvider.notifier).playNext(song);
+                _showMessage('已添加试听歌曲到下一曲');
+              }),
+            ),
+          ),
+        _SongOptionRow(
+          icon: AppIcons.downloadOutline,
+          title: '添加到离线下载队列',
+          onPressed: !canDownloadPreview
+              ? null
+              : () => unawaited(
+                  _closeAndRun(context, () async {
+                    try {
+                      await ref
+                          .read(offlineDownloadServiceProvider)
+                          .enqueuePreviewSong(
+                            song: song,
+                            libraryId: libraryId,
+                            config: embedConfig,
+                          );
+                      _showMessage('已添加「${song.title}」到离线下载队列');
+                    } catch (error) {
+                      NetworkErrorNotifier.show('添加试听歌曲失败: $error');
+                    }
+                  }),
+                ),
+        ),
+        _SongOptionRow(
+          icon: AppIcons.cloud,
+          title: previewSource == null || previewSource.isEmpty
+              ? '远程试听'
+              : '远程试听 · $previewSource',
+          onPressed: null,
+        ),
+      ]);
     } else {
       actions.addAll(<Widget>[
         _SongOptionRow(
@@ -247,31 +303,35 @@ class _SongOptionsSheet extends ConsumerWidget {
             },
           ),
       ]);
+    }
 
-      if (extraActions.isNotEmpty) {
+    if (mode != SongOptionsSheetMode.offlineOnly && extraActions.isNotEmpty) {
+      actions.add(
+        Padding(
+          padding: EdgeInsets.symmetric(vertical: context.echoSpacing.xs),
+          child: const EchoDivider(),
+        ),
+      );
+      for (final action in extraActions) {
         actions.add(
-          Padding(
-            padding: EdgeInsets.symmetric(vertical: context.echoSpacing.xs),
-            child: const EchoDivider(),
+          _SongOptionRow(
+            icon: action.icon,
+            title: action.title,
+            destructive: action.isDestructive,
+            onPressed: () => unawaited(
+              _closeAndRun(context, () async => action.onPressed()),
+            ),
           ),
         );
-        for (final action in extraActions) {
-          actions.add(
-            _SongOptionRow(
-              icon: action.icon,
-              title: action.title,
-              destructive: action.isDestructive,
-              onPressed: () => unawaited(
-                _closeAndRun(context, () async => action.onPressed()),
-              ),
-            ),
-          );
-        }
       }
     }
 
     return EchoBottomSheet(
-      title: mode == SongOptionsSheetMode.offlineOnly ? '离线曲目操作' : '歌曲操作',
+      title: mode == SongOptionsSheetMode.offlineOnly
+          ? '离线曲目操作'
+          : song.isPreview
+          ? '试听歌曲操作'
+          : '歌曲操作',
       padding: EdgeInsets.fromLTRB(
         context.echoSpacing.md,
         0,
@@ -352,12 +412,12 @@ class _SongSummary extends StatelessWidget {
           children: <Widget>[
             SizedBox.square(
               dimension: context.echoInteraction.minimumTouchTarget,
-              child: Center(
-                child: Icon(
-                  AppIcons.musicFilled,
-                  size: 24,
-                  color: context.echoColors.accent,
-                ),
+              child: EchoArtwork(
+                coverArtId: song.artworkReference,
+                semanticLabel: '${song.title} 封面',
+                size: context.echoInteraction.minimumTouchTarget,
+                requestSize: 192,
+                borderRadius: context.echoRadii.detail,
               ),
             ),
             SizedBox(width: context.echoSpacing.sm),

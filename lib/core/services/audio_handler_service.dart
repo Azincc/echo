@@ -15,6 +15,8 @@ class EchoAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
   // 用于通知外部的回调
   Function()? onSkipToNext;
   Function()? onSkipToPrevious;
+  Future<void> Function(Duration position)? onSeek;
+  Duration _positionOffset = Duration.zero;
 
   EchoAudioHandler(this._audioPlayer) {
     _init();
@@ -29,7 +31,11 @@ class EchoAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
 
     // 监听播放位置
     _audioPlayer.positionStream.listen((position) {
-      playbackState.add(playbackState.value.copyWith(updatePosition: position));
+      playbackState.add(
+        playbackState.value.copyWith(
+          updatePosition: _logicalPosition(position),
+        ),
+      );
     });
 
     // 监听播放完成
@@ -49,8 +55,8 @@ class EchoAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
         systemActions: echoPlaybackSystemActions,
         processingState: _getProcessingState(),
         playing: _audioPlayer.playing,
-        updatePosition: _audioPlayer.position,
-        bufferedPosition: _audioPlayer.bufferedPosition,
+        updatePosition: _logicalPosition(_audioPlayer.position),
+        bufferedPosition: _logicalPosition(_audioPlayer.bufferedPosition),
         speed: _audioPlayer.speed,
       ),
     );
@@ -125,7 +131,27 @@ class EchoAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
   @override
   Future<void> seek(Duration position) async {
     Logger.info('AudioHandler: seek to $position');
+    final callback = onSeek;
+    if (callback != null) {
+      await callback(position);
+      return;
+    }
     await _audioPlayer.seek(position);
+  }
+
+  /// Sets the logical song offset of the currently loaded source.
+  ///
+  /// A Subsonic `timeOffset` stream starts its decoder timeline at zero even
+  /// though it contains audio from the middle of the song. Media-session
+  /// progress must add this offset, and seek actions must be delegated back to
+  /// PlayerNotifier so it can rebuild the stream URL.
+  void setPositionOffset(Duration offset) {
+    _positionOffset = offset < Duration.zero ? Duration.zero : offset;
+    _broadcastState();
+  }
+
+  Duration _logicalPosition(Duration sourcePosition) {
+    return sourcePosition + _positionOffset;
   }
 
   @override

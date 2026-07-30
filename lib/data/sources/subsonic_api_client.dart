@@ -1,5 +1,6 @@
 import 'package:dio/dio.dart';
 import '../../core/constants/api_constants.dart';
+import '../../core/network/fallback_interceptor.dart';
 import '../../core/utils/subsonic_auth.dart';
 import '../../core/utils/logger.dart';
 import '../models/music_library.dart';
@@ -94,8 +95,17 @@ class SubsonicApiClient {
   Future<Map<String, dynamic>> get(
     String path, {
     Map<String, dynamic>? queryParameters,
+    bool allowFallbackRetry = true,
   }) async {
-    final response = await _dio.get(path, queryParameters: queryParameters);
+    final response = await _dio.get(
+      path,
+      queryParameters: queryParameters,
+      options: Options(
+        extra: <String, dynamic>{
+          FallbackInterceptor.allowRetryExtraKey: allowFallbackRetry,
+        },
+      ),
+    );
     final data = response.data as Map<String, dynamic>;
     _checkResponse(data);
     return data['subsonic-response'];
@@ -106,11 +116,17 @@ class SubsonicApiClient {
     String path, {
     Map<String, dynamic>? queryParameters,
     dynamic data,
+    bool allowFallbackRetry = true,
   }) async {
     final response = await _dio.post(
       path,
       queryParameters: queryParameters,
       data: data,
+      options: Options(
+        extra: <String, dynamic>{
+          FallbackInterceptor.allowRetryExtraKey: allowFallbackRetry,
+        },
+      ),
     );
     final responseData = response.data as Map<String, dynamic>;
     _checkResponse(responseData);

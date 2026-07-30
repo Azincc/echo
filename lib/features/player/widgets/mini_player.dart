@@ -833,7 +833,7 @@ class _MiniPlayerCover extends StatelessWidget {
       child: ClipRRect(
         borderRadius: context.echoRadii.detail,
         child: CoverArtImage(
-          coverArtId: song.coverArt,
+          coverArtId: song.artworkReference,
           size: 48,
           requestSize: 320,
           fit: BoxFit.cover,

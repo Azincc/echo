@@ -16,9 +16,12 @@ import 'package:echoes/providers/api_provider.dart';
 import 'package:echoes/providers/explore_provider.dart';
 import 'package:echoes/providers/library_provider.dart';
 import 'package:echoes/providers/offline_download_provider.dart';
+import 'package:echoes/providers/player_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+
+import '../player/test_player_notifier.dart';
 
 void main() {
   testWidgets('selection actions stay above the compact shell obstruction', (
@@ -197,6 +200,61 @@ void main() {
       expect(downloadAction, findsNothing);
     },
   );
+
+  testWidgets('remote preview can be inserted after a normal current song', (
+    tester,
+  ) async {
+    final currentSong = Song(id: 'normal', title: '音乐库歌曲');
+    final previewSong = Song(
+      id: 'gd_netease_preview-next',
+      title: '待播试听歌曲',
+      artist: '远程歌手',
+      isPreview: true,
+      previewSource: 'netease',
+      previewTrackId: 'preview-next',
+    );
+    final player = TestPlayerNotifier(
+      PlayerState(currentSong: currentSong, queue: <Song>[currentSong]),
+    );
+    final connectivity = ConnectivityMonitor(AddressPool(Dio()));
+    addTearDown(connectivity.stop);
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: <Override>[
+          connectivityMonitorProvider.overrideWithValue(connectivity),
+          playerProvider.overrideWith((ref) => player),
+          exploreRemoteSearchProvider.overrideWith(
+            (ref) => _StaticExploreRemoteSearchNotifier(
+              ref,
+              ExploreRemoteState(
+                songs: <Song>[previewSong],
+                page: 1,
+                hasMore: false,
+                query: '下一曲',
+                source: 'netease',
+              ),
+            ),
+          ),
+        ],
+        child: MaterialApp(theme: AppTheme.light(), home: const ExplorePage()),
+      ),
+    );
+
+    await tester.enterText(find.byType(TextField), '下一曲');
+    await tester.testTextInput.receiveAction(TextInputAction.search);
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.bySemanticsLabel('待播试听歌曲，更多试听操作'));
+    await tester.pumpAndSettle();
+    expect(find.text('试听歌曲操作'), findsOneWidget);
+
+    await tester.tap(find.text('下一曲播放'));
+    await tester.pumpAndSettle();
+
+    expect(player.state.queue, <Song>[currentSong, previewSong]);
+    expect(player.state.currentSong, currentSong);
+  });
 }
 
 class _ControllableOfflineDownloadService extends OfflineDownloadService {

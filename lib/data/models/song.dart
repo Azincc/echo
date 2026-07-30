@@ -80,6 +80,20 @@ class Song {
   @override
   int get hashCode => id.hashCode;
 
+  /// 播放器和播放队列统一使用的封面引用。
+  ///
+  /// 试听歌曲优先使用已解析的远程封面 URL；正式歌曲继续使用服务端
+  /// coverArt ID。CoverArtImage 能同时处理这两种引用。
+  String? get artworkReference {
+    final previewCover = previewCoverUrl?.trim();
+    if (isPreview && previewCover != null && previewCover.isNotEmpty) {
+      return previewCover;
+    }
+
+    final serverCover = coverArt?.trim();
+    return serverCover == null || serverCover.isEmpty ? null : serverCover;
+  }
+
   Song copyWith({
     String? id,
     String? title,

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -16,6 +18,7 @@ import '../../../providers/offline_download_provider.dart';
 import '../../../providers/player_provider.dart';
 import '../../../widgets/main_scaffold.dart';
 import '../../../widgets/visible_remote_retry_scope.dart';
+import '../../player/widgets/song_options_sheet.dart';
 import '../widgets/explore_widgets.dart';
 
 class ExplorePage extends ConsumerStatefulWidget {
@@ -176,6 +179,10 @@ class _ExplorePageState extends ConsumerState<ExplorePage> {
         });
       }
     }
+  }
+
+  void _showPreviewActions(Song song) {
+    unawaited(showSongOptionsSheet(context: context, song: song));
   }
 
   Future<void> _enqueuePreview(Song song, {bool force = false}) async {
@@ -910,6 +917,7 @@ class _ExplorePageState extends ConsumerState<ExplorePage> {
                       setState(() => _selectedSongIds.add(song.id));
                     },
                     onToggleSelected: () => _toggleSelection(song.id),
+                    onMorePressed: () => _showPreviewActions(song),
                     onDownload: () => _enqueuePreview(song),
                   );
                 },

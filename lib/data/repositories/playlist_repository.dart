@@ -52,13 +52,13 @@ class PlaylistRepository {
     try {
       final queryParams = {
         'name': name,
-        if (songIds != null && songIds.isNotEmpty)
-          'songId': songIds,
+        if (songIds != null && songIds.isNotEmpty) 'songId': songIds,
       };
 
       final response = await _apiClient.get(
         ApiConstants.createPlaylist,
         queryParameters: queryParams,
+        allowFallbackRetry: false,
       );
 
       final playlistData = response['playlist'];
@@ -89,13 +89,15 @@ class PlaylistRepository {
         if (songIdsToAdd != null && songIdsToAdd.isNotEmpty)
           'songIdToAdd': songIdsToAdd,
         if (songIndexesToRemove != null && songIndexesToRemove.isNotEmpty)
-          'songIndexToRemove':
-              songIndexesToRemove.map((i) => i.toString()).toList(),
+          'songIndexToRemove': songIndexesToRemove
+              .map((i) => i.toString())
+              .toList(),
       };
 
       await _apiClient.get(
         ApiConstants.updatePlaylist,
         queryParameters: queryParams,
+        allowFallbackRetry: false,
       );
     } catch (e) {
       Logger.error('Failed to update playlist', e);
@@ -109,6 +111,7 @@ class PlaylistRepository {
       await _apiClient.get(
         ApiConstants.deletePlaylist,
         queryParameters: {'id': playlistId},
+        allowFallbackRetry: false,
       );
     } catch (e) {
       Logger.error('Failed to delete playlist', e);

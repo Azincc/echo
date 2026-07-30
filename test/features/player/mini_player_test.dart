@@ -7,6 +7,7 @@ import 'package:echoes/features/player/widgets/mini_player.dart';
 import 'package:echoes/features/player/widgets/player_hero_helpers.dart';
 import 'package:echoes/providers/palette_provider.dart';
 import 'package:echoes/providers/player_provider.dart';
+import 'package:echoes/widgets/cover_art_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -402,5 +403,32 @@ void main() {
     );
     await tester.pump(const Duration(milliseconds: 60));
     expect(next, 1);
+  });
+
+  testWidgets('preview songs use their remote cover in the compact player', (
+    tester,
+  ) async {
+    final preview = Song(
+      id: 'preview',
+      title: 'Preview',
+      isPreview: true,
+      previewCoverUrl: 'https://images.example.test/preview.jpg',
+    );
+    final state = PlayerState(
+      currentSong: preview,
+      queue: <Song>[preview],
+      duration: const Duration(minutes: 3),
+    );
+
+    await tester.pumpWidget(appFor(view(state: state)));
+    await tester.pump();
+
+    final covers = tester
+        .widgetList<CoverArtImage>(find.byType(CoverArtImage))
+        .where(
+          (candidate) =>
+              candidate.coverArtId == 'https://images.example.test/preview.jpg',
+        );
+    expect(covers, isNotEmpty);
   });
 }

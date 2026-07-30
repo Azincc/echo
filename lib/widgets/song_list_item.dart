@@ -24,6 +24,9 @@ class EchoSongRow extends StatelessWidget {
     this.onLongPress,
     this.onMorePressed,
     this.moreSemanticLabel,
+    this.selectionMode = false,
+    this.selected = false,
+    this.onToggleSelected,
     this.isCurrent = false,
     this.isDownloaded = false,
     this.isFavorite,
@@ -43,6 +46,9 @@ class EchoSongRow extends StatelessWidget {
   final VoidCallback? onLongPress;
   final VoidCallback? onMorePressed;
   final String? moreSemanticLabel;
+  final bool selectionMode;
+  final bool selected;
+  final VoidCallback? onToggleSelected;
   final bool isCurrent;
   final bool isDownloaded;
   final bool? isFavorite;
@@ -55,8 +61,18 @@ class EchoSongRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final artist = song.artist?.trim();
     final artistText = artist != null && artist.isNotEmpty ? artist : '-';
-    final moreAction = onMorePressed ?? onLongPress;
-    final semanticLabel = _buildSemanticLabel(artistText);
+    final selectionAction = onToggleSelected ?? onPressed;
+    final mainAction = selectionMode ? selectionAction : onPressed;
+    final mainLongPress = selectionMode ? selectionAction : onLongPress;
+    final moreAction = selectionMode ? null : onMorePressed ?? onLongPress;
+    final semanticLabel = selectionMode
+        ? <String>[
+            song.title,
+            artistText,
+            song.durationString,
+            if (selected) '已选择',
+          ].join('，')
+        : _buildSemanticLabel(artistText);
     final mainContent = Row(
       crossAxisAlignment: CrossAxisAlignment.center,
       children: <Widget>[
@@ -65,20 +81,20 @@ class EchoSongRow extends StatelessWidget {
         Expanded(child: _buildDetails(context, artistText)),
       ],
     );
-    final hasMainAction = onPressed != null || onLongPress != null;
+    final hasMainAction = mainAction != null || mainLongPress != null;
     final main = hasMainAction
         ? EchoPressable(
             semanticLabel: semanticLabel,
-            selected: isCurrent ? true : null,
-            onPressed: onPressed,
-            onLongPress: onLongPress,
+            selected: selectionMode ? selected : (isCurrent ? true : null),
+            onPressed: mainAction,
+            onLongPress: mainLongPress,
             minimumSize: const Size(0, 48),
             borderRadius: context.echoRadii.control,
             child: mainContent,
           )
         : Semantics(
             container: true,
-            selected: isCurrent ? true : null,
+            selected: selectionMode ? selected : (isCurrent ? true : null),
             label: semanticLabel,
             child: ExcludeSemantics(
               child: ConstrainedBox(
@@ -88,13 +104,32 @@ class EchoSongRow extends StatelessWidget {
             ),
           );
 
-    return Padding(
-      padding: contentPadding,
+    return AnimatedContainer(
+      duration: context.echoMotion.resolve(
+        context,
+        context.echoMotion.feedback,
+      ),
+      curve: context.echoMotion.easeOut,
+      margin: contentPadding,
+      decoration: BoxDecoration(
+        color: selectionMode && selected
+            ? context.echoColors.accent.withValues(alpha: 0.1)
+            : Colors.transparent,
+        borderRadius: context.echoRadii.control,
+      ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: <Widget>[
           Expanded(child: main),
-          if (moreAction != null) ...<Widget>[
+          if (selectionMode && selectionAction != null) ...<Widget>[
+            SizedBox(width: context.echoSpacing.xs),
+            EchoIconButton(
+              icon: selected ? AppIcons.checkCircle : AppIcons.radio,
+              label: selected ? '取消选择 ${song.title}' : '选择 ${song.title}',
+              selected: selected,
+              onPressed: selectionAction,
+            ),
+          ] else if (moreAction != null) ...<Widget>[
             SizedBox(width: context.echoSpacing.xs),
             EchoIconButton(
               icon: AppIcons.more,
@@ -159,7 +194,7 @@ class EchoSongRow extends StatelessWidget {
           children: <Widget>[
             Positioned.fill(
               child: EchoArtwork(
-                coverArtId: coverArtId ?? song.coverArt,
+                coverArtId: coverArtId ?? song.artworkReference,
                 semanticLabel: '${song.title} 封面',
                 requestSize: 192,
                 borderRadius: context.echoRadii.detail,
@@ -311,6 +346,9 @@ class SongListItem extends StatelessWidget {
     this.onTap,
     this.onLongPress,
     this.onMorePressed,
+    this.selectionMode = false,
+    this.selected = false,
+    this.onToggleSelected,
     this.isCurrent = false,
     this.isDownloaded = false,
     this.isFavorite,
@@ -325,6 +363,9 @@ class SongListItem extends StatelessWidget {
   final VoidCallback? onTap;
   final VoidCallback? onLongPress;
   final VoidCallback? onMorePressed;
+  final bool selectionMode;
+  final bool selected;
+  final VoidCallback? onToggleSelected;
   final bool isCurrent;
   final bool isDownloaded;
   final bool? isFavorite;
@@ -344,6 +385,9 @@ class SongListItem extends StatelessWidget {
       onPressed: onTap,
       onLongPress: onLongPress,
       onMorePressed: onMorePressed,
+      selectionMode: selectionMode,
+      selected: selected,
+      onToggleSelected: onToggleSelected,
       isCurrent: isCurrent,
       isDownloaded: isDownloaded,
       isFavorite: isFavorite,

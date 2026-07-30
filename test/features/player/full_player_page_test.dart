@@ -590,4 +590,37 @@ void main() {
     expect(overlay.statusBarIconBrightness, Brightness.dark);
     expect(overlay.systemNavigationBarIconBrightness, Brightness.dark);
   });
+
+  testWidgets('full-player song actions use the album-derived panel palette', (
+    tester,
+  ) async {
+    final visuals = EchoMediaVisuals.fallback(seed: const Color(0xFFBFD7EA));
+
+    await tester.pumpWidget(
+      providerApp(
+        notifier: TestPlayerNotifier(initialState()),
+        home: const FullPlayerPage(),
+        visuals: visuals,
+      ),
+    );
+    await tester.pump();
+
+    await tester.tap(find.bySemanticsLabel('${song.title} 操作'));
+    await tester.pumpAndSettle();
+
+    final sheet = find.byType(EchoBottomSheet);
+    expect(sheet, findsOneWidget);
+    final sheetTitle = find.descendant(of: sheet, matching: find.text('歌曲操作'));
+    final sheetContext = tester.element(sheetTitle);
+    expect(sheetContext.echoColors.surface, visuals.panelSurface);
+    expect(sheetContext.echoColors.accent, visuals.controlAccent);
+    expect(sheetContext.echoColors.ink, visuals.foreground);
+    expect(sheetContext.echoColors.muted, visuals.mutedForeground);
+
+    final heart = tester.widget<Icon>(
+      find.descendant(of: sheet, matching: find.byIcon(AppIcons.heartOutline)),
+    );
+    expect(heart.color, visuals.controlAccent);
+    expect(tester.takeException(), isNull);
+  });
 }

@@ -61,6 +61,7 @@ class PlayQueueSheet extends ConsumerWidget {
         return showSongOptionsSheet(
           context: rowContext,
           song: song,
+          mediaVisuals: visuals,
           extraActions: <SongOptionsExtraAction>[
             SongOptionsExtraAction(
               icon: AppIcons.removeCircle,
@@ -212,8 +213,7 @@ class PlayQueueSheetView extends StatelessWidget {
                                 return EchoSongRow(
                                   index: index,
                                   song: song,
-                                  variant: EchoSongRowVariant.topRank,
-                                  rank: index + 1,
+                                  variant: EchoSongRowVariant.standard,
                                   isCurrent: index == currentIndex,
                                   contentPadding:
                                       EdgeInsetsDirectional.fromSTEB(

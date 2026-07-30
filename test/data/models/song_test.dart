@@ -160,6 +160,30 @@ void main() {
     });
   });
 
+  group('Song.artworkReference', () {
+    test('preview cover takes precedence for preview songs', () {
+      final song = Song(
+        id: 'preview',
+        title: 'Preview',
+        coverArt: 'server-cover',
+        isPreview: true,
+        previewCoverUrl: ' https://images.example.test/preview.jpg ',
+      );
+
+      expect(song.artworkReference, 'https://images.example.test/preview.jpg');
+    });
+
+    test('normal songs keep using the server cover reference', () {
+      final song = Song(
+        id: 'normal',
+        title: 'Normal',
+        coverArt: ' server-cover ',
+      );
+
+      expect(song.artworkReference, 'server-cover');
+    });
+  });
+
   // -------------------------------------------------------------------------
   // == and hashCode
   // -------------------------------------------------------------------------

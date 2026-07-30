@@ -142,4 +142,61 @@ void main() {
     expect(find.text('专辑：Album name'), findsOneWidget);
     expect(hostContext.mounted, isTrue);
   });
+
+  testWidgets(
+    'preview mode keeps queue actions but hides library-only actions',
+    (tester) async {
+      final currentSong = Song(id: 'current', title: 'Current song');
+      final previewSong = Song(
+        id: 'gd_netease_preview',
+        title: 'Preview song',
+        artist: 'Remote artist',
+        album: 'Remote album',
+        isPreview: true,
+        previewSource: 'netease',
+        previewTrackId: 'preview',
+        previewCoverUrl: 'https://images.example.test/preview.jpg',
+      );
+      final notifier = TestPlayerNotifier(
+        PlayerState(currentSong: currentSong, queue: <Song>[currentSong]),
+      );
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            libraryRepositoryProvider.overrideWithValue(libraryRepository),
+            playerProvider.overrideWith((ref) => notifier),
+          ],
+          child: MaterialApp(
+            theme: AppTheme.light(),
+            home: Scaffold(
+              body: Builder(
+                builder: (context) => TextButton(
+                  onPressed: () =>
+                      showSongOptionsSheet(context: context, song: previewSong),
+                  child: const Text('打开试听操作'),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+
+      await tester.tap(find.text('打开试听操作'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('试听歌曲操作'), findsOneWidget);
+      expect(find.text('下一曲播放'), findsOneWidget);
+      expect(find.text('添加到离线下载队列'), findsOneWidget);
+      expect(find.text('远程试听 · netease'), findsOneWidget);
+      expect(find.text('红心'), findsNothing);
+      expect(find.text('添加到歌单'), findsNothing);
+      expect(find.text('下载'), findsNothing);
+
+      await tester.tap(find.text('下一曲播放'));
+      await tester.pumpAndSettle();
+
+      expect(notifier.state.queue, <Song>[currentSong, previewSong]);
+    },
+  );
 }

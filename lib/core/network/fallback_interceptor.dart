@@ -5,6 +5,7 @@ import 'package:echoes/core/utils/toast_notifier.dart';
 
 class FallbackInterceptor extends Interceptor {
   static const _tag = 'FALLBACK';
+  static const allowRetryExtraKey = 'echo.allowFallbackRetry';
   final AddressPool _addressPool;
   final Dio _dio; // The customized Dio instance (with this interceptor)
 
@@ -27,8 +28,27 @@ class FallbackInterceptor extends Interceptor {
   }
 
   @override
+  void onResponse(Response response, ResponseInterceptorHandler handler) {
+    if (_consecutiveFailures != 0) {
+      Logger.debugWithTag(_tag, 'reset consecutive failure counter');
+      _consecutiveFailures = 0;
+    }
+    super.onResponse(response, handler);
+  }
+
+  @override
   void onError(DioException err, ErrorInterceptorHandler handler) async {
     if (_isConnectionError(err)) {
+      if (err.requestOptions.extra[allowRetryExtraKey] == false) {
+        Logger.warnWithTag(
+          _tag,
+          'skip automatic replay for non-idempotent request '
+          'path=${err.requestOptions.path}',
+          err,
+        );
+        super.onError(err, handler);
+        return;
+      }
       _consecutiveFailures++;
       Logger.warnWithTag(
         _tag,

@@ -1,3 +1,5 @@
+import 'dart:ui' show Tristate;
+
 import 'package:echoes/core/design/echo_design.dart';
 import 'package:echoes/core/theme/app_theme.dart';
 import 'package:echoes/data/models/song.dart';
@@ -132,6 +134,50 @@ void main() {
       findsNothing,
     );
     expect(find.bySemanticsLabel('${song.title}，更多操作'), findsOneWidget);
+  });
+
+  testWidgets('selection mode exposes selected state and replaces playback', (
+    tester,
+  ) async {
+    var playCount = 0;
+    var menuCount = 0;
+    var toggleCount = 0;
+
+    await tester.pumpWidget(
+      ProviderScope(
+        child: MaterialApp(
+          theme: AppTheme.light(),
+          home: Scaffold(
+            body: EchoSongRow(
+              song: song,
+              selectionMode: true,
+              selected: true,
+              onPressed: () => playCount += 1,
+              onLongPress: () => menuCount += 1,
+              onMorePressed: () => menuCount += 1,
+              onToggleSelected: () => toggleCount += 1,
+            ),
+          ),
+        ),
+      ),
+    );
+
+    final row = find.bySemanticsLabel(RegExp('^${RegExp.escape(song.title)}，'));
+    final toggle = find.bySemanticsLabel('取消选择 ${song.title}');
+    expect(row, findsOneWidget);
+    expect(toggle, findsOneWidget);
+    expect(
+      tester.getSemantics(row).flagsCollection.isSelected,
+      Tristate.isTrue,
+    );
+    expect(find.bySemanticsLabel('${song.title}，更多操作'), findsNothing);
+
+    await tester.tap(row);
+    await tester.tap(toggle);
+    expect(toggleCount, 2);
+    expect(playCount, 0);
+    expect(menuCount, 0);
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('top-rank variant uses an explicit rank', (tester) async {

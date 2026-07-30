@@ -60,44 +60,50 @@ List<Song> sortSongs(List<Song> songs, SongSortOption option) {
   }
 
   final sorted = List<Song>.of(songs);
-  sorted.sort((left, right) {
-    switch (option) {
-      case SongSortOption.defaultOrder:
-        return 0;
-      case SongSortOption.alphabeticalAsc:
-        return _compareSongAlphabetically(left, right);
-      case SongSortOption.alphabeticalDesc:
-        return _compareDescendingBy(
-          _compareSongAlphabetically(left, right),
-          fallback: () => 0,
-        );
-      case SongSortOption.durationAsc:
-        return _compareAscending(
-          left.duration ?? -1,
-          right.duration ?? -1,
-          fallback: () => _compareSongAlphabetically(left, right),
-        );
-      case SongSortOption.durationDesc:
-        return _compareDescending(
-          left.duration ?? -1,
-          right.duration ?? -1,
-          fallback: () => _compareSongAlphabetically(left, right),
-        );
-      case SongSortOption.updatedAsc:
-        return _compareAscending(
-          left.created?.millisecondsSinceEpoch ?? -1,
-          right.created?.millisecondsSinceEpoch ?? -1,
-          fallback: () => _compareSongAlphabetically(left, right),
-        );
-      case SongSortOption.updatedDesc:
-        return _compareDescending(
-          left.created?.millisecondsSinceEpoch ?? -1,
-          right.created?.millisecondsSinceEpoch ?? -1,
-          fallback: () => _compareSongAlphabetically(left, right),
-        );
-    }
-  });
+  sorted.sort((left, right) => compareSongsForSort(left, right, option));
   return sorted;
+}
+
+/// Compares two songs using the same ordering as [sortSongs].
+///
+/// Keeping the comparator public lets callers sort richer row models while
+/// retaining metadata such as a song's original position in a playlist.
+int compareSongsForSort(Song left, Song right, SongSortOption option) {
+  switch (option) {
+    case SongSortOption.defaultOrder:
+      return 0;
+    case SongSortOption.alphabeticalAsc:
+      return _compareSongAlphabetically(left, right);
+    case SongSortOption.alphabeticalDesc:
+      return _compareDescendingBy(
+        _compareSongAlphabetically(left, right),
+        fallback: () => 0,
+      );
+    case SongSortOption.durationAsc:
+      return _compareAscending(
+        left.duration ?? -1,
+        right.duration ?? -1,
+        fallback: () => _compareSongAlphabetically(left, right),
+      );
+    case SongSortOption.durationDesc:
+      return _compareDescending(
+        left.duration ?? -1,
+        right.duration ?? -1,
+        fallback: () => _compareSongAlphabetically(left, right),
+      );
+    case SongSortOption.updatedAsc:
+      return _compareAscending(
+        left.created?.millisecondsSinceEpoch ?? -1,
+        right.created?.millisecondsSinceEpoch ?? -1,
+        fallback: () => _compareSongAlphabetically(left, right),
+      );
+    case SongSortOption.updatedDesc:
+      return _compareDescending(
+        left.created?.millisecondsSinceEpoch ?? -1,
+        right.created?.millisecondsSinceEpoch ?? -1,
+        fallback: () => _compareSongAlphabetically(left, right),
+      );
+  }
 }
 
 enum PlaylistSortOption {

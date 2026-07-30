@@ -220,6 +220,7 @@ class ExploreRemoteSongRow extends StatelessWidget {
     required this.onPressed,
     required this.onLongPress,
     required this.onToggleSelected,
+    required this.onMorePressed,
     required this.onDownload,
   });
 
@@ -231,6 +232,7 @@ class ExploreRemoteSongRow extends StatelessWidget {
   final VoidCallback onPressed;
   final VoidCallback onLongPress;
   final VoidCallback onToggleSelected;
+  final VoidCallback onMorePressed;
   final VoidCallback onDownload;
 
   @override
@@ -310,32 +312,43 @@ class ExploreRemoteSongRow extends StatelessWidget {
                   ),
                 )
               else
-                AnimatedSwitcher(
-                  duration: context.echoMotion.resolve(
-                    context,
-                    context.echoMotion.feedback,
-                  ),
-                  switchInCurve: context.echoMotion.easeOut,
-                  switchOutCurve: context.echoMotion.easeOut,
-                  child: switch (downloadState) {
-                    ExploreRemoteDownloadState.idle => EchoIconButton(
-                      key: const ValueKey<String>('download-idle'),
-                      icon: AppIcons.downloadOutline,
-                      label: '添加 ${song.title} 到离线下载队列',
-                      onPressed: onDownload,
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: <Widget>[
+                    EchoIconButton(
+                      icon: AppIcons.more,
+                      label: '${song.title}，更多试听操作',
+                      onPressed: onMorePressed,
                     ),
-                    ExploreRemoteDownloadState.submitting =>
-                      _RemoteDownloadStatus(
-                        key: const ValueKey<String>('download-submitting'),
-                        songTitle: song.title,
-                        submitting: true,
+                    AnimatedSwitcher(
+                      duration: context.echoMotion.resolve(
+                        context,
+                        context.echoMotion.feedback,
                       ),
-                    ExploreRemoteDownloadState.queued => _RemoteDownloadStatus(
-                      key: const ValueKey<String>('download-queued'),
-                      songTitle: song.title,
-                      submitting: false,
+                      switchInCurve: context.echoMotion.easeOut,
+                      switchOutCurve: context.echoMotion.easeOut,
+                      child: switch (downloadState) {
+                        ExploreRemoteDownloadState.idle => EchoIconButton(
+                          key: const ValueKey<String>('download-idle'),
+                          icon: AppIcons.downloadOutline,
+                          label: '添加 ${song.title} 到离线下载队列',
+                          onPressed: onDownload,
+                        ),
+                        ExploreRemoteDownloadState.submitting =>
+                          _RemoteDownloadStatus(
+                            key: const ValueKey<String>('download-submitting'),
+                            songTitle: song.title,
+                            submitting: true,
+                          ),
+                        ExploreRemoteDownloadState.queued =>
+                          _RemoteDownloadStatus(
+                            key: const ValueKey<String>('download-queued'),
+                            songTitle: song.title,
+                            submitting: false,
+                          ),
+                      },
                     ),
-                  },
+                  ],
                 ),
             ],
           ),

@@ -245,12 +245,14 @@ class _FullPlayerPageState extends ConsumerState<FullPlayerPage>
   }
 
   void _showSongActions(Song song) {
+    final mediaVisuals = ref.read(resolvedCurrentSongMediaVisualsProvider);
     if (song.isPreview) {
       unawaited(
         showSongOptionsSheet(
           context: context,
           song: song,
           mode: SongOptionsSheetMode.offlineOnly,
+          mediaVisuals: mediaVisuals,
           extraActions: <SongOptionsExtraAction>[
             SongOptionsExtraAction(
               icon: AppIcons.downloadOutline,
@@ -262,7 +264,13 @@ class _FullPlayerPageState extends ConsumerState<FullPlayerPage>
       );
       return;
     }
-    unawaited(showSongOptionsSheet(context: context, song: song));
+    unawaited(
+      showSongOptionsSheet(
+        context: context,
+        song: song,
+        mediaVisuals: mediaVisuals,
+      ),
+    );
   }
 
   void _toggleLyrics() {

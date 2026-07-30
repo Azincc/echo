@@ -2,7 +2,7 @@ import 'dart:async';
 import 'dart:math';
 import 'package:audio_service/audio_service.dart';
 import 'package:flutter/foundation.dart'
-    show TargetPlatform, defaultTargetPlatform, kIsWeb;
+    show TargetPlatform, defaultTargetPlatform, kIsWeb, visibleForTesting;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:just_audio/just_audio.dart' hide PlayerState;
 import '../data/models/song.dart';
@@ -24,6 +24,7 @@ import 'audio_quality_provider.dart';
 import 'download_provider.dart';
 import 'audio_cache_provider.dart';
 import 'crossfade_provider.dart';
+import 'gd_music_provider.dart';
 import '../providers/auth_provider.dart';
 
 export 'player/player_state.dart';
@@ -33,6 +34,7 @@ import 'player/player_state.dart';
 import 'player/favorite_scrobble_handler.dart';
 import 'player/cache_manager_handler.dart';
 import 'player/player_seek_policy.dart';
+import 'player/transcoded_stream_seek.dart';
 
 const _playerLogTag = 'PLAYER';
 const _playDbgTag = 'PLAYDBG';
@@ -47,6 +49,42 @@ bool get _isApplePlatform =>
     !kIsWeb &&
     (defaultTargetPlatform == TargetPlatform.iOS ||
         defaultTargetPlatform == TargetPlatform.macOS);
+
+/// 将解析后的试听元数据写回原队列项，同时保留其它正式/试听歌曲。
+@visibleForTesting
+({List<Song> queue, int index}) resolvePreviewPlaybackQueue({
+  required List<Song> queue,
+  required int preferredIndex,
+  required Song unresolvedSong,
+  required Song resolvedSong,
+}) {
+  final nextQueue = List<Song>.of(queue);
+  var nextIndex = preferredIndex;
+
+  if (nextQueue.isEmpty) {
+    return (queue: <Song>[resolvedSong], index: 0);
+  }
+
+  final preferredIndexMatches =
+      nextIndex >= 0 &&
+      nextIndex < nextQueue.length &&
+      nextQueue[nextIndex].id == unresolvedSong.id;
+  if (!preferredIndexMatches) {
+    final matchedIndex = nextQueue.indexWhere(
+      (item) => item.id == unresolvedSong.id,
+    );
+    if (matchedIndex >= 0) {
+      nextIndex = matchedIndex;
+    } else {
+      nextIndex = nextIndex.clamp(0, nextQueue.length);
+      nextQueue.insert(nextIndex, resolvedSong);
+      return (queue: nextQueue, index: nextIndex);
+    }
+  }
+
+  nextQueue[nextIndex] = resolvedSong;
+  return (queue: nextQueue, index: nextIndex);
+}
 
 /// 播放器 Provider
 
@@ -85,8 +123,7 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
   String? _activeSeekSongId;
   bool _isApplyingPendingSeek = false;
   bool _seekByReloadStream = false;
-  // 默认关闭：当前服务端对 timeOffset 支持不稳定，首跳可能先失败再回退，导致明显卡顿。
-  bool _transcodeTimeOffsetSupported = false;
+  Duration _sourcePositionOffset = Duration.zero;
   String? _forcedNextSongId;
   int? _forcedNextIndex;
   ProcessingState? _lastProcessingStateForDebug;
@@ -155,6 +192,7 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
       _audioHandler?.onSkipToPrevious = () {
         previous();
       };
+      _audioHandler?.onSeek = seek;
     } catch (e) {
       Logger.warn('AudioService not available: $e');
       player = AudioPlayer(
@@ -179,7 +217,10 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
       _playDbg(
         'playingStream playing=$isPlaying '
         'processing=${player.processingState.name} '
-        'position=${player.position} buffered=${player.bufferedPosition} '
+        'sourcePosition=${player.position} '
+        'position=${_logicalPlayerPosition(player.position)} '
+        'sourceBuffered=${player.bufferedPosition} '
+        'buffered=${_logicalPlayerPosition(player.bufferedPosition)} '
         'song=${state.currentSong?.id}',
       );
       if (mounted) state = state.copyWith(isPlaying: isPlaying);
@@ -195,6 +236,8 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
       if (_shouldPreserveSeekPosition()) {
         return;
       }
+
+      final logicalPosition = _logicalPlayerPosition(position);
 
       // 合成进度模式下，lock cache 的 positionStream 可能回传 0 或过时位置，
       // 会把 UI 进度回退。此时统一忽略，交给轮询器维护并在恢复后切回真实位置。
@@ -212,23 +255,26 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
           _playDbg(
             isStuckZero
                 ? 'positionStream ignored_stuck_zero '
-                      'streamPos=$position statePos=${state.position} '
+                      'sourcePos=$position logicalPos=$logicalPosition '
+                      'statePos=${state.position} '
                       'song=${state.currentSong?.id}'
                 : 'positionStream ignored_while_synthetic '
-                      'streamPos=$position statePos=${state.position} '
+                      'sourcePos=$position logicalPos=$logicalPosition '
+                      'statePos=${state.position} '
                       'song=${state.currentSong?.id}',
           );
         }
         return;
       }
 
-      state = state.copyWith(position: position);
+      state = state.copyWith(position: logicalPosition);
     });
     _startPositionPolling(player);
 
     // 监听缓冲进度（仅在在线流式播放且非 LockCachingAudioSource 模式下使用）
     player.bufferedPositionStream.listen((buffered) {
       if (mounted && _downloadProgressSubscription == null) {
+        if (_shouldPreserveSeekPosition()) return;
         // 本地文件（下载/缓存）的 bufferedPositionStream 仅反映解码缓冲窗口，
         // 不代表文件可用进度，应跳过以保持 100%。
         final source = state.playbackSource;
@@ -238,15 +284,41 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
         }
         // 当使用 LockCachingAudioSource 时,由 downloadProgressStream 更新 bufferedPosition
         // 避免播放器解码缓冲区（seek 后会重置）覆盖实际下载进度
-        state = state.copyWith(bufferedPosition: buffered);
+        state = state.copyWith(
+          bufferedPosition: _logicalPlayerPosition(buffered),
+        );
       }
     });
     // 监听总时长
     player.durationStream.listen((duration) {
       if (mounted) {
         if (duration != null && duration > Duration.zero) {
+          if (_shouldPreserveSeekPosition() && _seekByReloadStream) {
+            _playDbg(
+              'durationStream ignored during reload seek duration=$duration '
+              'song=${state.currentSong?.id}',
+            );
+            return;
+          }
+          // A timeOffset stream may expose either the remaining duration or
+          // the original X-Content-Duration. The song timeline is already
+          // known, so do not replace it with a source-relative duration.
+          if (_sourcePositionOffset > Duration.zero &&
+              state.duration > Duration.zero) {
+            _loggedDurationUnavailableForSong = false;
+            _playDbg(
+              'durationStream kept logical duration=${state.duration} '
+              'sourceDuration=$duration offset=$_sourcePositionOffset '
+              'song=${state.currentSong?.id}',
+            );
+            return;
+          }
           // 如果流能提供时长，优先使用流的时长（更准确）
-          state = state.copyWith(duration: duration);
+          state = state.copyWith(
+            duration: _sourcePositionOffset > Duration.zero
+                ? duration + _sourcePositionOffset
+                : duration,
+          );
           _loggedDurationUnavailableForSong = false;
           _playDbg(
             'durationStream duration=$duration song=${state.currentSong?.id}',
@@ -274,9 +346,12 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
         _seekDbg(
           'playerState=${playerState.processingState.name} '
           'playing=${playerState.playing} '
-          'position=${player.position} '
-          'buffered=${player.bufferedPosition} '
+          'sourcePosition=${player.position} '
+          'position=${_logicalPlayerPosition(player.position)} '
+          'sourceBuffered=${player.bufferedPosition} '
+          'buffered=${_logicalPlayerPosition(player.bufferedPosition)} '
           'duration=${player.duration} '
+          'sourceOffset=$_sourcePositionOffset '
           'pending=$_pendingSeekPosition '
           'pendingSong=$_pendingSeekSongId '
           'currentSong=${state.currentSong?.id}',
@@ -428,11 +503,6 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
     );
 
     try {
-      if (retryPreview) {
-        await _playPreviewSongInternal(song, autoPlay: retryAutoPlay);
-        return;
-      }
-
       final retryQueue = state.queue.isEmpty ? [song] : state.queue;
       var retryIndex = state.currentIndex;
       final currentIndexMatchesSong =
@@ -472,11 +542,6 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
     bool clearShuffleForwardHistory = false,
     bool autoPlay = true,
   }) async {
-    if (song.isPreview) {
-      await _playPreviewSongInternal(song, autoPlay: autoPlay);
-      return;
-    }
-
     final playQueue = queue ?? [song];
     final playIndex = index ?? 0;
     _syncShuffleHistoryBeforeSongChange(
@@ -486,6 +551,16 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
       recordHistory: recordShuffleHistory,
       clearForwardHistory: clearShuffleForwardHistory,
     );
+
+    if (song.isPreview) {
+      await _playPreviewSongInternal(
+        song,
+        queue: playQueue,
+        index: playIndex,
+        autoPlay: autoPlay,
+      );
+      return;
+    }
 
     final debugSession = ++_playDebugSession;
     _transportRequestGeneration += 1;
@@ -685,6 +760,12 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
       } else {
         maxBitRate = effectiveQuality.maxBitRate;
       }
+      final useServerTimeOffsetSeek = shouldUseServerTimeOffsetSeek(
+        requestedFormat: transcodeFormat,
+        requestedMaxBitRate: maxBitRate,
+        sourceFormat: song.suffix,
+        sourceBitRate: song.bitRate,
+      );
 
       final activeAddress = await _ensureActiveAddressForPlayback(
         session: debugSession,
@@ -720,6 +801,7 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
         'sid=$debugSession stream_resolved '
         'quality=${effectiveQuality.name} transcode=${transcodeFormat ?? 'none'} '
         'maxBitRate=${maxBitRate ?? 'none'} appleHttp=$isAppleHttpStream '
+        'timeOffsetSeek=$useServerTimeOffsetSeek '
         'url=${_summarizeStreamUrl(streamUrl)}',
       );
 
@@ -871,7 +953,7 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
             songId: song.id,
             format: transcodeFormat,
             maxBitRate: maxBitRate,
-            seekByReloadStream: transcodeFormat != null,
+            seekByReloadStream: useServerTimeOffsetSeek,
           );
           await _syncPlaybackAfterSourceReady(autoPlay: autoPlay);
           if (!isCurrentSession()) return;
@@ -917,7 +999,7 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
             songId: song.id,
             format: transcodeFormat,
             maxBitRate: maxBitRate,
-            seekByReloadStream: transcodeFormat != null,
+            seekByReloadStream: useServerTimeOffsetSeek,
           );
           await _syncPlaybackAfterSourceReady(autoPlay: autoPlay);
           if (!isCurrentSession()) return;
@@ -970,7 +1052,7 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
             songId: song.id,
             format: transcodeFormat,
             maxBitRate: maxBitRate,
-            seekByReloadStream: false,
+            seekByReloadStream: useServerTimeOffsetSeek,
           );
           await _syncPlaybackAfterSourceReady(autoPlay: autoPlay);
           if (!isCurrentSession()) return;
@@ -1100,6 +1182,12 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
         format: 'mp3', // 转码为 MP3
         maxBitRate: 320,
       );
+      final useServerTimeOffsetSeek = shouldUseServerTimeOffsetSeek(
+        requestedFormat: 'mp3',
+        requestedMaxBitRate: 320,
+        sourceFormat: song.suffix,
+        sourceBitRate: song.bitRate,
+      );
       final isAppleHttpStream =
           _isApplePlatform && streamUrl.startsWith('http://');
 
@@ -1140,7 +1228,7 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
           songId: song.id,
           format: 'mp3',
           maxBitRate: 320,
-          seekByReloadStream: true,
+          seekByReloadStream: useServerTimeOffsetSeek,
         );
         await _syncPlaybackAfterSourceReady(autoPlay: autoPlay);
         if (!isCurrentSession()) return;
@@ -1190,7 +1278,7 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
           songId: song.id,
           format: 'mp3',
           maxBitRate: 320,
-          seekByReloadStream: false,
+          seekByReloadStream: useServerTimeOffsetSeek,
         );
         await _syncPlaybackAfterSourceReady(autoPlay: autoPlay);
         if (!isCurrentSession()) return;
@@ -1464,7 +1552,7 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
     _audioHandler?.updateMediaItem(mediaItem);
   }
 
-  /// 异步补充歌曲元数据（位深/采样率/声道数），不阻塞播放流程。
+  /// 异步补充歌曲元数据（格式/码率/位深/采样率/声道数），不阻塞播放流程。
   Future<void> _enrichSongMetadata(String songId, int session) async {
     try {
       final fullSong = await _musicRepository.getSong(songId);
@@ -1475,11 +1563,15 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
       if (current == null || current.id != songId) return;
       // 仅在缺失时补充
       final needsUpdate =
+          current.suffix == null ||
+          current.bitRate == null ||
           current.bitDepth == null ||
           current.samplingRate == null ||
           current.channelCount == null;
       if (!needsUpdate) return;
       final enriched = current.copyWith(
+        suffix: current.suffix ?? fullSong.suffix,
+        bitRate: current.bitRate ?? fullSong.bitRate,
         bitDepth: current.bitDepth ?? fullSong.bitDepth,
         samplingRate: current.samplingRate ?? fullSong.samplingRate,
         channelCount: current.channelCount ?? fullSong.channelCount,
@@ -1494,6 +1586,24 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
           final updatedQueue = List<Song>.from(state.queue);
           updatedQueue[idx] = enriched;
           state = state.copyWith(queue: updatedQueue);
+        }
+        if (_currentStreamSongId == songId &&
+            _sourcePositionOffset == Duration.zero) {
+          final useServerTimeOffsetSeek = shouldUseServerTimeOffsetSeek(
+            requestedFormat: _currentStreamFormat,
+            requestedMaxBitRate: _currentStreamMaxBitRate,
+            sourceFormat: enriched.suffix,
+            sourceBitRate: enriched.bitRate,
+          );
+          if (useServerTimeOffsetSeek != _seekByReloadStream) {
+            _seekByReloadStream = useServerTimeOffsetSeek;
+            _seekDbg(
+              'updated timeOffset seek after metadata refresh '
+              'song=$songId bitRate=${enriched.bitRate} '
+              'maxBitRate=$_currentStreamMaxBitRate '
+              'enabled=$useServerTimeOffsetSeek',
+            );
+          }
         }
       }
     } catch (e) {
@@ -1639,13 +1749,15 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
     await playSong(songs[startIndex], queue: songs, index: startIndex);
   }
 
-  /// 播放试听歌曲（强制单曲队列）
+  /// 播放试听歌曲。
   Future<void> playPreviewSong(Song song) async {
-    await _playPreviewSongInternal(song);
+    await playSong(song);
   }
 
   Future<void> _playPreviewSongInternal(
     Song song, {
+    required List<Song> queue,
+    required int index,
     bool autoPlay = true,
   }) async {
     final debugSession = ++_playDebugSession;
@@ -1656,12 +1768,30 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
       reason: 'play_preview_started',
       preserveRetrying: _retryingCurrentPlayback,
     );
-    final streamUrl = song.previewStreamUrl?.trim() ?? '';
-    if (streamUrl.isEmpty) {
-      NetworkErrorNotifier.show('试听链接不可用');
+
+    late final Song resolvedSong;
+    try {
+      resolvedSong = await _resolvePreviewSongForPlayback(song);
+    } catch (e) {
+      Logger.error('Failed to resolve preview song', e);
+      if (_playDebugSession == debugSession) {
+        NetworkErrorNotifier.show('试听链接解析失败');
+      }
       return;
     }
-    final previewHeaders = song.previewRequestHeaders;
+    if (_playDebugSession != debugSession) return;
+
+    final streamUrl = resolvedSong.previewStreamUrl?.trim() ?? '';
+    final previewHeaders = resolvedSong.previewRequestHeaders;
+    final previewQueue = resolvePreviewPlaybackQueue(
+      queue: queue,
+      preferredIndex: index,
+      unresolvedSong: song,
+      resolvedSong: resolvedSong,
+    );
+    final playQueue = previewQueue.queue;
+    final playIndex = previewQueue.index;
+
     if (!autoPlay) {
       _cancelFade();
       await _audioPlayer?.pause();
@@ -1686,35 +1816,36 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
     _lastIgnoredSyntheticPositionLogTick = -1;
     _syntheticPositionFallbackActive = false;
     _loggedDurationUnavailableForSong = false;
-    _resetShuffleHistory(updateState: false);
 
-    final initialDuration = song.duration != null
-        ? Duration(seconds: song.duration!)
+    final initialDuration = resolvedSong.duration != null
+        ? Duration(seconds: resolvedSong.duration!)
         : Duration.zero;
 
     state = state.copyWith(
-      currentSong: song,
-      queue: [song],
-      currentIndex: 0,
-      shuffleHistoryCount: 0,
+      currentSong: resolvedSong,
+      queue: playQueue,
+      currentIndex: playIndex,
       position: Duration.zero,
       duration: initialDuration,
       currentBitRateKbps: 0,
     );
 
-    _updateMediaItem(song);
+    _updateMediaItem(resolvedSong);
 
     try {
       _playDbg(
-        'sid=$debugSession preview setUrl song=${song.id} '
+        'sid=$debugSession preview setUrl song=${resolvedSong.id} '
+        'queue=${playQueue.length} index=$playIndex '
         'url=${_summarizeStreamUrl(streamUrl)} '
         'headers=${previewHeaders.keys.join(",")}',
       );
       final sourceReady = await _replaceLoadedSource(
-        songId: song.id,
+        songId: resolvedSong.id,
         label: 'preview',
-        ownsSource: () =>
-            _isPlaybackContextCurrent(session: debugSession, songId: song.id),
+        ownsSource: () => _isPlaybackContextCurrent(
+          session: debugSession,
+          songId: resolvedSong.id,
+        ),
         setSource: (player) async {
           await player.setUrl(streamUrl, headers: previewHeaders);
         },
@@ -1723,10 +1854,10 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
       _usingLockCachingSource = false;
       _currentStreamUrl = streamUrl;
       _setStreamContext(
-        songId: song.id,
+        songId: resolvedSong.id,
         format: null,
         maxBitRate: null,
-        seekByReloadStream: true,
+        seekByReloadStream: false,
       );
       await _syncPlaybackAfterSourceReady(autoPlay: autoPlay);
       if (!isCurrentSession()) return;
@@ -1736,10 +1867,10 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
         currentQuality: AudioQualityLevel.original,
         playbackSource: PlaybackSource.stream,
         currentBitRateKbps: _resolveCurrentBitRateKbps(
-          song: song,
+          song: resolvedSong,
           quality: AudioQualityLevel.original,
           source: PlaybackSource.stream,
-          maxBitRate: _normalizeBitRateKbps(song.bitRate),
+          maxBitRate: _normalizeBitRateKbps(resolvedSong.bitRate),
         ),
       );
       _clearCurrentPlaybackRetry(reason: 'playback_ready_preview');
@@ -1762,7 +1893,7 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
       }
       if (!hasAvailableRoute) {
         _scheduleCurrentPlaybackRetry(
-          song: song,
+          song: resolvedSong,
           isPreview: true,
           autoPlay: autoPlay,
         );
@@ -1771,6 +1902,39 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
       }
       NetworkErrorNotifier.show('试听播放失败');
     }
+  }
+
+  /// 试听歌曲可以先作为普通队列项加入；真正轮到播放时再补齐临时 URL。
+  Future<Song> _resolvePreviewSongForPlayback(Song song) async {
+    final existingUrl = song.previewStreamUrl?.trim() ?? '';
+    if (existingUrl.isNotEmpty) return song;
+
+    final source = song.previewSource?.trim() ?? '';
+    final trackId = song.previewTrackId?.trim() ?? '';
+    if (source.isEmpty || trackId.isEmpty) {
+      throw StateError('试听歌曲缺少 source/trackId');
+    }
+
+    final client = _ref.read(gdMusicApiClientProvider);
+    final resolved = await client.resolveSongUrl(
+      source: source,
+      trackId: trackId,
+    );
+
+    var coverUrl = song.previewCoverUrl?.trim();
+    final picId = song.previewPicId?.trim() ?? '';
+    if ((coverUrl == null || coverUrl.isEmpty) && picId.isNotEmpty) {
+      coverUrl = await client.resolveCoverUrl(source: source, picId: picId);
+    }
+
+    return song.copyWith(
+      previewStreamUrl: resolved.url,
+      previewCoverUrl: coverUrl,
+      previewQualityLabel: resolved.qualityLabel,
+      previewRequestHeaders: resolved.requiredHeaders,
+      bitRate: resolved.bitRateKbps,
+      suffix: resolved.suffix ?? song.suffix,
+    );
   }
 
   /// 播放/暂停
@@ -2704,8 +2868,10 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
     if (state.loopMode == LoopMode.one) {
       // 单曲循环
       _seekDbg('completed -> repeat one song=$completedSongId');
-      await _audioPlayer?.seek(Duration.zero);
-      _startPlayback();
+      await seek(Duration.zero);
+      if (state.currentSong?.id == completedSongId) {
+        _startPlayback(fadeIn: false);
+      }
     } else if (state.hasNext) {
       // 播放下一首
       _seekDbg('completed -> sequential next song=$completedSongId');
@@ -2875,90 +3041,117 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
         _currentStreamSongId == songId &&
         _currentStreamUrl != null) {
       final shouldResume = player.playing;
-      final offset = target.inSeconds;
+      final seekTarget = TranscodedStreamSeekTarget.fromLogical(target);
       final streamFormat = _currentStreamFormat;
       final streamMaxBitRate = _currentStreamMaxBitRate;
+      final wasUsingLockCachingSource = _usingLockCachingSource;
       final reloadUrl = _apiClient.getStreamUrl(
         songId,
         maxBitRate: streamMaxBitRate,
         format: streamFormat,
-        timeOffset: offset,
+        timeOffset: seekTarget.serverOffset.inSeconds,
       );
       _seekDbg(
         'seek reload-stream song=$songId '
-        'target=$target offsetSec=$offset format=$streamFormat '
-        'maxBitRate=$streamMaxBitRate wasPlaying=$shouldResume',
+        'target=$target serverOffset=${seekTarget.serverOffset} '
+        'sourcePosition=${seekTarget.sourcePosition} format=$streamFormat '
+        'maxBitRate=$streamMaxBitRate wasPlaying=$shouldResume '
+        'lockCache=$wasUsingLockCachingSource',
       );
       try {
+        var reloadedWithLockCaching = false;
         final sourceReady = await _replaceLoadedSource(
           songId: songId,
           label: 'seek_reload_stream',
           ownsSource: ownsSource,
           setSource: (sourcePlayer) async {
-            await sourcePlayer.setUrl(reloadUrl, initialPosition: target);
+            if (wasUsingLockCachingSource && _isAppleHttpUrl(reloadUrl)) {
+              // Apple HTTP streams may require just_audio's local proxy. Do
+              // not reuse the full-song cache file: this URL contains only a
+              // timeOffset tail segment.
+              // ignore: experimental_member_use
+              final audioSource = LockCachingAudioSource(Uri.parse(reloadUrl));
+              await sourcePlayer.setAudioSource(
+                audioSource,
+                initialPosition: seekTarget.sourcePosition,
+              );
+              reloadedWithLockCaching = true;
+              return;
+            }
+            await sourcePlayer.setUrl(
+              reloadUrl,
+              initialPosition: seekTarget.sourcePosition,
+            );
           },
         );
         if (!sourceReady) return;
-        _usingLockCachingSource = false;
+        if (reloadedWithLockCaching) {
+          // A tail segment must not be registered as a complete song cache.
+          _replaceDownloadProgressSubscription(null);
+        }
+        _usingLockCachingSource = reloadedWithLockCaching;
         _currentStreamUrl = reloadUrl;
         _setStreamContext(
           songId: songId,
           format: streamFormat,
           maxBitRate: streamMaxBitRate,
           seekByReloadStream: true,
+          sourcePositionOffset: seekTarget.serverOffset,
         );
         if (!isCurrentSeek()) {
           _schedulePendingSeekIfReady();
           return;
         }
+        if (mounted) {
+          state = state.copyWith(position: target, bufferedPosition: target);
+        }
         if (shouldResume) {
-          _startPlayback();
+          _startPlayback(fadeIn: false);
         }
         await Future<void>.delayed(const Duration(milliseconds: 220));
         if (!isCurrentSeek()) return;
-        final actualReload = player.position;
+        final actualReload = _logicalPlayerPosition(player.position);
         final reloadDrift = (actualReload - target).inMilliseconds.abs();
         _seekDbg(
-          'seek reload-stream verify target=$target actual=$actualReload '
-          'driftMs=$reloadDrift',
+          'seek reload-stream verify target=$target '
+          'sourceActual=${player.position} actual=$actualReload '
+          'sourceOffset=$_sourcePositionOffset driftMs=$reloadDrift',
         );
         if (reloadDrift <= 2000) return;
-        if (target > const Duration(seconds: 30) &&
-            actualReload < const Duration(seconds: 3) &&
-            reloadDrift > 60000) {
-          _transcodeTimeOffsetSupported = false;
-          _seekDbg(
-            'reload-stream timeOffset unsupported on current server, '
-            'disable reload-stream seek for this session',
-          );
-        }
         Logger.warn(
           'Reload-stream seek drift still high '
           '(target=$target, actual=$actualReload), retrying plain seek',
         );
         if (!isCurrentSeek()) return;
-        await player.seek(target);
+        await player.seek(seekTarget.sourcePosition);
         return;
       } catch (e) {
         if (!isCurrentSeek()) return;
         Logger.warn('Reload-stream seek failed, fallback to plain seek', e);
-        await player.seek(target);
+        await player.seek(_sourceSeekPosition(target));
         return;
       }
     }
 
+    final sourceTarget = _sourceSeekPosition(target);
     _seekDbg(
-      'seek execute target=$target from=${player.position} '
+      'seek execute target=$target sourceTarget=$sourceTarget '
+      'sourceFrom=${player.position} '
+      'from=${_logicalPlayerPosition(player.position)} '
+      'sourceOffset=$_sourcePositionOffset '
       'state=${player.processingState.name} lockCache=$_usingLockCachingSource',
     );
-    await player.seek(target);
+    await player.seek(sourceTarget);
     if (!isCurrentSeek()) return;
 
     await Future<void>.delayed(const Duration(milliseconds: 220));
     if (!isCurrentSeek()) return;
-    final actual = player.position;
+    final actual = _logicalPlayerPosition(player.position);
     final drift = (actual - target).inMilliseconds.abs();
-    _seekDbg('seek verify target=$target actual=$actual driftMs=$drift');
+    _seekDbg(
+      'seek verify target=$target sourceActual=${player.position} '
+      'actual=$actual driftMs=$drift',
+    );
     if (drift <= 2000) return;
 
     // LockCachingAudioSource 在刚开始下载时，远跳转可能出现“位置变化但音频仍从头播放”。
@@ -3009,6 +3202,7 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
         final streamUrl = _currentStreamUrl!;
         final streamFormat = _currentStreamFormat;
         final streamMaxBitRate = _currentStreamMaxBitRate;
+        final reloadStreamSeek = _seekByReloadStream;
         final sourceReady = await _replaceLoadedSource(
           songId: songId,
           label: 'seek_direct_stream_fallback',
@@ -3025,7 +3219,7 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
           songId: songId,
           format: streamFormat,
           maxBitRate: streamMaxBitRate,
-          seekByReloadStream: streamFormat != null,
+          seekByReloadStream: reloadStreamSeek,
         );
         if (!isCurrentSeek()) {
           _schedulePendingSeekIfReady();
@@ -3061,7 +3255,7 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
       await player.pause();
       if (!isCurrentSeek()) return;
     }
-    await player.seek(target);
+    await player.seek(sourceTarget);
     if (!isCurrentSeek()) return;
     if (shouldResume) {
       _startPlayback(fadeIn: false);
@@ -3081,18 +3275,16 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
   }) async {
     if (!isCurrentSeek()) return false;
 
-    final offset = target.inSeconds;
-    final reloadUrl = _apiClient.getStreamUrl(
-      songId,
-      maxBitRate: _currentStreamMaxBitRate,
-      format: _currentStreamFormat,
-      timeOffset: offset,
-    );
+    final currentStreamUrl = _currentStreamUrl;
+    if (currentStreamUrl == null) return false;
+    final reloadUrl = _withoutTimeOffset(currentStreamUrl);
+    final streamFormat = _currentStreamFormat;
+    final streamMaxBitRate = _currentStreamMaxBitRate;
+    final reloadStreamSeek = _seekByReloadStream;
 
     _seekDbg(
       'seek fallback -> lock-cache reload target=$target '
-      'offsetSec=$offset format=$_currentStreamFormat '
-      'maxBitRate=$_currentStreamMaxBitRate cache=temporary',
+      'format=$streamFormat maxBitRate=$streamMaxBitRate cache=temporary',
     );
     _playDbg(
       'seek_lock_cache_reload '
@@ -3106,21 +3298,20 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
       label: 'seek_lock_cache_reload',
       ownsSource: ownsSource,
       setSource: (sourcePlayer) async {
-        await sourcePlayer.setAudioSource(audioSource);
+        await sourcePlayer.setAudioSource(audioSource, initialPosition: target);
       },
     );
     if (!sourceReady) return false;
-    // This source starts at a non-zero timeOffset, so its cache file is only a
-    // tail segment and must never be registered as the complete song cache.
-    // Let bufferedPositionStream represent temporary buffering instead.
+    // This is a temporary retry source. Do not let it replace or register the
+    // normal full-song cache entry; bufferedPositionStream is sufficient.
     _replaceDownloadProgressSubscription(null);
     _usingLockCachingSource = true;
     _currentStreamUrl = reloadUrl;
     _setStreamContext(
       songId: songId,
-      format: _currentStreamFormat,
-      maxBitRate: _currentStreamMaxBitRate,
-      seekByReloadStream: false,
+      format: streamFormat,
+      maxBitRate: streamMaxBitRate,
+      seekByReloadStream: reloadStreamSeek,
     );
     if (!isCurrentSeek()) {
       _schedulePendingSeekIfReady();
@@ -3132,11 +3323,11 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
 
     await Future<void>.delayed(const Duration(milliseconds: 220));
     if (!isCurrentSeek()) return true;
-    final actual = player.position;
+    final actual = _logicalPlayerPosition(player.position);
     final drift = (actual - target).inMilliseconds.abs();
     _seekDbg(
       'seek fallback lock-cache reload verify target=$target '
-      'actual=$actual driftMs=$drift',
+      'sourceActual=${player.position} actual=$actual driftMs=$drift',
     );
 
     if (actual <= const Duration(milliseconds: 50)) {
@@ -3173,19 +3364,13 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
     required String? format,
     required int? maxBitRate,
     required bool seekByReloadStream,
+    Duration sourcePositionOffset = Duration.zero,
   }) {
     _currentStreamSongId = songId;
     _currentStreamFormat = format;
     _currentStreamMaxBitRate = maxBitRate;
-    _seekByReloadStream = seekByReloadStream && _transcodeTimeOffsetSupported;
-    if (seekByReloadStream &&
-        _transcodeTimeOffsetSupported &&
-        !_seekByReloadStream) {
-      _seekDbg(
-        'reload-stream seek disabled by capability cache '
-        '(timeOffset unsupported)',
-      );
-    }
+    _seekByReloadStream = seekByReloadStream;
+    _setSourcePositionOffset(sourcePositionOffset);
   }
 
   void _clearStreamContext() {
@@ -3193,6 +3378,35 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
     _currentStreamFormat = null;
     _currentStreamMaxBitRate = null;
     _seekByReloadStream = false;
+    _setSourcePositionOffset(Duration.zero);
+  }
+
+  void _setSourcePositionOffset(Duration offset) {
+    final normalized = offset < Duration.zero ? Duration.zero : offset;
+    if (_sourcePositionOffset == normalized) return;
+    _sourcePositionOffset = normalized;
+    _audioHandler?.setPositionOffset(normalized);
+    _seekDbg('source timeline offset updated: $normalized');
+  }
+
+  Duration _logicalPlayerPosition(Duration sourcePosition) {
+    return addPlaybackPositionOffset(
+      sourcePosition,
+      _sourcePositionOffset,
+      maximum: state.duration > Duration.zero ? state.duration : null,
+    );
+  }
+
+  Duration _sourceSeekPosition(Duration logicalPosition) {
+    final sourcePosition = logicalPosition - _sourcePositionOffset;
+    return sourcePosition < Duration.zero ? Duration.zero : sourcePosition;
+  }
+
+  String _withoutTimeOffset(String url) {
+    final uri = Uri.parse(url);
+    final query = Map<String, String>.from(uri.queryParameters)
+      ..remove('timeOffset');
+    return uri.replace(queryParameters: query).toString();
   }
 
   bool _isPlaybackContextCurrent({
@@ -3320,12 +3534,13 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
         return;
       }
 
-      final playerPos = player.position;
+      final sourcePlayerPos = player.position;
+      final playerPos = _logicalPlayerPosition(sourcePlayerPos);
       final processing = player.processingState;
       final isReadyPlaying =
           player.playing && processing == ProcessingState.ready;
 
-      final deltaFromLast = (playerPos - _lastPolledPlayerPosition)
+      final deltaFromLast = (sourcePlayerPos - _lastPolledPlayerPosition)
           .inMilliseconds
           .abs();
       if (deltaFromLast <= 150) {
@@ -3333,7 +3548,7 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
       } else {
         _stagnantPositionTicks = 0;
       }
-      _lastPolledPlayerPosition = playerPos;
+      _lastPolledPlayerPosition = sourcePlayerPos;
 
       // 正常情况下用底层播放器位置对齐 UI 进度。
       final drift = (playerPos - state.position).inMilliseconds.abs();
@@ -3341,7 +3556,7 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
           _syntheticPositionFallbackActive &&
           _usingLockCachingSource &&
           isReadyPlaying &&
-          playerPos <= const Duration(milliseconds: 50);
+          sourcePlayerPos <= const Duration(milliseconds: 50);
       final preserveSyntheticPosition =
           _syntheticPositionFallbackActive &&
           _usingLockCachingSource &&
@@ -3355,7 +3570,7 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
         final canDeactivateSynthetic =
             _syntheticPositionFallbackActive &&
             isReadyPlaying &&
-            playerPos > Duration.zero &&
+            sourcePlayerPos > Duration.zero &&
             drift <= 3000;
         if (canDeactivateSynthetic) {
           _syntheticPositionFallbackActive = false;
@@ -3370,7 +3585,8 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
           _stagnantPositionTicks % 6 == 0) {
         _playDbg(
           'position sync skipped to preserve synthetic '
-          'playerPos=$playerPos statePos=${state.position} '
+          'sourcePlayerPos=$sourcePlayerPos playerPos=$playerPos '
+          'statePos=${state.position} '
           'driftMs=$drift playing=${player.playing} '
           'processing=${processing.name} song=${state.currentSong?.id}',
         );
@@ -3381,7 +3597,8 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
           _stagnantPositionTicks % 6 == 0) {
         _playDbg(
           'position drift sync skipped while synthetic active '
-          'playerPos=$playerPos statePos=${state.position} '
+          'sourcePlayerPos=$sourcePlayerPos playerPos=$playerPos '
+          'statePos=${state.position} '
           'driftMs=$drift song=${state.currentSong?.id}',
         );
       }
@@ -3391,7 +3608,7 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
       final shouldUseSyntheticPosition =
           _usingLockCachingSource &&
           isReadyPlaying &&
-          playerPos <= const Duration(milliseconds: 50) &&
+          sourcePlayerPos <= const Duration(milliseconds: 50) &&
           state.duration > Duration.zero &&
           _stagnantPositionTicks >= 6;
       if (shouldUseSyntheticPosition &&
@@ -3400,7 +3617,8 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
         _lastStagnantLogTick = _stagnantPositionTicks;
         _playDbg(
           'position_stagnant ticks=$_stagnantPositionTicks '
-          'playerPos=$playerPos statePos=${state.position} '
+          'sourcePlayerPos=$sourcePlayerPos playerPos=$playerPos '
+          'statePos=${state.position} '
           'buffered=${player.bufferedPosition} duration=${state.duration} '
           'processing=${processing.name} playing=${player.playing} '
           'song=${state.currentSong?.id} '

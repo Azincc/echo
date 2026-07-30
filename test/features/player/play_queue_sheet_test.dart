@@ -3,8 +3,10 @@ import 'package:echoes/core/theme/app_theme.dart';
 import 'package:echoes/data/models/song.dart';
 import 'package:echoes/features/player/widgets/play_queue_sheet.dart';
 import 'package:echoes/providers/player_provider.dart';
+import 'package:echoes/widgets/cover_art_image.dart';
 import 'package:echoes/widgets/song_list_item.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -14,6 +16,8 @@ void main() {
       id: 'b',
       title: 'A long queued song title that may wrap at large text sizes',
       artist: 'Second artist with a long display name',
+      isPreview: true,
+      previewCoverUrl: 'https://images.example.test/preview.jpg',
     ),
   ];
 
@@ -26,27 +30,29 @@ void main() {
     EchoMediaVisuals? mediaVisuals,
     Color? albumColor,
   }) {
-    return MaterialApp(
-      theme: AppTheme.dark(),
-      builder: (context, child) {
-        final media = MediaQuery.of(context);
-        return MediaQuery(
-          data: media.copyWith(
-            textScaler: TextScaler.linear(textScale),
-            disableAnimations: true,
-          ),
-          child: child!,
-        );
-      },
-      home: Scaffold(
-        body: SizedBox.expand(
-          child: PlayQueueSheetView(
-            playerState: state,
-            mediaVisuals: mediaVisuals,
-            albumColor: albumColor,
-            onSelect: onSelect,
-            onClear: onClear,
-            onOpenSongActions: onOpenSongActions,
+    return ProviderScope(
+      child: MaterialApp(
+        theme: AppTheme.dark(),
+        builder: (context, child) {
+          final media = MediaQuery.of(context);
+          return MediaQuery(
+            data: media.copyWith(
+              textScaler: TextScaler.linear(textScale),
+              disableAnimations: true,
+            ),
+            child: child!,
+          );
+        },
+        home: Scaffold(
+          body: SizedBox.expand(
+            child: PlayQueueSheetView(
+              playerState: state,
+              mediaVisuals: mediaVisuals,
+              albumColor: albumColor,
+              onSelect: onSelect,
+              onClear: onClear,
+              onOpenSongActions: onOpenSongActions,
+            ),
           ),
         ),
       ),
@@ -79,9 +85,13 @@ void main() {
 
     expect(find.bySemanticsLabel('关闭播放队列'), findsOneWidget);
     expect(find.byType(EchoSongRow), findsNWidgets(2));
+    expect(find.byType(CoverArtImage), findsNWidgets(2));
     expect(find.bySemanticsLabel(RegExp('正在播放')), findsOneWidget);
+    expect(find.bySemanticsLabel(RegExp('试听')), findsOneWidget);
     expect(find.byIcon(AppIcons.equalizer), findsOneWidget);
-    expect(find.text('2'), findsOneWidget);
+    expect(find.text('2'), findsNothing);
+    final covers = tester.widgetList<CoverArtImage>(find.byType(CoverArtImage));
+    expect(covers.last.coverArtId, 'https://images.example.test/preview.jpg');
     expect(find.bySemanticsLabel(RegExp('更多操作')), findsNWidgets(2));
     expect(
       find.descendant(
@@ -145,10 +155,8 @@ void main() {
 
     final surface = tester.widget<EchoSurface>(find.byType(EchoSurface).first);
     final currentTitle = tester.widget<Text>(find.text(songs.first.title));
-    final playingIcon = tester.widget<Icon>(find.byIcon(AppIcons.equalizer));
     expect(surface.color, visuals.panelSurface);
     expect(currentTitle.style?.color, visuals.controlAccent);
-    expect(playingIcon.color, visuals.controlAccent);
   });
 
   testWidgets('empty queue explains the state and disables clear', (

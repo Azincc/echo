@@ -182,6 +182,85 @@ class MetadataCacheRepository {
     return Playlist.fromJson(playlistMap);
   }
 
+  /// Applies a confirmed remote song removal to both playlist cache views.
+  ///
+  /// This prevents a failed refresh from restoring the pre-mutation ordering,
+  /// which would make later index-based removals unsafe.
+  Future<void> cachePlaylistSongRemoval({
+    required String libraryId,
+    required Playlist playlist,
+    required Set<int> removedIndexes,
+  }) async {
+    final songs = playlist.songs;
+    if (songs == null || removedIndexes.isEmpty) return;
+
+    final validIndexes = removedIndexes
+        .where((index) => index >= 0 && index < songs.length)
+        .toSet();
+    if (validIndexes.isEmpty) return;
+
+    var removedDuration = 0;
+    final remainingSongs = <Song>[];
+    for (var index = 0; index < songs.length; index++) {
+      final song = songs[index];
+      if (validIndexes.contains(index)) {
+        removedDuration += song.duration ?? 0;
+      } else {
+        remainingSongs.add(song);
+      }
+    }
+    final nextDuration = playlist.duration - removedDuration;
+    final changed = DateTime.now();
+    final updatedDetail = Playlist(
+      id: playlist.id,
+      name: playlist.name,
+      comment: playlist.comment,
+      owner: playlist.owner,
+      public: playlist.public,
+      songCount: remainingSongs.length,
+      duration: nextDuration < 0 ? 0 : nextDuration,
+      created: playlist.created,
+      changed: changed,
+      coverArt: playlist.coverArt,
+      songs: remainingSongs,
+    );
+    await cachePlaylistDetail(libraryId, updatedDetail);
+
+    final cachedPlaylists = await getPlaylists(libraryId);
+    if (cachedPlaylists == null) return;
+    final playlistIndex = cachedPlaylists.indexWhere(
+      (cached) => cached.id == playlist.id,
+    );
+    if (playlistIndex < 0) return;
+
+    cachedPlaylists[playlistIndex] = Playlist(
+      id: updatedDetail.id,
+      name: updatedDetail.name,
+      comment: updatedDetail.comment,
+      owner: updatedDetail.owner,
+      public: updatedDetail.public,
+      songCount: updatedDetail.songCount,
+      duration: updatedDetail.duration,
+      created: updatedDetail.created,
+      changed: updatedDetail.changed,
+      coverArt: updatedDetail.coverArt,
+    );
+    await cachePlaylists(libraryId, cachedPlaylists);
+  }
+
+  /// Clears playlist caches when a post-mutation cache repair cannot finish.
+  Future<void> clearPlaylistCaches(String libraryId, String playlistId) async {
+    final prefs = await SharedPreferences.getInstance();
+    await Future.wait(<Future<bool>>[
+      prefs.remove(_key(libraryId, 'playlist_detail_$playlistId')),
+      prefs.remove(_key(libraryId, 'playlists')),
+    ]);
+    Logger.warnWithTag(
+      _tag,
+      'playlist caches cleared libraryId=$libraryId playlistId=$playlistId',
+    );
+  }
+
   // -------------------------------------------------------------------------
   // Newest Albums
   // -------------------------------------------------------------------------

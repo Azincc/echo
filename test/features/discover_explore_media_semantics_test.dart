@@ -57,6 +57,7 @@ void main() {
   ) async {
     var rowPresses = 0;
     var selectionPresses = 0;
+    var morePresses = 0;
     var downloadPresses = 0;
 
     Widget subject({
@@ -75,6 +76,7 @@ void main() {
           onPressed: () => rowPresses++,
           onLongPress: () {},
           onToggleSelected: () => selectionPresses++,
+          onMorePressed: () => morePresses++,
           onDownload: () => downloadPresses++,
         ),
       );
@@ -83,12 +85,15 @@ void main() {
     await tester.pumpWidget(subject());
 
     expect(find.bySemanticsLabel('晨光，示例歌手 · 清晨，远程试听'), findsOneWidget);
+    expect(find.bySemanticsLabel('晨光，更多试听操作'), findsOneWidget);
     expect(find.bySemanticsLabel('添加 晨光 到离线下载队列'), findsOneWidget);
     expect(find.bySemanticsLabel('晨光 封面'), findsNothing);
     expect(find.bySemanticsLabel('试听'), findsNothing);
 
     await tester.tap(find.bySemanticsLabel('添加 晨光 到离线下载队列'));
     expect(downloadPresses, 1);
+    await tester.tap(find.bySemanticsLabel('晨光，更多试听操作'));
+    expect(morePresses, 1);
     expect(rowPresses, 0);
 
     await tester.pumpWidget(subject(selectionMode: true));

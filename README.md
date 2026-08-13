@@ -1,3 +1,5 @@
+
+
 # 回响/Echoes
 
 <p align="center">
@@ -74,7 +76,7 @@ Echo 使用自有的 **Echo Listening System**，以“**Album Light, Quiet Chro
 
 - [音乐流首页（待替换）](docs/screenshots/music-home.png)
 - [探索（待替换）](docs/screenshots/explore-page.png)
-- [应用设置入口（待替换）](docs/screenshots/profile-page.png)
+- [我的页面（待替换）](docs/screenshots/profile-page.png)
 - [多音乐库管理（待替换）](docs/screenshots/multi-library-management.png)
 - [编辑音乐库与多线路（待替换）](docs/screenshots/edit-library-multi-endpoint.png)
 - [统计信息（待替换）](docs/screenshots/stats-overview.png)

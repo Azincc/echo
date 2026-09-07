@@ -6,7 +6,7 @@
 
 让自己的音乐库，随时回响。Echoes 是一款基于 Flutter 的 Navidrome / Subsonic / OpenSubsonic 音乐客户端，面向自建音乐服务，提供多线路访问、音乐浏览与播放、歌词封面补全、本地下载和可选的服务器侧离线导入。
 
-[获取发布版本](https://github.com/Azincc/echo/releases) · [配置第一个音乐库](gitbook/README.md) · [产品官网源码](website/) · [本地开发](#本地开发)
+[产品官网](https://echoesmusic.app/) · [获取发布版本](https://github.com/Azincc/echo/releases) · [配置第一个音乐库](gitbook/README.md) · [产品官网源码](website/) · [本地开发](#本地开发)
 
 ## 使用文档
 
@@ -223,7 +223,9 @@ test/                         # 单元测试与 Widget 测试
 
 ## 产品官网
 
-[`website/`](website/) 是独立的中英文产品官网，以模拟器实采截图介绍音乐库、播放器、歌词与多线路体验。中文位于 `/`，英文位于 `/en/`，正式域名配置为 `https://echoesmusic.app/`。页面使用原生 HTML / CSS / JavaScript，无 npm 依赖；构建时生成双语 SEO、站点地图和分享元数据，并提供键盘导航、截图弹窗及减少动效适配。
+访问 [Echoes 官网](https://echoesmusic.app/) · [English](https://echoesmusic.app/en/)。
+
+[`website/`](website/) 是独立的中英文产品官网，以模拟器实采截图介绍音乐库、播放器、歌词与多线路体验。中文位于 `/`，英文位于 `/en/`。页面使用原生 HTML / CSS / JavaScript，无 npm 依赖；构建时生成双语 SEO、站点地图和分享元数据，并提供键盘导航、截图弹窗及减少动效适配。
 
 安装 Node.js（推荐 22 LTS，最低 18）后，在项目根目录启动本地预览：
 

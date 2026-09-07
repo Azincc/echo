@@ -1,0 +1,35 @@
+{
+  "type": "design",
+  "designSystems": [],
+  "primaryDesignSystem": null,
+  "assets": {
+    "Echoes 产品官网": {
+      "versions": [
+        {
+          "path": "index.html",
+          "createdAt": "2026-09-07T02:33:25.945Z",
+          "status": "needs-review",
+          "viewport": {
+            "width": 1440,
+            "height": 900
+          }
+        }
+      ]
+    },
+    "Echoes English website": {
+      "versions": [
+        {
+          "path": "en/index.html",
+          "createdAt": "2026-09-07T03:28:41.737Z",
+          "status": "needs-review",
+          "viewport": {
+            "width": 1440,
+            "height": 900
+          }
+        }
+      ]
+    }
+  },
+  "createdAt": "2026-09-07T02:33:25.946Z",
+  "updatedAt": "2026-09-07T03:28:41.738Z"
+}

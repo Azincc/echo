@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "title": "Echoes 文档",
+  "description": "Echoes 安装、配置与使用指南。",
+  "locale": "zh-CN",
+  "homeLabel": "快速上手",
+  "github": "https://github.com/Azincc/echo",
+  "navigation": [
+    { "label": "文档", "link": "/" },
+    { "label": "产品官网", "link": "https://echoesmusic.app/" }
+  ],
+  "theme": {
+    "defaultMode": "system",
+    "accent": "#2563eb"
+  }
+}

@@ -154,15 +154,20 @@ details[open] .details-plus::after { transform: rotate(0); }
 details p { padding: 0 24px 24px 0; color: var(--muted); font-size: 12px; line-height: 1.95; }
 details p a { color: var(--accent-light); text-decoration: underline; text-underline-offset: 3px; }
 .guide-link { display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 18px 20px; background: var(--surface); border: 1px solid var(--divider); border-radius: 12px; color: #c7d2cb; font-size: 12px; margin-top: 18px; transition: border-color 160ms ease-out; }
-.guide-link:hover { border-color: var(--accent); }
+.guide-link:hover { border-color: var(--accent-light); }
+.guide-copy { display: grid; gap: 6px; min-width: 0; }
+.guide-copy strong { color: var(--ink); font-size: 1rem; font-weight: 600; }
+.guide-copy > span { color: var(--muted); }
+.guide-link > .icon { flex-shrink: 0; color: var(--accent-light); }
 .site-footer { border-top: 1px solid var(--divider); padding-top: 35px; padding-bottom: 28px; }
 .footer-top { display: flex; align-items: center; gap: 24px; }
 .footer-top .brand > img { width: 30px; height: 30px; border-radius: 9px; }
 .footer-top .brand > span { font-size: 25px; }
 .footer-top p { color: var(--muted); font-size: 11px; padding-top: 2px; }
-.footer-github { display: inline-flex; align-items: center; gap: 8px; margin-left: auto; color: #c0c9ce; font-size: 12px; min-height: 48px; }
-.footer-github:hover { color: var(--accent-light); }
-.footer-github > .icon:first-child { width: 19px; height: 19px; }
+.footer-links { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 24px; margin-left: auto; }
+.footer-link { display: inline-flex; align-items: center; gap: 8px; color: #c0c9ce; font-size: 12px; min-height: 48px; }
+.footer-link:hover { color: var(--accent-light); }
+.footer-link > .icon:first-child { width: 19px; height: 19px; }
 .footer-bottom { display: flex; justify-content: space-between; gap: 24px; color: #89939b; font-size: 10px; margin-top: 30px; }
 .footer-bottom a:hover { color: var(--ink); }
 
@@ -311,7 +316,7 @@ details p a { color: var(--accent-light); text-decoration: underline; text-under
   .guide-link { font-size: 12px; }
   .footer-top { gap: 14px; flex-wrap: wrap; }
   .footer-top p { flex-basis: calc(100% - 140px); font-size: 10px; }
-  .footer-github { margin-left: 0; margin-top: 5px; font-size: 12px; }
+  .footer-links { margin-left: 0; margin-top: 5px; }
   .footer-bottom { flex-direction: column; gap: 11px; margin-top: 17px; font-size: 9px; }
   .site-footer { padding-block: 27px; }
   .dialog-header { gap: 20px; }
@@ -351,7 +356,7 @@ p, h1, h2, h3, a, summary { overflow-wrap: break-word; }
 .hero-description, .section-intro > p, .story-copy p, .section-description,
 .feature-row p, .detail-item p, .download-copy > p:first-of-type, details p { font-size: 1rem; }
 .hero-kicker, .hero-note, .compatibility-label, .image-hint, .library-caption,
-.release-link, .platform-note, .guide-link, .footer-top p, .footer-github,
+.release-link, .platform-note, .guide-link, .footer-top p, .footer-link,
 .footer-bottom, #screenshot-caption, .dialog-status { font-size: .875rem; }
 .hero-note { column-gap: 12px; row-gap: 4px; }
 .hero-kicker { letter-spacing: .06em; }

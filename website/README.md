@@ -4,6 +4,8 @@
 
 正式站点地址配置为 **https://echoesmusic.app/**，支持 Cloudflare Pages 静态托管和 Docker 自托管。本仓库提供发布配置；实际公网部署、镜像发布和域名生效以工作流与托管平台的结果为准。
 
+项目文档位于 **[docs.echoesmusic.app](https://docs.echoesmusic.app/)**，包含快速上手、Navidrome 推荐配置和 Embed 部署教程。中英文官网的导航、连接音乐库 FAQ、下载区文档入口及页脚均链接到该站点；文档目前为中文，英文页面已注明语言。
+
 ## 本地预览与构建
 
 推荐 Node.js 22 LTS（最低 18）。在仓库根目录运行：
